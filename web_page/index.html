@@ -231,10 +231,13 @@
       <div class="check-box">
         <div class="row">
           <input type="text" id="check-url" placeholder="https://example.com/comic/some-page" style="flex:1; min-width:220px">
+          <input type="text" id="check-cookies" spellcheck="false" placeholder="cookies, e.g. AGE_OK=yes" style="width:190px"
+            title="For a site behind an age gate: the cookie its gate sets, as name=value, several put apart with ;">
           <button type="button" class="primary" id="check-go">Check this page</button>
         </div>
         <div class="help" style="margin-bottom:0">Loads the page in the browser the scraper uses and says which
-          paths match it, or what to add when none do.</div>
+          paths match it, or what to add when none do. A site behind an age gate needs its cookie in the
+          second box, as the comic's settings give it, or the check sees only the gate.</div>
         <div class="check-result" id="check-result"></div>
       </div>
       <div id="ep-lists"></div>
