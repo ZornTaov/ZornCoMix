@@ -5,6 +5,8 @@ import os
 import shlex
 from datetime import datetime, timezone
 
+from comiclib import cookies
+
 METADATA_FILE = "mirror_metadata.json"
 SCHEMA = 2
 
@@ -75,6 +77,8 @@ def settings_to_argv(settings):
         argv.append("--no-multi-page")
     if settings.get("cbz_path"):
         argv += ["--cbz-path", settings["cbz_path"]]
+    #what the site wants to have been told before it shows the comic, an age gate's answer most often
+    argv += cookies.as_args(settings.get("cookies"))
     argv.append(url)
     return argv
 
@@ -95,6 +99,13 @@ def argv_to_settings(argv):
         token = argv[at]
         if token in valued and at + 1 < len(argv):
             settings[valued[token]] = argv[at + 1]
+            at += 2
+            continue
+        if token == "--cookie" and at + 1 < len(argv):
+            try:
+                settings.setdefault("cookies", {}).update(cookies.parse([argv[at + 1]]))
+            except ValueError:
+                pass
             at += 2
             continue
         if token in flagged:

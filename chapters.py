@@ -33,7 +33,8 @@ from comiclib.chapters.packing import (already_packed, chapter_contents, chapter
 from comiclib.chapters.pageops import (fetch_missing, insert_page, mark_recovered, note_page,  # noqa: F401
                                        refetch, renumber, shift_up)
 from comiclib.chapters.wordpress import wordpress_index
-from comiclib.metadata import METADATA_FILE as metadata_file  # noqa: F401
+from comiclib import cookies, download
+from comiclib.metadata import METADATA_FILE as metadata_file, read as read_metadata  # noqa: F401
 from comiclib.pages import listing as folder_pages, page_key, page_number, plain_name  # noqa: F401
 from comiclib.paths import config_folder  # noqa: F401
 from comiclib.standin import (video_types, flash_types, link_types, a_web_address,  # noqa: F401
@@ -184,6 +185,10 @@ def main():
     if not os.path.isdir(folder) and not (args.what == "try" and args.like):
         print("ERROR: {0} is not a folder.".format(folder))
         return 2
+    #a site behind an age gate shows its archive, its pages and its pictures only to someone carrying the
+    #gate's cookie, and every part of this reads one of them
+    cookies.use((read_metadata(folder).get("settings") or {}) if os.path.isdir(folder) else {})
+    download.site_cookies = cookies.session().cookies if cookies.for_comic else None
     if args.what == "show":
         path = alignment_path(index_path(folder, args.root, args))
         if not os.path.exists(path):

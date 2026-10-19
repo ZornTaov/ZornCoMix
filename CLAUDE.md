@@ -46,8 +46,9 @@ archives, and keep them up to date unattended.
 | `pluginsetup` | A plugin's own settings, its `plugin.json` `setup`, the same for every comic of it: kept in `config/plugin-setup/<id>.json` (mode 600, not in the plugin's clone), edited in the Plugins dialog, handed to its program as environment variables and to its `plugin.py` as `settings["setup"]`. A `secret` is never put on a command line, which the log and the run record keep; the page shows and edits it, since whoever can reach the page is trusted with the setup |
 | `pluginfetch` | Installing a plugin from its git repository (cloned aside, checked, renamed to its `id`), updating it, removing one no comic uses, and whether the web page may (`MIRROR_WEB_PASSWORD`, or `MIRROR_ALLOW_PLUGIN_INSTALLS`) |
 | `exits` | `mirror_base`'s exit codes and what each means, and `MirrorError`, which carries one |
-| `browser` | Starting the browser a scrape drives, and closing it however it ended |
-| `elements` | The element paths shipped as examples (comic image, next link, first-page link), finding the image and the links by them, and pressing a link |
+| `browser` | Starting the browser a scrape drives, and closing it however it ended. `after_open` is what `mirror_base` does with a page opened by its address: passing an age gate |
+| `cookies` | A comic's `settings.cookies` (an age gate's answer, `--cookie NAME=VALUE`): into the browser before its first page, and onto every `requests` read of the site, scoped to its domain and neighbours. `chapters.py` sets `use()` once from the comic's settings, since its readers are not handed them. Imports `requests` and selenium only where used, since `metadata` imports it and the reader has neither |
+| `elements` | The element paths shipped as examples (comic image, next link, first-page link, age gate's button), finding the image and the links by them, and pressing a link |
 | `pagecheck` | `--check`: which known paths match a page, and what to add when none do |
 | `download` | Fetching an image, with retries |
 | `guards` | The checks before a page is written: running backwards, writing over another page, one page under two names |

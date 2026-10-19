@@ -1,9 +1,9 @@
 //the element paths dialog: the two lists as they are being edited, and checking a page against them
 
 //each list the dialog edits, in the order they are shown, by what it is called there
-const pathLabels = { image: "Comic image", next: "Next page", first: "First page" };
+const pathLabels = { image: "Comic image", next: "Next page", first: "First page", gate: "Age gate" };
 const pathKinds = Object.keys(pathLabels);
-let paths = { image: [], next: [], first: [] };
+let paths = { image: [], next: [], first: [], gate: [] };
 let checkJob = null;
 //the last page checked, kept so the path list can say what each path actually found there. a path that
 //catches the buttons alongside the pages is worth seeing while the list is being edited, not afterwards
@@ -311,6 +311,16 @@ function renderCheck(found, host) {
       //has no link back to itself, so this is said quietly and offers nothing to add
       parts.push(`<div style="margin-top:8px"><b>${label}</b>: <span class="muted">nothing matched, so a walk
         from this page could not find its way back to page 1</span></div>`);
+      return;
+    }
+    if (kind === "gate") {
+      //the gate was pressed before anything else was looked at, so what is shown above is the page past it.
+      //most sites have none, which is nothing to remark on
+      parts.push(hits.length
+        ? `<div style="margin-top:8px"><b>${label}</b>: <code>${esc(hits[0].url)}</code> was the site's gate,
+            passed by pressing <code>${esc(hits[0].xpath)}</code>. This check runs with javascript on and a scrape
+            does not; giving the comic the gate's cookie gets past it either way.</div>`
+        : `<div style="margin-top:8px"><b>${label}</b>: <span class="muted">none on this page</span></div>`);
       return;
     }
     if (hits.length) {

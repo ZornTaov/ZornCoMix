@@ -86,8 +86,10 @@ def settings_from_args(args, folder, url, increment, ended=False):
     #everything about this comic that a later run has to be told, and nothing that can be worked out
     #from it. this block is the only place any of it is written down: the command is rebuilt from here
     #when a run starts, so editing one value here is the whole of changing how a comic is scraped.
-    #every key is always written, even at its default, so there is somewhere obvious to change it.
-    return {
+    #every key is always written, even at its default, so there is somewhere obvious to change it - all but
+    #the cookies, which only a site behind a gate has, and which every other comic's sidecar would otherwise
+    #gain as an empty block the day it next ran
+    settings = {
         "url": url,
         "output": folder,
         "cbz_path": args.cbz_path,
@@ -102,6 +104,9 @@ def settings_from_args(args, folder, url, increment, ended=False):
         #not a scraping option: update_comics.py reads it and leaves a finished comic alone
         "ended": bool(ended),
     }
+    if getattr(args, "cookies", None):
+        settings["cookies"] = dict(args.cookies)
+    return settings
 
 
 def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason, image_xpath, next_xpath,

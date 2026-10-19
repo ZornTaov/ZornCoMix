@@ -8,8 +8,7 @@ import sys
 import time
 import urllib.parse
 
-import requests
-
+from comiclib import cookies
 from comiclib.chapters.index import MIRROR
 from comiclib.chapters.links import link_targets, looks_like_pages, page_shape, same_page
 
@@ -247,12 +246,14 @@ class ArchiveReader(html.parser.HTMLParser):
 def read_archive(url, browser=False, script=None):
     if browser:
         #for an archive a plain fetch comes back empty on, because the page builds itself with javascript
-        done = subprocess.run([sys.executable, script or MIRROR, "--page-source", url],
+        done = subprocess.run([sys.executable, script or MIRROR, "--page-source"]
+                              + cookies.as_args(cookies.for_comic) + [url],
                               capture_output=True, text=True, timeout=300)
         return done.stdout
     #a page, never a download: a link under a heading can be a whole volume as a zip, and fetched to be read
-    #as a page it was minutes of nothing. only html is read, and only so much of it
-    with requests.get(url, timeout=60, headers={"User-Agent": "Mozilla/5.0"}, stream=True) as answer:
+    #as a page it was minutes of nothing. only html is read, and only so much of it. an archive behind an age
+    #gate is the gate without its cookie, and a gate has no chapters
+    with cookies.session().get(url, timeout=60, stream=True) as answer:
         answer.raise_for_status()
         kind = answer.headers.get("Content-Type", "").split(";")[0].strip().lower()
         if kind and "html" not in kind and "xml" not in kind and not kind.startswith("text/"):

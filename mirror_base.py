@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 
 #what this shares with the other scripts: where the settings are, what makes two filenames one page, the
 #metadata file and how an archive is packed
-from comiclib import browser, cbz, download, elements, exits, guards, pagecheck, runrecord, walk
+from comiclib import browser, cbz, cookies, download, elements, exits, guards, pagecheck, runrecord, walk
 from comiclib.chapters.index import KeptIndex
 from comiclib.chapters.links import same_page
 from comiclib.metadata import METADATA_FILE, now_stamp, read as read_metadata
@@ -35,7 +35,7 @@ custom_args = [
 
 #the paths shipped in comiclib.elements with the library's own element_paths.json laid over them, read
 #once, before anything is tried
-element_names, next_ele_names, first_ele_names = elements.with_saved_paths(element_paths_file())
+element_names, next_ele_names, first_ele_names, gate_ele_names = elements.with_saved_paths(element_paths_file())
 
 #what the page before this one showed, so an image that appears again can be told from a page of the
 #comic. kept as the raw matches rather than what was kept of them, so furniture is recognised even on a
@@ -67,6 +67,10 @@ FALLBACKS_TO_SWITCH = 3
 REPEATS_TO_STOP = 5
 current_url = None
 verbose = False
+#the cookies this comic was given, by its settings or --cookie, which win over any a gate's button sets
+given_cookies = {}
+#the site's age gate, when this run met one: the path that pressed past it and where, for --check to say
+gate_passed = None
 
 #name of the sidecar written into the output folder, so it gets zipped into the cbz alongside the pages
 metadata_file = METADATA_FILE
@@ -191,6 +195,7 @@ def setup():
     params.add_argument("--index-first",action='store_true',default=False,help="With --index, follow the comic's first-page link before walking, for a comic whose beginning was never recorded.")
     params.add_argument("--index-limit",type=int,default=0,metavar="PAGES",help="With --index, stop after this many pages. 0 means the whole comic.")
     params.add_argument("--note-page",action='append',default=[],metavar="ADDRESS",help="Keep this page as a note of its address rather than the pictures on it; can be given more than once. A comic's own list, from chapters.py note, is read from its metadata; a walk is given it this way.")
+    params.add_argument("--cookie",action='append',default=[],metavar="NAME=VALUE",help="A cookie the site wants before it shows the comic - the one its \"are you 18?\" page sets once passed, most often; can be given more than once. Set in the browser before the first page loads, and sent with every image fetched from the site.")
     params.add_argument("--check",action='store_true',default=False,help="Load the page, report which of the known image and next element paths match it, and stop. Suggests paths for a site that matches none, which is the first step in adding a comic the script does not know yet.")
     params.add_argument("--prime",action='store_true',default=False,help="Save only the first page, check the next link works, write the metadata and archive, then stop. The comic is then ready for update_comics to download the rest, which is far quicker run on the machine holding the library than over a network share.")
     
@@ -198,12 +203,23 @@ def setup():
     arg_parser = params
     run_start = now_stamp()
     run_id = uuid.uuid4().hex
+    global given_cookies
+    try:
+        args.cookies = given_cookies = cookies.parse(args.cookie)
+    except ValueError as error:
+        print("\nERROR: {0}".format(error))
+        sys.exit(EXIT_USAGE)
+    download.site_cookies = cookies.jar(args.cookies, args.URL) if args.cookies else None
 
     if args.check:
         #one page, looked at once: worth loading it the way a browser really would, since a site that
         #builds its page with javascript shows nothing useful otherwise
         browser_images = True
         args.enable_javascript = True
+
+    #a page opened by its address - the first, and the one a fresh browser picks up from - is looked at for the
+    #site's age gate before anything else is
+    browser.after_open = through_gate
 
     #renewed every so many pages, since one browser led through thousands of them slows to a crawl and then
     #stops loading them properly
@@ -292,13 +308,55 @@ def came_round(left, reached):
 
 
 def build_driver(args):
-    #the browser this run drives, with this run's settings for loading images and how long a page may take
-    return browser.build_driver(args, browser_images, page_timeout)
+    #the browser this run drives, with this run's settings for loading images and how long a page may take,
+    #and the comic's cookies already in it - every fresh one too, since a site's gate is met by whichever
+    #browser loads a page without them
+    driver = browser.build_driver(args, browser_images, page_timeout)
+    cookies.into_browser(driver, getattr(args, "cookies", None), getattr(args, "URL", None))
+    return driver
+
+
+def gate_shown(driver):
+    #the gate path a page answers to, if it is a site's "are you old enough?" page rather than the comic
+    for path in gate_ele_names:
+        if next_element(driver, path) is not None:
+            return path
+    return None
+
+
+def through_gate(driver, wanted):
+    #a site's age gate, met on a page opened by its address: its button pressed, and the page that was wanted
+    #opened again, since a gate's button as often sends a reader to the front page as back where they were.
+    #done before anything is looked for on the page, so nothing on the gate - its warning picture, its button -
+    #can become the path this comic's pages are found by. a gate that is still there after its button is
+    #pressed is said once and left: reading on finds no comic, and stops the run the way that always does
+    global gate_passed
+    path = gate_shown(driver)
+    if path is None:
+        return
+    gate_passed = {"xpath": path, "url": driver.current_url}
+    print("{0} is the site's age gate; pressing {1} to pass it.".format(driver.current_url, path), flush=True)
+    if not next_ele_get(driver, path):
+        print("WARNING: the gate's button would not press.", flush=True)
+        return
+    #the gate set its cookie as its button was pressed, and it counts for pages loaded from now on - in the
+    #browser, and for the pictures, which are fetched outside it and which a gate can refuse just the same
+    if driver.current_url != wanted:
+        driver.get(wanted)
+        browser.load_or_retry(driver)
+    got = cookies.from_browser(driver)
+    if got:
+        download.site_cookies = cookies.jar(dict(got, **given_cookies), wanted)
+    if gate_shown(driver):
+        print("WARNING: {0} still shows the gate after its button was pressed. A button that sets its cookie "
+              "with a script needs --enable_javascript; surer still is giving the comic the cookie itself, "
+              "--cookie NAME=VALUE, as the browser's developer tools show it once the gate has been passed "
+              "by hand.".format(wanted), flush=True)
 
 
 def check_page(driver):
     #--check, against the element paths this run would try, in the order it would try them
-    return pagecheck.check_page(driver, element_names, next_ele_names, first_ele_names)
+    return pagecheck.check_page(driver, element_names, next_ele_names, first_ele_names, gate_passed)
 
 
 def output_folder(args):

@@ -71,10 +71,23 @@ shipped = {
          "note": 'a picture button with nothing to say what it is but its picture\'s name, as on a site '
                  'built by hand: comicfirst.gif'},
     ],
+    #the button on a site's "are you old enough?" page, pressed when a page opened by its address turns out to
+    #be one, before anything is looked for on it. what a gate's button says is up to each site, so these are
+    #the commonest wordings and little more: a comic's own cookie, in its settings, is the surer way past
+    "gate": [
+        {"xpath": '//*[self::a or self::button][contains(translate(normalize-space(.), "OVER", "over"), '
+                  '"over 18")]',
+         "note": 'a link or button that says "over 18", as "I am over 18" does'},
+        {"xpath": '//*[self::a or self::button][.//img[contains(translate(@alt, "OVER", "over"), "over 18")]]',
+         "note": 'a picture button whose alt text says "over 18"'},
+        {"xpath": '//*[self::a or self::button][contains(translate(normalize-space(.), "OLDENUGH", '
+                  '"oldenugh"), "old enough")]',
+         "note": 'a link or button that says "old enough", as "I am old enough" does'},
+    ],
 }
 
 #the lists a scrape reads, in the order it hands them back
-kinds = ("image", "next", "first")
+kinds = ("image", "next", "first", "gate")
 
 
 def with_saved_paths(path):
