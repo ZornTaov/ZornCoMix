@@ -342,7 +342,7 @@ $("check-go").addEventListener("click", async () => {
   const url = $("check-url").value.trim();
   $("check-result").innerHTML = `<span class="muted">Checking… a browser has to start, so give it a moment.</span>`;
   try {
-    const result = await post("/api/check", { url });
+    const result = await post("/api/check", { url, cookies: $("check-cookies").value });
     checkJob = { id: result.queued, host: (url.split("/")[2] || "") };
   } catch (error) {
     $("check-result").innerHTML = `<div class="s-failed">${esc(error.message)}</div>`;

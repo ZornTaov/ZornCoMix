@@ -595,6 +595,9 @@ paths:
                 url:
                   type: string
                   description: Full http(s) address to check
+                cookies:
+                  type: string
+                  description: Cookies to load the page with, for a site behind an age gate - "name=value; name=value", as a comic's settings take them
       responses:
         "200":
           $ref: "#/components/responses/JobQueued"

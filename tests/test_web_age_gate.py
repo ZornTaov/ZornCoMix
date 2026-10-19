@@ -1,6 +1,7 @@
 #the web page's side of a comic behind an age gate: its cookies edited with its other settings, the gate's
 #button among the element paths, and a check that says it met a gate and pressed past it.
 import json
+import time
 
 import pytest
 
@@ -55,6 +56,37 @@ def test_emptying_the_box_takes_the_cookies_away(web, comic):
     code, answer = saved(page, "")
     assert code == 200 and answer.get("saved"), answer
     assert "cookies" not in read_meta(comic)["settings"], "no empty block left behind"
+
+
+def run_check(page, body, limit=180):
+    code, queued = page.call("/api/check", body)
+    assert code == 200, queued
+    end = time.time() + limit
+    while time.time() < end:
+        _, state = page.call("/api/state")
+        running = [state["current"]] if state.get("current") else []
+        for job in (state.get("history") or []) + running + (state.get("waiting") or []):
+            if job.get("id") == queued["queued"] and job.get("check"):
+                return job["check"]
+        time.sleep(0.5)
+    raise AssertionError("the check never finished")
+
+
+def test_a_check_cookie_must_be_name_equals_value(web):
+    code, answer = web().call("/api/check", {"url": "https://example.com/p/1", "cookies": "AGE_OK"})
+    assert code == 400 and "name=value" in answer["error"]
+
+
+@pytest.mark.browser
+@pytest.mark.slow
+def test_a_check_given_the_cookie_sees_past_the_gate(web, serve):
+    #no gate path: without the cookie the check sees only the gate, and with it the comic
+    site = serve(Gated)
+    page = web(env=OWN_PROFILE)
+    blocked = run_check(page, {"url": site + "/p/2"})
+    assert not blocked.get("image"), blocked
+    passed = run_check(page, {"url": site + "/p/2", "cookies": "AGE_OK=yes"})
+    assert passed.get("image") and passed.get("title") == "Comic 2", passed
 
 
 @pytest.mark.browser

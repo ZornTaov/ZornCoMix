@@ -16,7 +16,7 @@ from comiclib import moving, pluginfetch, plugins, pluginsetup, runlogs
 from comiclib.paths import PROJECT
 from comiclib.web.adding import add_with_plugin, parse_entries
 from comiclib.web.edits import discard_walk, fix_chapter, insert_page, preview_move, save_config, save_settings
-from comiclib.web.edits import comicinfo_view, save_comicinfo, try_chapter_list
+from comiclib.web.edits import comicinfo_view, cookie_value, save_comicinfo, try_chapter_list
 from comiclib.web.elementpaths import element_settings, save_elements
 from comiclib.web.jobs import LogTee, Runner
 from comiclib.web.uploads import KINDS as upload_kinds, discard, pending, plan, receive
@@ -301,10 +301,18 @@ def make_handler(runner, args, uc, tee):
                 self.reply(result, status)
             elif path == "/api/check":
                 url = str(body.get("url") or "").strip()
+                #a site behind an age gate shows a check nothing but its gate without the gate's cookie,
+                #typed as the comic's own settings have it
+                try:
+                    given = cookie_value(body.get("cookies"))
+                except ValueError as error:
+                    given = error
                 if not re.match(r"^https?://\S+$", url):
                     self.reply({"error": "that is not a full http(s) address"}, 400)
+                elif isinstance(given, ValueError):
+                    self.reply({"error": str(given)}, 400)
                 else:
-                    job = runner.submit_check(url)
+                    job = runner.submit_check(url, given)
                     self.reply({"queued": job.id, "label": job.label})
             elif path == "/api/chapterize":
                 name = str(body.get("name") or "")
