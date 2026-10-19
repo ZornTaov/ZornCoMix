@@ -45,6 +45,24 @@ def drawn_heading(attrs):
     return text[:1].upper() + text[1:]
 
 
+def clicked_to(attrs):
+    #where an element sends the browser when it is clicked, for an archive whose chapters are boxes with a
+    #script on them - onclick="location.href='/comic/33'" - rather than links. a link by any other name, as a
+    #dropdown's options are, and without reading it such a page lists nothing at all
+    said = re.search(r'''(?:window\.|document\.)?location(?:\.href)?\s*=\s*(['"])(.+?)\1'''
+                     r'''|location\.(?:assign|replace)\(\s*(['"])(.+?)\3\s*\)''', attrs.get("onclick") or "")
+    if not said:
+        return None
+    return said.group(2) or said.group(4)
+
+
+def drawn_behind(attrs):
+    #a picture an element shows as its background rather than as an <img>: a thumbnail drawn by its style,
+    #background-image: url(...), which a chapter's cover can be on an archive laid out as a grid of boxes
+    said = re.search(r'''background(?:-image)?\s*:[^;]*url\(\s*(['"]?)([^'")]+)\1\s*\)''', attrs.get("style") or "")
+    return said.group(2).strip() if said else None
+
+
 class ArchiveReader(html.parser.HTMLParser):
     #reads a comic's archive page as a sequence of two things: headings, and links. what a heading looks
     #like differs from site to site - a real heading tag on one, a bold line or a table cell on another -
@@ -73,6 +91,10 @@ class ArchiveReader(html.parser.HTMLParser):
         self.inside = []
         self.link = None
         self.link_text = []
+        #the tag the open link ends with: an <a>'s own, or for a box clicked through to a page, the box's -
+        #with how many tags like it are open inside it, so its first inner </div> does not end it
+        self.link_tag = None
+        self.link_depth = 0
         #the pictures inside the heading being read: a chapter's banner, drawn beside its name
         self.pictures = []
 
@@ -83,20 +105,8 @@ class ArchiveReader(html.parser.HTMLParser):
         if src and not src.startswith("data:"):
             self.events.append(("image", src, how))
 
-    def handle_starttag(self, tag, attrs):
-        got = dict(attrs)
-        if tag == "a" and got.get("href"):
-            self.link = got["href"]
-            self.link_text = []
-            return
-        #some archives are a dropdown rather than a list of links: every page of a comic as an <option>,
-        #and a script that sends you to the value when you pick one. that is a link
-        #by any other name, and without reading it such a page says nothing at all.
-        if tag == "option" and got.get("value"):
-            self.link = got["value"]
-            self.link_text = []
-            return
-        if tag == "img" and self.heading not in self.title_tags:
+    def an_image(self, got):
+        if self.heading not in self.title_tags:
             #a drawn heading, which stands on its own. inside a written heading the picture is part of what
             #that heading says and is left to it - but a container named "chapters", which is what wraps
             #the whole list on a page like this, is not a heading that can say anything
@@ -112,10 +122,36 @@ class ArchiveReader(html.parser.HTMLParser):
             elif self.link is not None:
                 self.picture(got.get("src"), "link")
             return
-        if tag == "img":
-            #a picture inside a written heading: the banner beside the chapter's name
-            self.pictures.append(got.get("src"))
+        #a picture inside a written heading: the banner beside the chapter's name
+        self.pictures.append(got.get("src"))
+
+    def handle_starttag(self, tag, attrs):
+        got = dict(attrs)
+        if tag == "a" and got.get("href"):
+            self.link, self.link_tag, self.link_depth = got["href"], "a", 0
+            self.link_text = []
             return
+        #some archives are a dropdown rather than a list of links: every page of a comic as an <option>,
+        #and a script that sends you to the value when you pick one. that is a link
+        #by any other name, and without reading it such a page says nothing at all.
+        if tag == "option" and got.get("value"):
+            self.link, self.link_tag, self.link_depth = got["value"], "option", 0
+            self.link_text = []
+            return
+        if tag == "img":
+            self.an_image(got)
+            return
+        if self.link is not None and tag == self.link_tag:
+            self.link_depth += 1
+        elif self.link is None and clicked_to(got):
+            #a box with a script that goes to a page when it is clicked: a link from here to the box's own
+            #closing tag. what is inside it is read as ever - the cover drawn in it, the name written in it
+            self.link, self.link_tag, self.link_depth = clicked_to(got), tag, 0
+            self.link_text = []
+        behind = drawn_behind(got)
+        if behind:
+            #a picture drawn as an element's background is as much the chapter's picture as an <img> would be
+            self.an_image({"src": behind, "alt": got.get("title") or got.get("aria-label") or ""})
         #whole words only: a class called comic-archive-date holds "arc" inside "archive" and is a date,
         #not a heading
         words = set(re.split(r'[^a-z]+', "{0} {1}".format(got.get("class") or "", got.get("id") or "").lower()))
@@ -184,8 +220,18 @@ class ArchiveReader(html.parser.HTMLParser):
             return
         self.events.append(("link", href, said))
 
+    def ends_link(self, tag):
+        #an <a> or an <option> ends at either's closing tag, as it always has: an option's own is often left out
+        if tag in ("a", "option") and self.link_tag in ("a", "option"):
+            return True
+        return tag == self.link_tag
+
     def handle_endtag(self, tag):
-        if tag in ("a", "option") and self.link is not None:
+        if self.link is not None and self.ends_link(tag) and self.link_depth:
+            #a tag like the clicked box's own, closing inside it
+            self.link_depth -= 1
+        elif self.link is not None and self.ends_link(tag):
+            self.link_tag = None
             said = re.sub(r'\s+', ' ', "".join(self.link_text)).strip()
             if self.heading:
                 #some archives put the chapter's link inside the heading that names it, rather than under
@@ -492,6 +538,62 @@ def points_back(found, at):
     return False
 
 
+#of the steps from one linked cover to the next, how many have to skip pages for the covers to be chapters'
+#rather than every page's: a gallery of every page steps one page at a time
+SKIPPING = 0.8
+
+
+def covers_as_chapters(events, where, base):
+    #an archive that is a grid of chapters: a box for each with its cover drawn in it and a number or a name
+    #under it, leading to the chapter's first page, and no heading anywhere. a gallery of every page looks the
+    #same - a picture on every link - so the walk tells them apart: these lead to pages far apart, in order,
+    #and a gallery's lead to one page after another. without a walk there is no telling, and nothing is read
+    boxes = []
+    for at, (kind, first, said) in enumerate(events):
+        if kind not in ("link", "owned"):
+            continue
+        #the cover just before the box's link - or before the heading a box named "Book 2" gives out as well
+        picture = at - 1
+        if kind == "owned" and picture >= 0 and events[picture][:2] == ("heading", said):
+            picture -= 1
+        if picture < 0 or events[picture][0] != "image" or events[picture][2] != "link":
+            continue
+        n = walked_at(where, base, first)
+        if n is not None:
+            boxes.append((at, picture, events[picture][1], n))
+    if len(boxes) < IN_ORDER:
+        return events
+    pages = [n for _, _, _, n in boxes]
+    steps = [later - earlier for earlier, later in zip(pages, pages[1:])]
+    if not (all(step > 0 for step in steps) or all(step < 0 for step in steps)):
+        return events
+    if sum(1 for step in steps if abs(step) > 1) < len(steps) * SKIPPING:
+        return events
+    #a picture several chapters show is the site's stand-in for a cover not drawn yet, and no chapter's own
+    srcs = [src for _, _, src, _ in boxes]
+    shared = {src for src in srcs if srcs.count(src) > 1}
+    links = {at: (picture, src) for at, picture, src, _ in boxes}
+    pictures = {picture: src for _, picture, src, _ in boxes}
+    out = []
+    for at, event in enumerate(events):
+        if at in pictures:
+            #the cover becomes the banner of the heading given out for its box, unless every box shows it
+            if pictures[at] not in shared:
+                out.append(("image", pictures[at], "heading"))
+            continue
+        if at not in links or event[0] == "owned":
+            #a box already named for its chapter has its heading and its link already
+            out.append(event)
+            continue
+        _, href, said = event
+        #a box that says only its number - "12" - is that chapter, and named so
+        label = ("Chapter " + said.lstrip("#")) if re.match(r'^#?\d+(\.\d+)?$', said) else said
+        label = label or "Chapter {0}".format(sorted(links).index(at) + 1)
+        out.append(("heading", label, 0))
+        out.append(("owned", href, label))
+    return out
+
+
 def chapters_from_events(events, where, base="", fetch=None, outer=False):
     #a chapter starts at the first page link after a heading. several headings can sit together - a title
     #and the summary underneath it - so the one that reads most like a title wins: a real heading tag
@@ -503,6 +605,7 @@ def chapters_from_events(events, where, base="", fetch=None, outer=False):
     if fetch is not None:
         events = through_chapter_pages(events, where, base, fetch)
     events = beside_its_heading(events)
+    events = covers_as_chapters(events, where, base)
     found, waiting, listed = [], [], set()
     #the outer heading waiting for the first page under it, and its banner
     parent = parent_image = None
