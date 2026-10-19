@@ -97,6 +97,6 @@ def save_elements(args, uc, given):
         write_json(path, body)
     except OSError as error:
         return 500, {"error": "could not write {0}: {1}".format(path, error)}
-    print("Saved {0}: {1} image path(s), {2} next path(s), {3} first-page path(s)".format(
+    print("Saved {0}: {1} image path(s), {2} next path(s), {3} first-page path(s), {4} gate path(s)".format(
         path, *(len([e for e in cleaned[kind] if e["enabled"]]) for kind in kinds)), flush=True)
     return 200, {"saved": True, "path": path}

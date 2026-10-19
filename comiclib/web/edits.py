@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-from comiclib import comicinfo, moving, plugins
+from comiclib import comicinfo, cookies, moving, plugins
 from comiclib.chapters.index import index_path, set_aside
 from comiclib.metadata import write_json
 from comiclib.plugins import field_value
@@ -28,6 +28,7 @@ editable = {
     "direction_check": "flag",
     "multi_page": "flag",
     "ended": "flag",
+    "cookies": "cookies",
 }
 #of those, the ones a comic another program scrapes has too: everything else is mirror_base's own
 plugin_kept = ("cbz", "cbz_path", "ended")
@@ -128,11 +129,33 @@ def try_chapter_list(args, comic, given):
                  "exit_code": done.returncode}
 
 
+def cookie_value(given):
+    #a comic's cookies as the page sends them: written the way a browser's Cookie header has them,
+    #"AGE_OK=yes; theme=dark", or one to a line - or already as {"name": "value"}. none at all is None, which
+    #is how a comic that never had any reads, so emptying the box takes the setting away rather than
+    #leaving an empty one behind
+    if isinstance(given, dict):
+        held = {str(name).strip(): str(value).strip() for name, value in given.items() if str(name).strip()}
+    else:
+        parts = [part.strip() for part in re.split(r"[;\n]", str(given or "")) if part.strip()]
+        try:
+            held = cookies.parse(parts)
+        except ValueError:
+            raise ValueError("each cookie is name=value, as AGE_OK=yes; several are put apart with ;")
+    return held or None
+
+
 def clean_settings(given):
     #checks each value the page sent, so a typo turns into a message rather than a comic that will not run
     cleaned, problems = {}, []
     for key, kind in editable.items():
         if key not in given:
+            continue
+        if kind == "cookies":
+            try:
+                cleaned[key] = cookie_value(given[key])
+            except ValueError as error:
+                problems.append(str(error))
             continue
         try:
             cleaned[key] = field_value(kind, given[key])
@@ -240,6 +263,8 @@ def save_settings(args, uc, runner, name, given, expected_updated):
     if not changed:
         return 200, {"saved": False, "message": "nothing changed"}
     settings.update(cleaned)
+    if "cookies" in settings and not settings["cookies"]:
+        del settings["cookies"]
     metadata["settings"] = settings
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     metadata["updated"] = stamp

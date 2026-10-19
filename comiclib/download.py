@@ -7,6 +7,9 @@ from comiclib.exits import DOWNLOAD as EXIT_DOWNLOAD, MirrorError
 
 #set by the scrape from its --verbose, for saying each retry out loud
 verbose = False
+#set by the scrape from its --cookie, as a jar scoped to the comic's site: a site behind an age gate can
+#refuse its pictures as well as its pages to anyone who has not passed it
+site_cookies = None
 
 
 def fetch(url, attempts=3, referer=None):
@@ -18,7 +21,7 @@ def fetch(url, attempts=3, referer=None):
         headers["Referer"] = referer
     for attempt in range(1, attempts + 1):
         try:
-            req = requests.get(url, stream=True, timeout=30, headers=headers)
+            req = requests.get(url, stream=True, timeout=30, headers=headers, cookies=site_cookies)
             if req.status_code != 200:
                 raise requests.RequestException("HTTP {0}".format(req.status_code))
             return req

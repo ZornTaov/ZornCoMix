@@ -309,7 +309,7 @@ paths:
   /api/elements:
     get:
       tags: [Elements]
-      summary: Element XPath lists (image, next, first-page)
+      summary: Element XPath lists (image, next, first-page, age gate)
       responses:
         "200":
           description: Element paths per kind with source and state
@@ -326,8 +326,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/ElementPath"
-                  first_page:
+                  first:
                     type: array
+                    items:
+                      $ref: "#/components/schemas/ElementPath"
+                  gate:
+                    type: array
+                    description: The button on a site's age gate, pressed when a page opened by its address is one
                     items:
                       $ref: "#/components/schemas/ElementPath"
                   path:
@@ -357,7 +362,11 @@ paths:
                   type: array
                   items:
                     $ref: "#/components/schemas/ElementPathInput"
-                first_page:
+                first:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ElementPathInput"
+                gate:
                   type: array
                   items:
                     $ref: "#/components/schemas/ElementPathInput"
@@ -436,7 +445,7 @@ paths:
                   description: The comic's folder name
                 settings:
                   type: object
-                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended)
+                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended, cookies). cookies is "name=value; name=value" or an object of name to value; empty removes them
                 updated:
                   type: ["string", "null"]
                   description: Expected updated timestamp (optimistic concurrency)
@@ -586,6 +595,9 @@ paths:
                 url:
                   type: string
                   description: Full http(s) address to check
+                cookies:
+                  type: string
+                  description: Cookies to load the page with, for a site behind an age gate - "name=value; name=value", as a comic's settings take them
       responses:
         "200":
           $ref: "#/components/responses/JobQueued"

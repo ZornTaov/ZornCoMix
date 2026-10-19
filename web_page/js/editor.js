@@ -38,6 +38,8 @@ async function openEditor(name) {
   $("e-increment").value = s.increment ?? "";
   $("e-cbz_path").value = s.cbz_path || "";
   $("e-waittime").value = s.waittime || 0;
+  //written the way a browser's Cookie header has them, which is how they are typed back
+  $("e-cookies").value = Object.entries(s.cookies || {}).map(([name, value]) => `${name}=${value}`).join("; ");
   const chapters = detail.chapters || {};
   $("e-chapters").value = chapters.source_url || "";
   $("e-every").value = chapters.every || "";
@@ -185,7 +187,8 @@ async function saveEditor(updateAfter) {
   const settings = editing.plugin
     ? { cbz_path: $("e-cbz_path").value, plugin: readPluginForm($("e-plugin")) }
     : { url: $("e-url").value, increment: $("e-increment").value, cbz_path: $("e-cbz_path").value,
-        waittime: $("e-waittime").value, chapters_url: $("e-chapters").value, chapters_every: $("e-every").value };
+        waittime: $("e-waittime").value, cookies: $("e-cookies").value,
+        chapters_url: $("e-chapters").value, chapters_every: $("e-every").value };
   flags.forEach((key) => { settings[key] = $("e-" + key).checked; });
   try {
     const result = await post("/api/settings", { name: editing.name, updated: editing.updated, settings, update_after: updateAfter });

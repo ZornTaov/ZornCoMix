@@ -8,6 +8,7 @@ import shutil
 
 import requests
 
+from comiclib import cookies
 from comiclib.chapters.align import do_align
 from comiclib.download import fetch
 from comiclib.exits import MirrorError
@@ -200,8 +201,7 @@ def refetch(folder, args):
         print("Nothing was changed. Run it again without --dry-run to fetch them.")
         return 0
 
-    session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0"})
+    session = cookies.session()
     done, kept, failed, renamed = 0, 0, [], []
     for page, held in wanted:
         path = os.path.join(folder, page["file"])
@@ -461,8 +461,7 @@ def insert_page(folder, args):
               "for this site.".format(args.url))
         return 2
     #fetched before anything is moved, so a page that cannot be had leaves the comic exactly as it was
-    session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0"})
+    session = cookies.session()
     try:
         answer = session.get(found["src"], timeout=120)
         answer.raise_for_status()

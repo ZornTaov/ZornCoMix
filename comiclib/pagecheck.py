@@ -118,9 +118,11 @@ def links_matching(driver, names):
     return matched
 
 
-def check_page(driver, element_names, next_ele_names, first_ele_names=()):
-    #every path that matches, in the order a scrape would try them, so it is clear which one would win
-    found = {"url": driver.current_url, "title": driver.title, "image": [], "next": [], "first": []}
+def check_page(driver, element_names, next_ele_names, first_ele_names=(), gate=None):
+    #every path that matches, in the order a scrape would try them, so it is clear which one would win. gate is
+    #the site's age gate, when opening the page met one and a gate path pressed past it
+    found = {"url": driver.current_url, "title": driver.title, "image": [], "next": [], "first": [],
+             "gate": [gate] if gate else []}
     for element in element_names:
         srcs = ele_get_all(driver, element)
         if srcs:
@@ -141,6 +143,11 @@ def check_page(driver, element_names, next_ele_names, first_ele_names=()):
         found["needs_javascript"] = built_by_javascript(found["url"], found["image"][0]["src"])
 
     print("Checked {0}".format(found["url"]))
+    if gate:
+        #this check runs with javascript on, which a scrape does not, and a gate's button that sets its cookie
+        #with a script works only with it
+        print("  gate: {0} was the site's age gate, passed by pressing {1}. A comic given the gate's cookie "
+              "(--cookie) never meets it, with javascript or without.".format(gate["url"], gate["xpath"]))
     for kind in ("image", "next"):
         if found[kind]:
             print("  {0}: {1} of the known paths match; a scrape would use {2}".format(

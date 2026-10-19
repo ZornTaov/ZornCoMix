@@ -130,6 +130,11 @@ def retry_waits():
     return tuple(float(bit) for bit in given.split(",") if bit.strip())
 
 
+#what is done with a page opened by its address, once it has loaded: the scrape passes a site's age gate here,
+#since a gate meets a browser on the first page it loads, and this is where the page that was wanted is known
+after_open = None
+
+
 def open_page(driver, url):
     #going straight to an address. a load chrome cannot make at all - refused, reset - raises here, where
     #the same failure reached by a click does not; either way the browser is left on its error page, and
@@ -143,6 +148,8 @@ def open_page(driver, url):
         if not error_page(driver):
             raise
     load_or_retry(driver)
+    if after_open:
+        after_open(driver, url)
 
 
 def load_or_retry(driver):

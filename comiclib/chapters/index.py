@@ -12,6 +12,7 @@ from datetime import datetime
 
 import requests
 
+from comiclib import cookies
 from comiclib.metadata import read as read_metadata, write as write_metadata, write_json
 from comiclib.chapters.links import same_page
 from comiclib.pages import SET_ASIDE, held_pages, listing as folder_pages, page_key, page_number
@@ -120,8 +121,7 @@ def fill_sizes(path, pages, workers=6):
     if not wanted:
         return 0
     print("Asking the site how big {0} image(s) are ...".format(len(wanted)), flush=True)
-    session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0"})
+    session = cookies.session()
     done = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for page, size in zip(wanted, pool.map(lambda page: head_size(session, page["src"]), wanted)):
@@ -357,6 +357,8 @@ def walk(folder, args):
         command.append("--firefox")
     if settings.get("waittime"):
         command += ["--waittime", str(settings["waittime"])]
+    #a site behind an age gate shows a walk the gate, and nothing past it, without the gate's cookie
+    command += cookies.as_args(settings.get("cookies"))
     #pages this comic keeps as a note of their address, so the walk counts each as the one page it is
     for address in metadata.get("notes") or []:
         command += ["--note-page", address]
@@ -382,7 +384,8 @@ def one_page(url, args):
     #in a real browser. a walk of one page into a scratch index is exactly that, and needs no new mode.
     spare = os.path.join(index_folder(), "one-page-{0}.jsonl".format(os.getpid()))
     os.makedirs(os.path.dirname(spare), exist_ok=True)
-    command = [sys.executable, MIRROR, "--index", spare, "--index-limit", "1", url]
+    command = [sys.executable, MIRROR, "--index", spare, "--index-limit", "1"] + cookies.as_args(
+        cookies.for_comic) + [url]
     try:
         subprocess.run(command, text=True)
         held = read_index(spare)

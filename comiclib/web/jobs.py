@@ -16,6 +16,7 @@ from comiclib import moving, pluginfetch, plugins
 from comiclib.batch import chapter_step, own_group
 from comiclib.library import find_comics
 from comiclib.chapters.index import index_path, numbering_trouble, set_aside, set_aside_pages
+from comiclib.cookies import as_args
 from comiclib.exits import USAGE
 from comiclib.metadata import METADATA_FILE, write_json
 from comiclib.paths import config_folder
@@ -254,10 +255,11 @@ class Runner:
             label = "{0}: {1} comics".format(why, len(names))
         return self.submit(Job("update", label, work))
 
-    def submit_check(self, url):
-        #a browser is heavy enough that this waits its turn like everything else
+    def submit_check(self, url, cookies=None):
+        #a browser is heavy enough that this waits its turn like everything else. cookies are a site's, for
+        #getting past its age gate as a comic given them would
         def work(job):
-            command = [sys.executable, self.args.script, "--check", url]
+            command = [sys.executable, self.args.script, "--check"] + as_args(cookies) + [url]
             print("Checking {0}".format(url), flush=True)
             try:
                 done = subprocess.run(command, cwd=self.args.root, capture_output=True, text=True,

@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 
 import requests
 
+from comiclib import cookies
 from comiclib.chapters.index import index_path, patiently, read_index, set_aside, write_lines
 from comiclib.metadata import read as read_metadata
 from comiclib.pages import saved_name
@@ -151,8 +152,7 @@ def wordpress_index(folder, args):
     if not address:
         print("ERROR: nothing says where {0} is on the web. Pass --start with any one of its pages.".format(folder))
         return None
-    session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0"})
+    session = cookies.session()
     try:
         root = api_root(session, address)
         base = post_type(session, root, address)
