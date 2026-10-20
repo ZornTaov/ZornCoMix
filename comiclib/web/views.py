@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-from comiclib import metadata as sidecar, plugins, runlogs
+from comiclib import metadata as sidecar, plugins, runlogs, useragent
 from comiclib.chapters.index import reaches_newest, read_index
 from comiclib.chapters.numbering import numbered
 
@@ -295,4 +295,6 @@ def config_view(args, uc):
     return {"path": uc.config_path(), "saved": os.path.exists(uc.config_path()),
             "settings": saved, "defaults": uc.config_defaults,
             "restart_needed": ["schedule"], "root": args.root,
-            "from_command_line": sorted(getattr(args, "from_command_line", []))}
+            "from_command_line": sorted(getattr(args, "from_command_line", [])),
+            #what a blank User-Agent box means, for the box to say so
+            "user_agent_default": useragent.default}

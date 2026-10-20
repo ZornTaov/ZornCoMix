@@ -66,6 +66,11 @@ dialog > form { position: relative; }
   library path is long and has no spaces to break at, so it wraps anywhere rather than widen the dialog*/
 #edit-move-box { margin-bottom: 10px; }
 #edit-move-box > summary { margin-bottom: 8px; }
+details.advanced { margin-bottom: 10px; }
+details.advanced > summary { margin-bottom: 8px; }
+.agent { display: flex; gap: 8px; min-width: 0; }
+.agent input[type=text] { flex: 1; min-width: 0; }
+@media (max-width: 560px) { .agent { flex-wrap: wrap; } }
 .move-plan { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
   margin: 0 0 8px; font-size: 12px; overflow-wrap: anywhere; }
 .move-plan div { padding: 1px 0; }

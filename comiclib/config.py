@@ -21,6 +21,8 @@ config_defaults = {
     "progress": 60,
     "max_depth": 5,
     "schedule": None,
+    #the name the pictures and the chapter pages are fetched under; None is useragent's built-in one
+    "user_agent": None,
     #what the web page's add form starts with ticked
     "add_defaults": {"prime": False, "prefix": False, "increment": 1, "javascript": False,
                      "waittime": 0, "cbz": True, "direction_check": True, "multi_page": True},

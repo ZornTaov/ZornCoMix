@@ -40,6 +40,10 @@ async function openEditor(name) {
   $("e-waittime").value = s.waittime || 0;
   //written the way a browser's Cookie header has them, which is how they are typed back
   $("e-cookies").value = Object.entries(s.cookies || {}).map(([name, value]) => `${name}=${value}`).join("; ");
+  $("e-user_agent").value = s.user_agent || "";
+  //what a blank box falls back to, so it is plain what the comic is fetched under now
+  $("e-user_agent").placeholder = (config && (config.settings.user_agent || config.user_agent_default)) || "";
+  $("edit-advanced").open = !!s.user_agent;
   const chapters = detail.chapters || {};
   $("e-chapters").value = chapters.source_url || "";
   $("e-every").value = chapters.every || "";
@@ -187,7 +191,7 @@ async function saveEditor(updateAfter) {
   const settings = editing.plugin
     ? { cbz_path: $("e-cbz_path").value, plugin: readPluginForm($("e-plugin")) }
     : { url: $("e-url").value, increment: $("e-increment").value, cbz_path: $("e-cbz_path").value,
-        waittime: $("e-waittime").value, cookies: $("e-cookies").value,
+        waittime: $("e-waittime").value, cookies: $("e-cookies").value, user_agent: $("e-user_agent").value,
         chapters_url: $("e-chapters").value, chapters_every: $("e-every").value };
   flags.forEach((key) => { settings[key] = $("e-" + key).checked; });
   try {
@@ -316,3 +320,4 @@ $("e-discard-walk").addEventListener("click", async () => {
 $("edit-save").addEventListener("click", () => saveEditor(false));
 $("edit-save-update").addEventListener("click", () => saveEditor(true));
 $("edit-cancel").addEventListener("click", () => $("editor").close());
+$("e-user_agent-mine").addEventListener("click", () => { $("e-user_agent").value = navigator.userAgent; });

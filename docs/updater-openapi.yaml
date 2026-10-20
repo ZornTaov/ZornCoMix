@@ -274,6 +274,9 @@ paths:
                     items:
                       type: string
                     description: Settings overridden on the command line
+                  user_agent_default:
+                    type: string
+                    description: The User-Agent images and chapter pages are fetched under when neither the library's user_agent nor a comic's own is set
     post:
       tags: [Config]
       summary: Save library configuration
@@ -286,7 +289,7 @@ paths:
               properties:
                 settings:
                   type: object
-                  description: Settings to save (only known keys are accepted)
+                  description: Settings to save (only known keys are accepted). user_agent is one line of text, or empty for the built-in one
       responses:
         "200":
           description: Saved
@@ -445,7 +448,7 @@ paths:
                   description: The comic's folder name
                 settings:
                   type: object
-                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended, cookies). cookies is "name=value; name=value" or an object of name to value; empty removes them
+                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended, cookies, user_agent). cookies is "name=value; name=value" or an object of name to value; empty removes them. user_agent is the name this comic's images and chapter pages are fetched under, one line of text; empty removes it, and the library's is used
                 updated:
                   type: ["string", "null"]
                   description: Expected updated timestamp (optimistic concurrency)

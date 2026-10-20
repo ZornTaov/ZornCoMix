@@ -88,7 +88,8 @@ def settings_from_args(args, folder, url, increment, ended=False):
     #when a run starts, so editing one value here is the whole of changing how a comic is scraped.
     #every key is always written, even at its default, so there is somewhere obvious to change it - all but
     #the cookies, which only a site behind a gate has, and which every other comic's sidecar would otherwise
-    #gain as an empty block the day it next ran
+    #gain as an empty block the day it next ran, and a name of the comic's own to fetch under, which only a
+    #site refusing the library's has
     settings = {
         "url": url,
         "output": folder,
@@ -106,6 +107,8 @@ def settings_from_args(args, folder, url, increment, ended=False):
     }
     if getattr(args, "cookies", None):
         settings["cookies"] = dict(args.cookies)
+    if getattr(args, "user_agent", None):
+        settings["user_agent"] = args.user_agent
     return settings
 
 

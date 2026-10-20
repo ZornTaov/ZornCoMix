@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 
 #what this shares with the other scripts: where the settings are, what makes two filenames one page, the
 #metadata file and how an archive is packed
-from comiclib import browser, cbz, cookies, download, elements, exits, guards, pagecheck, runrecord, walk
+from comiclib import browser, cbz, cookies, download, elements, exits, guards, pagecheck, runrecord, useragent, walk
 from comiclib.chapters.index import KeptIndex
 from comiclib.chapters.links import same_page
 from comiclib.metadata import METADATA_FILE, now_stamp, read as read_metadata
@@ -196,6 +196,7 @@ def setup():
     params.add_argument("--index-limit",type=int,default=0,metavar="PAGES",help="With --index, stop after this many pages. 0 means the whole comic.")
     params.add_argument("--note-page",action='append',default=[],metavar="ADDRESS",help="Keep this page as a note of its address rather than the pictures on it; can be given more than once. A comic's own list, from chapters.py note, is read from its metadata; a walk is given it this way.")
     params.add_argument("--cookie",action='append',default=[],metavar="NAME=VALUE",help="A cookie the site wants before it shows the comic - the one its \"are you 18?\" page sets once passed, most often; can be given more than once. Set in the browser before the first page loads, and sent with every image fetched from the site.")
+    params.add_argument("--user-agent",default=None,metavar="TEXT",help="The name to fetch this comic's images under, for a site that refuses the library's - one that drops the connection on every image is often refusing the name. Beats the user_agent in ComicScraper.json, which beats a current Chrome's. The browser keeps its own.")
     params.add_argument("--check",action='store_true',default=False,help="Load the page, report which of the known image and next element paths match it, and stop. Suggests paths for a site that matches none, which is the first step in adding a comic the script does not know yet.")
     params.add_argument("--prime",action='store_true',default=False,help="Save only the first page, check the next link works, write the metadata and archive, then stop. The comic is then ready for update_comics to download the rest, which is far quicker run on the machine holding the library than over a network share.")
     
@@ -206,6 +207,8 @@ def setup():
     global given_cookies
     try:
         args.cookies = given_cookies = cookies.parse(args.cookie)
+        args.user_agent = useragent.clean(args.user_agent)
+        useragent.use(args.user_agent)
     except ValueError as error:
         print("\nERROR: {0}".format(error))
         sys.exit(EXIT_USAGE)
