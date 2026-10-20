@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-from comiclib import comicinfo, cookies, moving, plugins, useragent
+from comiclib import comicinfo, cookies, moving, placeholders, plugins, useragent
 from comiclib.chapters.index import index_path, set_aside
 from comiclib.metadata import write_json
 from comiclib.plugins import field_value
@@ -30,6 +30,7 @@ editable = {
     "ended": "flag",
     "cookies": "cookies",
     "user_agent": "agent",
+    "placeholders": "placeholders",
 }
 #of those, the ones a comic another program scrapes has too: everything else is mirror_base's own
 plugin_kept = ("cbz", "cbz_path", "ended")
@@ -164,6 +165,12 @@ def clean_settings(given):
             except ValueError as error:
                 problems.append(str(error))
             continue
+        if kind == "placeholders":
+            try:
+                cleaned[key] = placeholders.parse(given[key])
+            except ValueError as error:
+                problems.append(str(error))
+            continue
         try:
             cleaned[key] = field_value(kind, given[key])
         except ValueError:
@@ -271,7 +278,7 @@ def save_settings(args, uc, runner, name, given, expected_updated):
         return 200, {"saved": False, "message": "nothing changed"}
     settings.update(cleaned)
     #neither is kept empty: a comic without its own is a comic that never had any
-    for key in ("cookies", "user_agent"):
+    for key in ("cookies", "user_agent", "placeholders"):
         if key in settings and not settings[key]:
             del settings[key]
     metadata["settings"] = settings

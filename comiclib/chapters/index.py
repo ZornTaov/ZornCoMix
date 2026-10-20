@@ -12,7 +12,7 @@ from datetime import datetime
 
 import requests
 
-from comiclib import cookies
+from comiclib import cookies, placeholders
 from comiclib.metadata import read as read_metadata, write as write_metadata, write_json
 from comiclib.chapters.links import same_page
 from comiclib.pages import SET_ASIDE, held_pages, listing as folder_pages, page_key, page_number
@@ -359,6 +359,8 @@ def walk(folder, args):
         command += ["--waittime", str(settings["waittime"])]
     #a site behind an age gate shows a walk the gate, and nothing past it, without the gate's cookie
     command += cookies.as_args(settings.get("cookies"))
+    #and stops where the site shows a page still to come, as a scrape does, rather than numbering it
+    command += placeholders.as_args(settings.get("placeholders"))
     #pages this comic keeps as a note of their address, so the walk counts each as the one page it is
     for address in metadata.get("notes") or []:
         command += ["--note-page", address]

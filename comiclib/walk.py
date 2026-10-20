@@ -36,11 +36,12 @@ def go_to_first(driver, first_paths):
     return False
 
 
-def build_index(driver, args, page_images, next, still_on, first_paths=(), elsewhere=None):
+def build_index(driver, args, page_images, next, still_on, first_paths=(), elsewhere=None, not_out=None):
     #walks the comic the way a scrape does, but saves nothing: this is only about which page is which.
     #each line is written as it is reached, so a walk that is stopped or times out keeps what it had.
     #page_images(driver, args), next(driver, args), still_on(driver, before) and elsewhere(driver, args,
-    #left, known) are the scrape's own, and first_paths are the library's links back to page 1.
+    #left, known) are the scrape's own, and first_paths are the library's links back to page 1. not_out(here)
+    #says the page just read showed one of the comic's placeholders, where a page is still to come
     path = args.index
     folder = os.path.dirname(os.path.abspath(path))
     if folder:
@@ -92,6 +93,17 @@ def build_index(driver, args, page_images, next, still_on, first_paths=(), elsew
             #a line per page of the comic, not per address: where a comic serves several at once, the
             #numbering a scrape would give them is exactly the numbering recorded here
             srcs = page_images(driver, args)
+            if not_out and not_out(here):
+                #the pages out so far are the comic's, and the slot after them is still to come: a line for it
+                #now would number the page that fills it, and every page after, one further on
+                for src in srcs:
+                    at += 1
+                    out.write(json.dumps({"n": at, "url": here, "src": src, "file": saved_name(src),
+                                          "title": driver.title}) + chr(10))
+                out.flush()
+                print("{0} shows a placeholder where its next page will be, so this is as far as the comic "
+                      "goes for now.".format(here))
+                break
             if len(srcs) > 1 and most_here < 2:
                 print("{0} holds {1} pages of the comic, so each gets its own line in the "
                       "index.".format(here, len(srcs)))
