@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-from comiclib import comicinfo, cookies, moving, plugins
+from comiclib import comicinfo, cookies, moving, plugins, useragent
 from comiclib.chapters.index import index_path, set_aside
 from comiclib.metadata import write_json
 from comiclib.plugins import field_value
@@ -29,6 +29,7 @@ editable = {
     "multi_page": "flag",
     "ended": "flag",
     "cookies": "cookies",
+    "user_agent": "agent",
 }
 #of those, the ones a comic another program scrapes has too: everything else is mirror_base's own
 plugin_kept = ("cbz", "cbz_path", "ended")
@@ -157,6 +158,12 @@ def clean_settings(given):
             except ValueError as error:
                 problems.append(str(error))
             continue
+        if kind == "agent":
+            try:
+                cleaned[key] = useragent.clean(given[key])
+            except ValueError as error:
+                problems.append(str(error))
+            continue
         try:
             cleaned[key] = field_value(kind, given[key])
         except ValueError:
@@ -263,8 +270,10 @@ def save_settings(args, uc, runner, name, given, expected_updated):
     if not changed:
         return 200, {"saved": False, "message": "nothing changed"}
     settings.update(cleaned)
-    if "cookies" in settings and not settings["cookies"]:
-        del settings["cookies"]
+    #neither is kept empty: a comic without its own is a comic that never had any
+    for key in ("cookies", "user_agent"):
+        if key in settings and not settings[key]:
+            del settings[key]
     metadata["settings"] = settings
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     metadata["updated"] = stamp
@@ -367,6 +376,11 @@ def save_config(args, uc, given):
                 except ValueError:
                     problems.append("the schedule wants a 24 hour time like 03:30")
             saved[key] = text or None
+        elif key == "user_agent":
+            try:
+                saved[key] = useragent.clean(value)
+            except ValueError as error:
+                problems.append(str(error))
         else:
             try:
                 number = int(value)

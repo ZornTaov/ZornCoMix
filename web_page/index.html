@@ -159,6 +159,14 @@
           <label class="check"><input type="checkbox" id="c-add-direction_check"> direction check</label>
         </div>
       </div>
+      <details class="advanced" id="cfg-advanced"><summary>Advanced settings</summary>
+        <div class="field"><label for="c-user_agent">User-Agent</label>
+          <div class="agent"><input type="text" id="c-user_agent" spellcheck="false">
+            <button type="button" id="c-user_agent-mine">Use this browser's</button></div>
+          <div class="note">The name pictures and chapter pages are fetched under; blank for a current Chrome's.
+            A site that drops the connection on every picture is often refusing the name. A comic can have
+            its own, in its settings. The scrape's browser keeps its own name either way.</div></div>
+      </details>
     </div>
     <div class="dlg-foot">
       <div class="msg" id="cfg-msg"></div>
@@ -388,6 +396,13 @@
         <div class="note">What the site's "are you 18?" page sets once passed, as name=value; several put apart with ;.
           The browser's developer tools show it under the site's cookies after passing the gate by hand.</div>
       </div>
+      <details class="advanced builtin-only" id="edit-advanced"><summary>Advanced settings</summary>
+        <div class="field"><label for="e-user_agent">User-Agent</label>
+          <div class="agent"><input type="text" id="e-user_agent" spellcheck="false">
+            <button type="button" id="e-user_agent-mine">Use this browser's</button></div>
+          <div class="note">The name this comic's pictures and chapter pages are fetched under, for a site that
+            refuses the library's; blank for the library's, set in Settings.</div></div>
+      </details>
       <div class="field">
         <label>Options</label>
         <div class="row">

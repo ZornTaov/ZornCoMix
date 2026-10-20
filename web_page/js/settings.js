@@ -10,6 +10,10 @@ function applyConfig(data) {
     $("c-" + key).value = s[key] ?? "";
   });
   $("c-schedule").value = s.schedule || "";
+  $("c-user_agent").value = s.user_agent || "";
+  $("c-user_agent").placeholder = data.user_agent_default || "";
+  //kept shut unless it holds something, so a library on the built-in name never has to look at it
+  if (s.user_agent) $("cfg-advanced").open = true;
   ["jobs", "timeout", "progress", "max_depth", "schedule"].forEach((key) => {
     const note = $("c-" + key + "-note");
     if (note) note.textContent = data.from_command_line.includes(key) ? "· set on the command line, which wins" : "";
@@ -44,10 +48,12 @@ async function loadConfig(open) {
 
 $("open-config").addEventListener("click", () => loadConfig(true));
 $("cfg-cancel").addEventListener("click", () => $("config").close());
+//the name of the browser this page is open in: a real one, as current as that browser is
+$("c-user_agent-mine").addEventListener("click", () => { $("c-user_agent").value = navigator.userAgent; });
 $("cfg-save").addEventListener("click", async () => {
   const msg = $("cfg-msg");
   msg.className = "msg"; msg.textContent = "Saving…";
-  const settings = { schedule: $("c-schedule").value.trim(), add_defaults: {} };
+  const settings = { schedule: $("c-schedule").value.trim(), user_agent: $("c-user_agent").value, add_defaults: {} };
   ["pages_folder", "cbz_folder", "jobs", "timeout", "progress", "max_depth"].forEach((key) => {
     settings[key] = $("c-" + key).value;
   });

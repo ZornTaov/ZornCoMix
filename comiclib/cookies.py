@@ -7,8 +7,7 @@
 import ipaddress
 from urllib.parse import urlparse
 
-#the browser's own name for itself, which some sites want before they answer at all
-USER_AGENT = "Mozilla/5.0"
+from comiclib import useragent
 
 #the cookies of the comic being worked on, and one of its pages to say which site they are for, for the parts
 #of chapters.py that read the site without being handed the comic's settings: set once by the command, with
@@ -73,7 +72,8 @@ def session(cookies=None, url=None):
     if cookies is None:
         cookies, url = for_comic, url or comic_url
     made = requests.Session()
-    made.headers.update({"User-Agent": USER_AGENT})
+    #a browser's name, which some sites want before they answer at all
+    made.headers.update({"User-Agent": useragent.current})
     domain = domain_for(url) if url else None
     #python's cookie jar reads a host with no dots in its name as that name with .local after it, and holds
     #back a cookie set for the name alone - a browser does not

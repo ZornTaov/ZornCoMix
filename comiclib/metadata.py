@@ -79,6 +79,9 @@ def settings_to_argv(settings):
         argv += ["--cbz-path", settings["cbz_path"]]
     #what the site wants to have been told before it shows the comic, an age gate's answer most often
     argv += cookies.as_args(settings.get("cookies"))
+    #the name its pictures are fetched under, for a site that refuses the library's
+    if settings.get("user_agent"):
+        argv += ["--user-agent", settings["user_agent"]]
     argv.append(url)
     return argv
 
@@ -90,7 +93,8 @@ def argv_to_settings(argv):
     settings = {"url": None, "output": None, "cbz_path": None, "increment": None, "prefix": False,
                 "javascript": False, "firefox": False, "waittime": 0, "cbz": True, "ended": False}
     valued = {"--increment": "increment", "-i": "increment", "--output": "output", "-o": "output",
-              "--cbz-path": "cbz_path", "--waittime": "waittime", "-w": "waittime"}
+              "--cbz-path": "cbz_path", "--waittime": "waittime", "-w": "waittime",
+              "--user-agent": "user_agent"}
     flagged = {"--prefix": "prefix", "-p": "prefix", "--enable_javascript": "javascript",
                "-ej": "javascript", "--firefox": "firefox", "-f": "firefox"}
     at = 0
