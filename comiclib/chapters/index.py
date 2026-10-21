@@ -371,6 +371,14 @@ def walk(folder, args):
     #pages this comic keeps as a note of their address, so the walk counts each as the one page it is
     for address in metadata.get("notes") or []:
         command += ["--note-page", address]
+    #and the paths its scrapes found it by, so the walk follows the same links an update does. searching the
+    #lists afresh, a walk of a comic of several pages an address took a next link that led back, and stopped
+    #at its second address calling the comic looped
+    state = metadata.get("state") or {}
+    if state.get("image_xpath"):
+        command += ["--image-path", state["image_xpath"]]
+    if state.get("next_xpath"):
+        command += ["--next-path", state["next_xpath"]]
     if args.first:
         command.append("--index-first")
     if args.limit:
