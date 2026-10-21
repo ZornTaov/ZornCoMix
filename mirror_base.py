@@ -13,7 +13,8 @@ from selenium.webdriver.common.by import By
 
 #what this shares with the other scripts: where the settings are, what makes two filenames one page, the
 #metadata file and how an archive is packed
-from comiclib import browser, cbz, cookies, download, elements, exits, guards, pagecheck, runrecord, useragent, walk
+from comiclib import (browser, cbz, cookies, download, elements, exits, guards, pagecheck, placeholders, runrecord,
+                      useragent, walk)
 from comiclib.chapters.index import KeptIndex
 from comiclib.chapters.links import same_page
 from comiclib.metadata import METADATA_FILE, now_stamp, read as read_metadata
@@ -159,6 +160,8 @@ scrape_state = {
     "walked_to": None,
     #set when a page turns out to hold no comic image at all, after this run has already saved some
     "ran_out": None,
+    #the address that showed one of the comic's placeholders where a page is still to come
+    "not_out": None,
     #the picture saved as the last page, and the pages in a row it has been saved as, by file
     "repeat_src": None,
     "repeat_files": [],
@@ -197,6 +200,7 @@ def setup():
     params.add_argument("--note-page",action='append',default=[],metavar="ADDRESS",help="Keep this page as a note of its address rather than the pictures on it; can be given more than once. A comic's own list, from chapters.py note, is read from its metadata; a walk is given it this way.")
     params.add_argument("--cookie",action='append',default=[],metavar="NAME=VALUE",help="A cookie the site wants before it shows the comic - the one its \"are you 18?\" page sets once passed, most often; can be given more than once. Set in the browser before the first page loads, and sent with every image fetched from the site.")
     params.add_argument("--user-agent",default=None,metavar="TEXT",help="The name to fetch this comic's images under, for a site that refuses the library's - one that drops the connection on every image is often refusing the name. Beats the user_agent in ComicScraper.json, which beats a current Chrome's. The browser keeps its own.")
+    params.add_argument("--placeholder",action='append',default=[],metavar="ADDRESS",help="A picture the site shows where a page will be once it is out - a week's address filled a day at a time, say, the rest showing \"coming soon\". Never saved: the run stops at the first one, as caught up, and the next carries on from that address. Its whole address, or from its first /; can be given more than once.")
     params.add_argument("--check",action='store_true',default=False,help="Load the page, report which of the known image and next element paths match it, and stop. Suggests paths for a site that matches none, which is the first step in adding a comic the script does not know yet.")
     params.add_argument("--prime",action='store_true',default=False,help="Save only the first page, check the next link works, write the metadata and archive, then stop. The comic is then ready for update_comics to download the rest, which is far quicker run on the machine holding the library than over a network share.")
     
@@ -209,6 +213,7 @@ def setup():
         args.cookies = given_cookies = cookies.parse(args.cookie)
         args.user_agent = useragent.clean(args.user_agent)
         useragent.use(args.user_agent)
+        args.placeholders = placeholders.parse(args.placeholder)
     except ValueError as error:
         print("\nERROR: {0}".format(error))
         sys.exit(EXIT_USAGE)
@@ -437,6 +442,16 @@ def page_images(driver, args):
             else:
                 print("The image path {0} found nothing on {1}, so {2} found it for this page only.".format(
                     image_xpath, here, found_by))
+    #a picture the comic's settings name as a page not out yet ends what this address holds for now: the
+    #slot it fills will be a real page, numbered where it stands, so nothing after it can be numbered either.
+    #asked before anything below, which would count it among the pictures seen and could leave it out as
+    #furniture - shown in every slot not out yet, it repeats - and save what comes after it in its place
+    #(a loop rather than next(), which is this script's own name for pressing the next link)
+    for at, src in enumerate(srcs):
+        if placeholders.matches(src, getattr(args, "placeholders", None)):
+            scrape_state["not_out"] = here
+            srcs = srcs[:at]
+            break
     if len(srcs) > 1 and not getattr(args, "multi_page", True):
         #told to read this comic as one page an address whatever the page holds
         return srcs[:1]
@@ -513,6 +528,15 @@ def img_save(driver, increment, args):
     global current_url
     current_url = driver.current_url
     srcs = page_images(driver, args)
+
+    if scrape_state["not_out"] == current_url:
+        #the pages out so far, and no further: the next link from an address still filling leads nowhere new
+        #yet, or to the address before. one with none out at all saves nothing, and the next run starts at
+        #it, numbering on from the last page saved, which is what an address walked to and not saved does
+        resuming = scrape_state["pages_saved"] == 0
+        for at, src in enumerate(srcs):
+            save_one(driver, src, increment + at, args, resuming)
+        return False
 
     if not srcs:
         #a page with no comic image on it, reached after this run has already saved some, is how a comic
@@ -812,7 +836,8 @@ def main():
         #a walk that records what it saw and downloads nothing
         code = EXIT_OK
         try:
-            walk.build_index(driver, args, page_images, next, still_on, first_ele_names, next_elsewhere)
+            walk.build_index(driver, args, page_images, next, still_on, first_ele_names, next_elsewhere,
+                             not_out=lambda here: scrape_state["not_out"] == here)
         except MirrorError as error:
             print("\nERROR: {0}".format(error))
             code = error.code
@@ -892,7 +917,12 @@ def main():
             increment = increment + 1 if scrape_state["last_increment"] is None \
                 else scrape_state["last_increment"] + 1
             driver.moved_on()
-        if scrape_state["ran_out"]:
+        if scrape_state["not_out"]:
+            print("Caught up: {0} shows a placeholder where its next page will be, so the pages out so far are "
+                  "saved and the rest wait for a later run.".format(scrape_state["not_out"]))
+            stop_reason = "next page not out yet"
+            completed = True
+        elif scrape_state["ran_out"]:
             #the loop ended because the page the next link led to holds no comic at all
             print("The next link led to {0}, which has no page of the comic on it, so this is as far as the "
                   "comic goes for now. The next run carries on from {1}.".format(

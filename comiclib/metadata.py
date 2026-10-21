@@ -5,7 +5,7 @@ import os
 import shlex
 from datetime import datetime, timezone
 
-from comiclib import cookies
+from comiclib import cookies, placeholders
 
 METADATA_FILE = "mirror_metadata.json"
 SCHEMA = 2
@@ -82,6 +82,8 @@ def settings_to_argv(settings):
     #the name its pictures are fetched under, for a site that refuses the library's
     if settings.get("user_agent"):
         argv += ["--user-agent", settings["user_agent"]]
+    #pictures the site shows where a page will be once it is out
+    argv += placeholders.as_args(settings.get("placeholders"))
     argv.append(url)
     return argv
 
@@ -103,6 +105,13 @@ def argv_to_settings(argv):
         token = argv[at]
         if token in valued and at + 1 < len(argv):
             settings[valued[token]] = argv[at + 1]
+            at += 2
+            continue
+        if token == "--placeholder" and at + 1 < len(argv):
+            try:
+                settings["placeholders"] = placeholders.parse((settings.get("placeholders") or []) + [argv[at + 1]])
+            except ValueError:
+                pass
             at += 2
             continue
         if token == "--cookie" and at + 1 < len(argv):

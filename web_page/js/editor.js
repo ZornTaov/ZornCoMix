@@ -43,7 +43,8 @@ async function openEditor(name) {
   $("e-user_agent").value = s.user_agent || "";
   //what a blank box falls back to, so it is plain what the comic is fetched under now
   $("e-user_agent").placeholder = (config && (config.settings.user_agent || config.user_agent_default)) || "";
-  $("edit-advanced").open = !!s.user_agent;
+  $("e-placeholders").value = (s.placeholders || []).join(" ");
+  $("edit-advanced").open = !!(s.user_agent || (s.placeholders || []).length);
   const chapters = detail.chapters || {};
   $("e-chapters").value = chapters.source_url || "";
   $("e-every").value = chapters.every || "";
@@ -192,6 +193,7 @@ async function saveEditor(updateAfter) {
     ? { cbz_path: $("e-cbz_path").value, plugin: readPluginForm($("e-plugin")) }
     : { url: $("e-url").value, increment: $("e-increment").value, cbz_path: $("e-cbz_path").value,
         waittime: $("e-waittime").value, cookies: $("e-cookies").value, user_agent: $("e-user_agent").value,
+        placeholders: $("e-placeholders").value,
         chapters_url: $("e-chapters").value, chapters_every: $("e-every").value };
   flags.forEach((key) => { settings[key] = $("e-" + key).checked; });
   try {

@@ -109,6 +109,9 @@ def settings_from_args(args, folder, url, increment, ended=False):
         settings["cookies"] = dict(args.cookies)
     if getattr(args, "user_agent", None):
         settings["user_agent"] = args.user_agent
+    #and the pictures its site shows for a page still to come, which only a site that does that has
+    if getattr(args, "placeholders", None):
+        settings["placeholders"] = list(args.placeholders)
     return settings
 
 
