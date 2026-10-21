@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -479,11 +480,24 @@ def make_handler(runner, args, uc, tee):
     return Handler
 
 
+class PageServer(ThreadingHTTPServer):
+    #http.server asks for SO_REUSEADDR, which elsewhere only lets a restarted page have its port straight back.
+    #on windows it lets a second server bind a port one is already listening on, and the two then share its
+    #connections: two updaters started on one port each answered some of the page's requests with the other's
+    #library. there the port is held exclusively instead, so the second is refused and says so
+    if os.name == "nt":
+        allow_reuse_address = False
+
+        def server_bind(self):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            super().server_bind()
+
+
 def start(args, uc):
     tee = LogTee(sys.stdout)
     sys.stdout = tee
     runner = Runner(args, uc)
-    server = ThreadingHTTPServer((args.web_host, args.web), make_handler(runner, args, uc, tee))
+    server = PageServer((args.web_host, args.web), make_handler(runner, args, uc, tee))
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True, name="web").start()
     shown = "localhost" if args.web_host in ("0.0.0.0", "", "::") else args.web_host

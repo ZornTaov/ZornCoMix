@@ -3,6 +3,7 @@
 import json
 import os
 import shlex
+import time
 from datetime import datetime, timezone
 
 from comiclib import cookies, placeholders
@@ -38,7 +39,22 @@ def write_json(path, body, indent=2):
     with open(spare, 'w', encoding='utf-8') as f:
         json.dump(body, f, indent=indent)
         f.write('\n')
-    os.replace(spare, path)
+    replace_patiently(spare, path)
+
+
+def replace_patiently(spare, path, tries=20, wait=0.1):
+    #on windows a file another process has open cannot be replaced, and whatever reads a comic's metadata - the
+    #reader, a virus scanner, a sync - holds it open for a moment. a save landing in that moment failed outright,
+    #and the web page's request went unanswered. tried again for a couple of seconds instead; elsewhere the
+    #first try always works
+    for attempt in range(tries):
+        try:
+            os.replace(spare, path)
+            return
+        except PermissionError:
+            if attempt == tries - 1:
+                raise
+            time.sleep(wait)
 
 
 def write(folder, metadata):
