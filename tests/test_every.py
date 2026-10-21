@@ -3,6 +3,7 @@
 #its name as it fills, the next part starts on its own once it is full, and changing the size is a change
 #that moves archives already written, so it needs --force like any other.
 import os
+import re
 import time
 import zipfile
 
@@ -112,6 +113,37 @@ def test_each_part_is_packed_into_an_archive_of_its_own(library, chapters):
         with zipfile.ZipFile(str(shelf / name)) as zf:
             held.append(len([n for n in zf.namelist() if n.endswith(".png")]))
     assert held == [4, 4, 2], held
+
+
+def test_an_update_lists_only_the_part_that_grew(library, chapters):
+    #a page a day joins the last part, and an update saying so used to list every part and every archive,
+    #which read as all of them being worked on again
+    folder = daily(chapters, library, 10)
+    ch(folder, library, "chapters", "--every", "4", "--save")
+    ch(folder, library, "pack")
+    add_pages(chapters, library, folder, 11)
+    code, out = ch(folder, library, "chapters", "--save")
+    assert code == 0, out
+    assert "2 chapter(s) as saved before, not listed again" in out, out
+    rows = re.findall(r"^  (\d+) {2,}", out, re.M)
+    assert rows == ["3"], out
+    code, out = ch(folder, library, "pack")
+    assert code == 0, out
+    assert "0 to write, 1 to add pages to, 2 already as they should be" in out, out
+    assert not [line for line in out.splitlines() if line.startswith("  keep")], out
+    assert "  add   c003 " in out, out
+    #what it holds now is checked as surely as before
+    assert "Checked: all 11 page(s)" in out, out
+
+
+def test_a_part_that_moves_is_shown_with_every_other(library, chapters):
+    #a size changed moves pages between archives already written: the whole list is the thing to look over
+    folder = daily(chapters, library, 10)
+    ch(folder, library, "chapters", "--every", "4", "--save")
+    code, out = ch(folder, library, "chapters", "--every", "5", "--save")
+    assert code == 1 and "not listed again" not in out, out
+    rows = re.findall(r"^  (\d+) {2,}", out, re.M)
+    assert rows == ["1", "2"], out
 
 
 def unwalked(library, names, name="Numbered"):

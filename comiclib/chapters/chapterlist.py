@@ -93,15 +93,23 @@ def say_fixes(took, missed):
         print("  by hand: {0} is not a page of this comic, so that correction did nothing".format(where))
 
 
-def show_chapters(folder, chapters, pages, listed=None):
+def show_chapters(folder, chapters, pages, listed=None, before=None):
+    #before is the list saved last time, when every chapter in it is still where it was: those that are
+    #exactly as saved go unlisted, since a comic cut every hundred pages, or kept current from its archive
+    #page, would otherwise print every one of its chapters on every update to say one of them grew
     print("{0}: {1} chapter(s) over {2} page(s)".format(folder, len(chapters), len(pages)))
+    same = {(c["number"], c.get("label"), c["start_page"], c["end_page"]) for c in before or []}
+    shown = [c for c in chapters if (c["number"], c.get("label"), c["start_page"], c["end_page"]) not in same]
     if listed is not None:
         print("  the archive listed {0} of this comic's {1} pages".format(listed, len(pages)))
     before = chapters[0]["start_page"] - 1 if chapters else 0
     if before:
         print("  {0} page(s) come before the first chapter starts".format(before))
-    print("  {0:<4} {1:<44} {2:>7} {3:>7} {4:>7}  {5}".format("no", "label", "from", "to", "pages", "starts at"))
-    for chapter in chapters:
+    if len(shown) < len(chapters):
+        print("  {0} chapter(s) as saved before, not listed again".format(len(chapters) - len(shown)))
+    if shown:
+        print("  {0:<4} {1:<44} {2:>7} {3:>7} {4:>7}  {5}".format("no", "label", "from", "to", "pages", "starts at"))
+    for chapter in shown:
         print("  {0:<4} {1:<44} {2:>7} {3:>7} {4:>7}  {5}{6}".format(
             chapter["number"], (chapter["label"] or "")[:44], chapter["start_page"], chapter["end_page"],
             chapter["pages"], (chapter["start_file"] or "?"),
@@ -360,8 +368,9 @@ def plan(folder, args):
     found, took, missed = apply_fixes(found, pages, known.get("fixes"))
     say_fixes(took, missed)
     chapters = settle_chapters(found, pages, args.shift)
-    show_chapters(folder, chapters, pages, listed)
     how, what = compare_chapters(known.get("list"), chapters)
+    #a list that moves a saved chapter is shown whole, since that is the one to look over before --force
+    show_chapters(folder, chapters, pages, listed, before=known.get("list") if how != "changed" else None)
     if known.get("list"):
         if how == "same":
             print("  the same chapters as before.")

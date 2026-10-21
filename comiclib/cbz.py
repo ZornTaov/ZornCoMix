@@ -2,6 +2,7 @@
 #no reader can show gets the same stand-in whether the comic keeps one archive or one per chapter, and
 #whether the archive is added to after a scrape or written afresh - and every one carries a ComicInfo.xml
 #saying what it is, kept as current as its pages.
+import contextlib
 import os
 import zipfile
 
@@ -72,10 +73,17 @@ def expected(folder, names, sizes=None, drawn=None):
     return wanted
 
 
+def opened(cbz):
+    #an archive by its path, or one already open, which is used as it is and left open: a pack asks several
+    #things of each chapter's archive, and every opening reads its whole directory again - eighty-odd times
+    #a run on a comic cut every so many pages, for archives that turn out to be as they should be
+    return contextlib.nullcontext(cbz) if isinstance(cbz, zipfile.ZipFile) else zipfile.ZipFile(cbz)
+
+
 def held(cbz):
     #what an archive holds of the comic's folder, as entry name to size: leaving out folders, and the
     #ComicInfo, which is written for the archive and is no file of the comic's
-    with zipfile.ZipFile(cbz) as zf:
+    with opened(cbz) as zf:
         return {info.filename: info.file_size for info in zf.infolist()
                 if not info.filename.endswith('/') and info.filename != comicinfo.NAME}
 
@@ -216,7 +224,7 @@ def retag(cbz, folder, names, about, dry_run=False):
 def planned(cbz, folder, pages, superseded, about, adding=True):
     #what adding to an archive would change: the files it does not hold yet, the superseded entries to
     #forget, the ComicInfo it should end up with, and whether that says anything the one it has does not
-    with zipfile.ZipFile(cbz) as zf:
+    with opened(cbz) as zf:
         prefix = archive_prefix(zf, folder)
         existing = set(zf.namelist())
         #a page held otherwise counts as present when its stand-in is there, not when the file is. not

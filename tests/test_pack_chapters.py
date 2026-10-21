@@ -1,8 +1,10 @@
 #packing a comic one archive per chapter, beside the single archive it had: named to sort, holding what
 #each chapter holds, rewritten only when something in it changed, and checked before the single archive is
 #given up.
+import collections
 import json
 import os
+import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -133,6 +135,31 @@ def test_a_page_scraped_since_goes_on_the_end_of_its_chapter_rather_than_writing
     assert {name: at for name, at in tiny.stamps().items() if name != THIRD} == \
         {name: at for name, at in before.items() if name != THIRD}, "another chapter was touched"
     assert "0 to write, 3 already" in tiny.pack().stdout
+
+
+def test_a_pack_reads_each_archive_it_keeps_once(tiny, chapters, monkeypatch):
+    #a comic cut every hundred pages has eighty archives as they should be beside the one a page joins, and
+    #each reading of an archive's directory, or of a page's size, is one more trip to the disk it is on. the
+    #plan used to open each archive three times, the check after a fourth, and the check asked every page its
+    #size again
+    (tiny.comic / "0013.png").write_bytes(b"n" * 1300)
+    reads = collections.Counter()
+    real_contents = zipfile.ZipFile._RealGetContents
+
+    def counted(zf):
+        reads[os.path.basename(str(zf.filename))] += 1
+        return real_contents(zf)
+    monkeypatch.setattr(zipfile.ZipFile, "_RealGetContents", counted)
+    asked = []
+    real_size = os.path.getsize
+    monkeypatch.setattr(os.path, "getsize", lambda path: asked.append(os.path.abspath(path)) or real_size(path))
+    monkeypatch.setattr(sys, "argv", ["chapters.py", "pack", str(tiny.comic), "--root", str(tiny.library)])
+    assert chapters.main() == 0
+    assert reads[FIRST] == 1 and reads[SECOND] == 1, reads
+    #the archive a page joins is read to judge it, to plan what goes on its end, to add it, and to check it
+    assert reads[THIRD] == 4, reads
+    pages = [path for path in asked if os.path.dirname(path) == str(tiny.comic)]
+    assert set(pages) <= {str(tiny.comic / "0013.png")}, pages
 
 
 def test_a_stand_ins_size_is_remembered_so_packing_need_not_draw_it(tiny, chapters):

@@ -218,31 +218,36 @@ def chapter_contents(folder, chapters, pages):
     return parcels
 
 
-def already_packed(path, names, folder, sizes=None, drawn=None):
-    #an archive only needs writing again if what it holds is not what it should hold
-    if not os.path.exists(path):
-        return False
+def verdict(held, wanted):
+    #what a chapter's archive needs, from what it holds and what it should, both as entry name to size.
+    #an archive only needs writing again if what it holds is not what it should hold - and not even then
+    #when all that is wrong is pages it does not hold yet: everything it holds is one of its pages at the
+    #size it should be. those go on the end, as a single archive's new pages do, rather than the chapter
+    #being written again whole - which a sync would carry whole - for one new page. a page changed, or one
+    #moved to another chapter, still has the chapter written afresh. every archive is asked, not only the
+    #last: a page put in by hand, or a lost one fetched again, shifts every page after it, and the chapters
+    #after it with them
+    if held == wanted:
+        return "keep"
+    if len(held) < len(wanted) and all(wanted.get(entry) == size for entry, size in held.items()):
+        return "add"
+    return "write"
+
+
+def judged(path, names, folder, sizes=None, drawn=None):
+    #verdict() of an archive by its path; one missing or unreadable is written
     try:
-        held = cbz.held(path)
-        wanted = cbz.expected(folder, names, sizes, drawn)
+        return verdict(cbz.held(path), cbz.expected(folder, names, sizes, drawn))
     except (OSError, zipfile.BadZipFile):
-        return False
-    return held == wanted
+        return "write"
+
+
+def already_packed(path, names, folder, sizes=None, drawn=None):
+    return judged(path, names, folder, sizes, drawn) == "keep"
 
 
 def only_short(path, names, folder, sizes=None, drawn=None):
-    #whether all that is wrong with a chapter archive is pages it does not hold yet: everything it holds is
-    #one of its pages at the size it should be. those go on the end, as a single archive's new pages do,
-    #rather than the chapter being written again whole - which a sync would carry whole - for one new page.
-    #a page changed, or one moved to another chapter, still has the chapter written afresh
-    if not os.path.exists(path):
-        return False
-    try:
-        held = cbz.held(path)
-        wanted = cbz.expected(folder, names, sizes, drawn)
-    except (OSError, zipfile.BadZipFile):
-        return False
-    return all(wanted.get(entry) == size for entry, size in held.items()) and len(held) < len(wanted)
+    return judged(path, names, folder, sizes, drawn) == "add"
 
 
 def pack(folder, args):
@@ -281,29 +286,42 @@ def pack(folder, args):
     sizes = file_sizes(folder)
     drawn = Sizes((metadata.get("chapters") or {}).get("standins"))
     todo, short, retold = [], [], {}
+    #what each archive left as it is was found to hold, so the check after need not read it again
+    kept_held = {}
     for at, (chapter, names) in enumerate(parcels, 1):
         path = os.path.join(shelf, chapter_file(folder, chapter))
         path = still_at.get(path, path)
-        if only_short(path, names, folder, sizes, drawn):
+        #opened once for everything asked of it
+        try:
+            with zipfile.ZipFile(path) as zf:
+                held = cbz.held(zf)
+                how = verdict(held, cbz.expected(folder, names, sizes, drawn))
+                if how == "keep":
+                    kept_held[path] = held
+                    #the pages are right but the ComicInfo may not be - a label put right, the comic marked
+                    #ended, or an archive packed before ComicInfo described its pages. that goes on the end of
+                    #the archive rather than the chapter being written again, which a sync would carry whole
+                    change = cbz.planned(zf, folder, names, (), comicinfo.about_chapter(
+                        folder, metadata, chapter, len(parcels)), adding=False)
+                    if change["retold"]:
+                        retold[chapter["number"]] = (path, change)
+        except (OSError, zipfile.BadZipFile):
+            how = "write"
+        if how == "add":
             short.append((chapter, names))
-        elif not already_packed(path, names, folder, sizes, drawn):
+        elif how == "write":
             todo.append((chapter, names))
-        else:
-            #the pages are right but the ComicInfo may not be - a label put right, the comic marked ended,
-            #or an archive packed before ComicInfo described its pages. that goes on the end of the archive
-            #rather than the chapter being written again, which a sync would carry whole
-            change = cbz.planned(path, folder, names, (), comicinfo.about_chapter(folder, metadata, chapter,
-                                                                                  len(parcels)), adding=False)
-            if change["retold"]:
-                retold[chapter["number"]] = (path, change)
         if at % 10 == 0 and at < len(parcels):
             print("    looked at {0} of {1}".format(at, len(parcels)), flush=True)
     print("  {0} to write, {1}{2} already as they should be{3}".format(
         len(todo), "{0} to add pages to, ".format(len(short)) if short else "", len(parcels) - len(todo) - len(short),
         ", {0} of them with a ComicInfo to bring up to date".format(len(retold)) if retold else ""))
-    for chapter, names in parcels[:100]:
-        mark = "write" if (chapter, names) in todo else "add  " if (chapter, names) in short else \
-            "info " if chapter["number"] in retold else "keep "
+    #only what is to change: a comic cut every hundred pages gains a page to its last archive most days, and a
+    #row for each of the eighty kept beside it read as eighty archives being worked on
+    changing = [(chapter, names) for chapter, names in parcels if (chapter, names) in todo
+                or (chapter, names) in short or chapter["number"] in retold]
+    for chapter, names in changing[:100]:
+        mark = "write" if (chapter, names) in todo else "add  " if (chapter, names) in short else "info "
         print("  {0} c{1:<7} {2:<44} {3:>4} page(s)  {4}".format(
             mark, name_part(chapter.get("called") or chapter["number"]), tidy_name(chapter["label"])[:44],
             len(names), chapter_file(folder, chapter)[:60]))
@@ -331,7 +349,7 @@ def pack(folder, args):
     if retold:
         print("Brought the ComicInfo of {0} chapter archive(s) up to date.".format(len(retold)))
 
-    kept = verify_chapters(folder, shelf, parcels, drawn)
+    kept = verify_chapters(folder, shelf, parcels, drawn, sizes=sizes, held=kept_held, on_disk=on_disk)
     if kept is not True:
         return 1
     metadata = read_metadata(folder)
@@ -355,28 +373,32 @@ def pack(folder, args):
     return 0
 
 
-def verify_chapters(folder, shelf, parcels, drawn=None):
+def verify_chapters(folder, shelf, parcels, drawn=None, sizes=None, held=None, on_disk=None):
     #every page has to be in exactly one chapter archive, at the size it is on disk, before the single
-    #archive that holds them all can be given up
+    #archive that holds them all can be given up. a pack hands over what it already knows - every file's size
+    #from its one listing of the folder, the listing itself, and what each archive it left alone holds - so
+    #only the archives it wrote to are read again, and no page is asked its size a second time
     seen, trouble = {}, []
     for chapter, names in parcels:
         path = os.path.join(shelf, chapter_file(folder, chapter))
         try:
-            held = cbz.held(path)
+            has = (held or {}).get(path)
+            if has is None:
+                has = cbz.held(path)
         except (OSError, zipfile.BadZipFile) as error:
             trouble.append("c{0:03d}: {1}".format(chapter["number"], error))
             continue
         for name in names:
             #a page held as something no reader can show is in the archive as its stand-in, so that is
             #what has to be there and at the size the drawing comes to
-            (entry, size), = cbz.expected(folder, [name], drawn=drawn).items()
-            if held.get(entry) != size:
+            (entry, size), = cbz.expected(folder, [name], sizes, drawn).items()
+            if has.get(entry) != size:
                 trouble.append("c{0:03d}: {1} is {2} in the archive, {3} on disk".format(
-                    chapter["number"], entry, held.get(entry), size))
+                    chapter["number"], entry, has.get(entry), size))
             if name in seen:
                 trouble.append("{0} is in both c{1:03d} and c{2:03d}".format(name, seen[name], chapter["number"]))
             seen[name] = chapter["number"]
-    missing = sorted(set(folder_pages(folder, others=True)) - set(seen))
+    missing = sorted(set(folder_pages(folder, others=True) if on_disk is None else on_disk) - set(seen))
     for name in missing[:5]:
         trouble.append("{0} is in no chapter archive".format(name))
     if trouble:
