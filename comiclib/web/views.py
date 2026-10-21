@@ -131,6 +131,19 @@ def is_moving(runner, name):
                for job in [runner.current] + list(runner.waiting))
 
 
+def rewind_label(name):
+    #what a job taking a comic back to an earlier page is called, which is also how one queued is found again
+    return "Go back: {0}".format(name)
+
+
+def is_rewinding(runner, name):
+    #going back queued or under way. it rewrites the comic's metadata and record when its turn comes, so an
+    #edit saved in between would be written over, and a second going back would plan from pages already gone
+    label = rewind_label(name)
+    return any(job is not None and job.kind == "rewind" and job.label == label
+               for job in [runner.current] + list(runner.waiting))
+
+
 def read_metadata(path):
     metadata = sidecar.load(path)
     #an old sidecar is brought up to date first, so the edit lands in the one place a run reads it
@@ -241,7 +254,7 @@ def comic_detail(args, uc, runner, name):
         "decide": asked,
         "state": metadata.get("state") or {},
         "first_page_url": history.get("first_page_url"),
-        "runs": [{key: run.get(key) for key in ("started", "start_url", "start_page_number", "last_url",
+        "runs": [{key: run.get(key) for key in ("run_id", "started", "start_url", "start_page_number", "last_url",
                                                 "last_page_number", "pages_saved", "stop_reason", "exit_code")}
                  for run in runs[-8:]][::-1],
         "edits": (history.get("edits") or [])[-8:][::-1],
@@ -251,6 +264,7 @@ def comic_detail(args, uc, runner, name):
         "pages_in_folder": uc.folder_pages(comic.folder),
         "running": is_running(runner, comic.name),
         "moving": is_moving(runner, comic.name),
+        "rewinding": is_rewinding(runner, comic.name),
     }, None
 
 

@@ -80,15 +80,20 @@ async function openEditor(name) {
   $("e-next-number").textContent = `use ${next}, the number after the pages held`;
   $("e-next-number").onclick = () => { $("e-increment").value = next; };
 
+  //a run that saved pages can be undone: the comic goes back to the page it started on. a plugin's comic
+  //keeps where it is up to in its plugin's program, so it has no going back
+  const undoable = (r) => !plugin && r.run_id && r.start_page_number && r.pages_saved;
   const runs = detail.runs.map((r) => `<tr><td>${esc(when(r.started))}</td><td class="num">${r.pages_saved ?? ""}</td>
     <td>${esc(r.stop_reason || "")}${r.exit_code ? " (exit " + r.exit_code + ")" : ""}</td>
-    <td>${r.last_page_number ?? ""}</td><td>${link(r.last_url)}</td></tr>`).join("");
+    <td>${r.last_page_number ?? ""}</td><td>${link(r.last_url)}</td>
+    <td>${undoable(r) ? `<button type="button" class="link" data-undo="${esc(r.run_id)}" data-from="${r.start_page_number}"
+      title="Go back to page ${r.start_page_number}, where this run started">Undo</button>` : ""}</td></tr>`).join("");
   const edits = detail.edits.map((e) => `<div class="history-item line">${esc(when(e.at))}: ${esc(Object.entries(e.changed)
     .map(([key, pair]) => `${key} ${JSON.stringify(pair[0])} → ${JSON.stringify(pair[1])}`).join(", "))}</div>`).join("");
   //a week of its updates, each one's output in full, newest first - an update that found nothing new is here too
   const logs = (detail.logs || []).map((l) => logLink(l.name, when(l.at))).join(" · ");
   $("edit-runs").innerHTML = (runs ? `<div class="table-wrap" style="max-height:none"><table class="runs"><thead><tr><th>Started</th>
-    <th>Saved</th><th>Ended</th><th>At #</th><th>Last page</th></tr></thead><tbody>${runs}</tbody></table></div>` : "") +
+    <th>Saved</th><th>Ended</th><th>At #</th><th>Last page</th><th></th></tr></thead><tbody>${runs}</tbody></table></div>` : "") +
     (logs ? `<div class="muted" style="margin-top:10px">What each update said</div><div class="line">${logs}</div>` : "") +
     (edits ? `<div class="muted" style="margin-top:10px">Edits</div>${edits}` : "");
   $("edit-runs-box").hidden = !runs && !edits && !logs;
@@ -98,12 +103,17 @@ async function openEditor(name) {
   placesAsked = false;
   $("edit-move-box").open = false;
   resetMove();
+  $("e-rewind-from").value = "";
+  $("e-rewind-url").value = "";
+  $("edit-rewind-box").open = false;
+  resetRewind();
 
-  const busy = detail.running || detail.moving;
-  ["edit-save", "edit-save-update", "e-move-check"].forEach((id) => { $(id).disabled = busy; });
+  const busy = detail.running || detail.moving || detail.rewinding;
+  ["edit-save", "edit-save-update", "e-move-check", "e-rewind-check"].forEach((id) => { $(id).disabled = busy; });
   if (busy) {
     msg.className = "msg bad";
     msg.textContent = detail.moving ? "Waiting to be moved; reopen it once the move has finished."
+      : detail.rewinding ? "Waiting to go back to an earlier page; reopen it once that has finished."
       : "Being scraped right now; stop it or wait to edit.";
   }
   $("editor").showModal();
@@ -202,6 +212,62 @@ $("e-move-go").addEventListener("click", async () => {
     ["edit-save", "edit-save-update", "e-move-check", "e-move-go"].forEach((id) => { $(id).disabled = true; });
     msg.className = "msg good";
     msg.textContent = `Queued; it becomes ${result.to} when its turn comes. Watch it under Running now.`;
+  } catch (error) {
+    msg.className = "msg bad";
+    msg.textContent = error.message;
+  }
+});
+
+//going back, like moving, only ever does what was last shown: a page or run changed after looking has to be
+//looked at again. what was looked at is what is sent
+let rewindChecked = null;
+function resetRewind() {
+  rewindChecked = null;
+  $("e-rewind-plan").hidden = true;
+  $("e-rewind-plan").innerHTML = "";
+  $("e-rewind-go").disabled = true;
+}
+
+async function checkRewind(asked) {
+  const msg = $("edit-msg");
+  resetRewind();
+  msg.className = "msg"; msg.textContent = "Looking…";
+  try {
+    const result = await post("/api/rewind", Object.assign({ name: editing.name, dry_run: true }, asked));
+    $("e-rewind-plan").innerHTML = result.lines.map((line) => `<div>${esc(line)}</div>`).join("");
+    $("e-rewind-plan").hidden = false;
+    $("e-rewind-go").disabled = false;
+    rewindChecked = asked;
+    msg.textContent = "";
+  } catch (error) {
+    msg.className = "msg bad";
+    msg.textContent = error.message;
+  }
+}
+
+["e-rewind-from", "e-rewind-url"].forEach((id) => $(id).addEventListener("input", resetRewind));
+$("e-rewind-check").addEventListener("click", () =>
+  checkRewind({ from: $("e-rewind-from").value.trim(), url: $("e-rewind-url").value.trim() }));
+//undoing a run is going back to the page it started on, by the run itself, so the address it was told to
+//start from is used whatever the comic's record says
+$("edit-runs").addEventListener("click", (event) => {
+  const undo = event.target.dataset.undo;
+  if (!undo || !editing) return;
+  $("e-rewind-from").value = event.target.dataset.from;
+  $("e-rewind-url").value = "";
+  $("edit-rewind-box").open = true;
+  $("edit-rewind-box").scrollIntoView({ block: "nearest" });
+  checkRewind({ run: undo });
+});
+$("e-rewind-go").addEventListener("click", async () => {
+  const msg = $("edit-msg");
+  if (rewindChecked === null) return;
+  try {
+    const result = await post("/api/rewind", Object.assign({ name: editing.name }, rewindChecked));
+    //the metadata is about to be rewritten, so nothing more is saved from what this dialog was opened with
+    ["edit-save", "edit-save-update", "e-move-check", "e-rewind-check", "e-rewind-go"].forEach((id) => { $(id).disabled = true; });
+    msg.className = "msg good";
+    msg.textContent = `Queued (${result.label}); watch it under Running now, then reopen the comic to update it.`;
   } catch (error) {
     msg.className = "msg bad";
     msg.textContent = error.message;

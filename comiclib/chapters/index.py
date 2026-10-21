@@ -268,7 +268,6 @@ def set_aside_pages(folder, names):
     #every archive without anyone having asked for that. (moved, refused) as lists of (name, why)
     _, by_number, _ = numbered_files(folder)
     going = set(names)
-    aside = os.path.join(folder, SET_ASIDE)
     moved, refused = [], []
     for name in names:
         number = page_number(name)
@@ -278,16 +277,24 @@ def set_aside_pages(folder, names):
         if not [other for other in by_number[number] if other not in going]:
             refused.append((name, "nothing else would be left on its page number"))
             continue
-        os.makedirs(aside, exist_ok=True)
-        target = os.path.join(aside, name)
-        stem, ending = os.path.splitext(name)
-        again = 1
-        while os.path.exists(target):
-            again += 1
-            target = os.path.join(aside, "{0} ({1}){2}".format(stem, again, ending))
+        target = aside_target(folder, name)
         os.replace(os.path.join(folder, name), target)
         moved.append((name, os.path.relpath(target, folder)))
     return moved, refused
+
+
+def aside_target(folder, name):
+    #where a file goes in the comic's set-aside folder: under its own name, or numbered on from it when a
+    #file of that name was set aside before, so nothing set aside is ever written over
+    aside = os.path.join(folder, SET_ASIDE)
+    os.makedirs(aside, exist_ok=True)
+    target = os.path.join(aside, name)
+    stem, ending = os.path.splitext(name)
+    again = 1
+    while os.path.exists(target):
+        again += 1
+        target = os.path.join(aside, "{0} ({1}){2}".format(stem, again, ending))
+    return target
 
 
 def joined_pages(folder, args, numbered=False):

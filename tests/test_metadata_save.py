@@ -119,3 +119,15 @@ def test_where_the_comic_was_moved_from_outlives_a_run(saving, mirror):
                    "history": {"moves": moves}}, f)
     meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
     assert meta["history"]["moves"] == moves
+
+
+def test_each_time_the_comic_went_back_outlives_a_run(saving, mirror):
+    #the run after going back is the one that fetches the pages again, and it is what says which pages were
+    #set aside, and where to find one that went
+    rewinds = [{"at": "2026-10-20T00:00:00Z", "from_page": 2, "newest_was": 3, "run": None,
+                "set_aside": [".set aside/0002_page.jpg"], "archives_set_aside": [], "index_was": None}]
+    with open(saving / "mirror_metadata.json", "w", encoding="utf-8") as f:
+        json.dump({"schema": 2, "settings": {"url": "https://example.com/comic/1/"},
+                   "history": {"rewinds": rewinds}}, f)
+    meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
+    assert meta["history"]["rewinds"] == rewinds

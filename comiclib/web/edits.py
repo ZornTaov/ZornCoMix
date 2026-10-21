@@ -12,7 +12,7 @@ from comiclib.chapters.index import index_path, set_aside
 from comiclib.metadata import write_json
 from comiclib.plugins import field_value
 from comiclib.web.adding import clean_folder
-from comiclib.web.views import find_comic, is_moving, is_running, read_metadata, walk_needed
+from comiclib.web.views import find_comic, is_moving, is_rewinding, is_running, read_metadata, walk_needed
 
 #the settings a person may change from the page, and what each one has to be. output is left out on
 #purpose: a comic's folder is what says where it lives, and update_comics ignores a stored output anyway
@@ -68,6 +68,48 @@ def insert_page(args, comic, given):
         return 400, {"error": (first[0] if first else "that did not work")[:300],
                      "output": output[-4000:]}
     return 200, {"output": output[-8000:]}
+
+
+def rewind_command(args, comic, given):
+    #chapters.py rewind as the page asked for it: back to before a run, or to a page by its number, with its
+    #address where the comic's record does not know it. (command, None), or (None, what is wrong)
+    script = os.path.join(os.path.dirname(os.path.abspath(args.script)), "chapters.py")
+    command = [sys.executable, "-u", script, "rewind", comic.folder]
+    if args.root:
+        command += ["--root", args.root]
+    run_id = str(given.get("run") or "").strip()
+    page = str(given.get("from") if given.get("from") is not None else "").strip()
+    if run_id:
+        command += ["--run", run_id]
+    elif re.match(r"^\d+$", page) and int(page) >= 1:
+        command += ["--from", page]
+    else:
+        return None, "say which page to go back to, as a number: it and every page after it are taken off"
+    url = str(given.get("url") or "").strip()
+    if url:
+        if not re.match(r"^https?://\S+$", url):
+            return None, "the page's address has to be a full http(s) address"
+        command += ["--url", url]
+    return command, None
+
+
+def preview_rewind(args, comic, given):
+    #what going back would do, said by chapters.py itself in a dry run: a moment's reading of the folder and
+    #the record, nothing changed. the page shows it before anything is queued, and it is asked again then,
+    #so going back that cannot be done is said at once rather than queued to fail
+    command, problem = rewind_command(args, comic, given)
+    if problem:
+        return 400, {"error": problem}
+    try:
+        done = subprocess.run(command + ["--dry-run"], capture_output=True, text=True, errors="replace",
+                              env=dict(os.environ, PYTHONUNBUFFERED="1"), timeout=600)
+    except subprocess.SubprocessError as error:
+        return 500, {"error": "could not work out going back: {0}".format(error)}
+    lines = [line for line in (done.stdout or "").splitlines() if line.strip() and not line.startswith("Nothing was")]
+    if done.returncode != 0:
+        said = [line for line in lines if line.startswith("ERROR")]
+        return 400, {"error": (said[0][len("ERROR: "):] if said else (done.stderr or "that did not work"))[:600]}
+    return 200, {"lines": lines}
 
 
 def fix_chapter(args, comic, given):
@@ -222,6 +264,9 @@ def save_settings(args, uc, runner, name, given, expected_updated):
         return 409, {"error": "{0} is being scraped right now; stop it or wait for it to finish".format(name)}
     if is_moving(runner, comic.name):
         return 409, {"error": "{0} is being moved; reopen it once the move has finished".format(name)}
+    if is_rewinding(runner, comic.name):
+        return 409, {"error": "{0} is waiting to go back to an earlier page; reopen it once that has "
+                              "finished".format(name)}
     path = os.path.join(comic.folder, uc.metadata_file)
     try:
         metadata = read_metadata(path)
@@ -235,10 +280,15 @@ def save_settings(args, uc, runner, name, given, expected_updated):
         given = dict(given, chapters_url=None, chapters_every=None)
     else:
         cleaned, problems = clean_settings(given)
-    #a plugin's program finds its own pages, so a plugin comic has no paths to put right
+    #a plugin's program finds its own pages, so a plugin comic has no paths to put right. a path is checked
+    #only when it was changed: the editor sends both back with every save, and one a scrape or a hand edit
+    #wrote in some other shape would otherwise stop every other setting of the comic being saved
     found_by = {}
+    held = metadata.get("state") or {}
     for key in remembered_paths:
         if key in given and not settings.get("scraper"):
+            if str(given[key] or "").strip() == (held.get(key) or ""):
+                continue
             try:
                 found_by[key] = path_value(given[key])
             except ValueError as error:

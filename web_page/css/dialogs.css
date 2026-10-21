@@ -64,8 +64,10 @@ dialog > form { position: relative; }
 .decide .row { margin-top: 8px; }
 /*moving a comic: what would move, a line per folder or archive, shown before the move can be pressed. a
   library path is long and has no spaces to break at, so it wraps anywhere rather than widen the dialog*/
-#edit-move-box { margin-bottom: 10px; }
-#edit-move-box > summary { margin-bottom: 8px; }
+#edit-move-box, #edit-rewind-box { margin-bottom: 10px; }
+#edit-move-box > summary, #edit-rewind-box > summary { margin-bottom: 8px; }
+/*undoing a run, from the table of runs: a link-sized button in its own column*/
+table.runs button.link { white-space: nowrap; }
 details.advanced { margin-bottom: 10px; }
 details.advanced > summary { margin-bottom: 8px; }
 .agent { display: flex; gap: 8px; min-width: 0; }

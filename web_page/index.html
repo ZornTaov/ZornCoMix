@@ -460,6 +460,26 @@
           <button type="button" id="e-move-go" disabled>Move it</button>
         </div>
       </details>
+      <details id="edit-rewind-box" class="builtin-only"><summary>Go back to an earlier page</summary>
+        <div class="field move-field">
+          <label for="e-rewind-from">From page</label>
+          <span><input type="number" id="e-rewind-from" min="1" style="width:110px"></span>
+          <div class="note">That page and every page after it are taken off, into the comic's <code>.set aside</code>
+            folder rather than deleted, and its record of which page is which, its chapters and its archives go back
+            with them; the next update starts at that page. For pages saved as the wrong picture, or past a next link
+            that went wrong: put the path right under Advanced settings first. Each of the recent runs can be undone
+            this way too.</div>
+        </div>
+        <div class="field move-field">
+          <label for="e-rewind-url">Its address</label>
+          <input type="text" id="e-rewind-url" spellcheck="false" placeholder="only when the comic's record does not know it">
+        </div>
+        <div class="move-plan" id="e-rewind-plan" hidden></div>
+        <div class="row move-row">
+          <button type="button" id="e-rewind-check">See what would go</button>
+          <button type="button" id="e-rewind-go" disabled>Go back</button>
+        </div>
+      </details>
       <details id="edit-runs-box"><summary>Recent runs and edits</summary><div id="edit-runs"></div></details>
     </div>
     <div class="dlg-foot edit-foot">

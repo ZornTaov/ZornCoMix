@@ -234,7 +234,9 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
         metadata["history"]["moves"] = old_history["moves"]
     #what this comic is known to be missing, and which of its files were made by hand. worked out by
     #chapters.py, which takes minutes to do, so a scrape must not throw it away
-    for kept in ("gaps", "gaps_note", "hand_made", "gaps_checked", "index_cache"):
+    #and each time it was taken back to an earlier page, with what was set aside, which says where to look
+    #for a page that went
+    for kept in ("gaps", "gaps_note", "hand_made", "gaps_checked", "index_cache", "rewinds"):
         if old_history.get(kept) is not None:
             metadata["history"][kept] = old_history[kept]
     if metadata["history"].get("index_cache") is None:

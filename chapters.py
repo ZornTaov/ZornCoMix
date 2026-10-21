@@ -32,6 +32,7 @@ from comiclib.chapters.packing import (already_packed, chapter_contents, chapter
                                        verify_chapters)
 from comiclib.chapters.pageops import (fetch_missing, insert_page, mark_recovered, note_page,  # noqa: F401
                                        refetch, renumber, shift_up)
+from comiclib.chapters.rewind import rewind
 from comiclib.chapters.wordpress import wordpress_index
 from comiclib import cookies, download, useragent
 from comiclib.metadata import METADATA_FILE as metadata_file, read as read_metadata  # noqa: F401
@@ -46,7 +47,7 @@ def setup():
         description="Line a comic's saved files up with the pages they came from.")
     params.add_argument("what", choices=["index", "align", "show", "chapters", "fix", "try", "pack",
                                          "refetch", "repack", "renumber", "recovered", "insert", "comicinfo",
-                                         "covers", "note"],
+                                         "covers", "note", "rewind"],
                         help="index: walk the comic (or, with --wordpress, read its list of posts) and "
                              "line it up. align: line up a walk already done. "
                              "show: what the last alignment says. refetch: fetch again any page whose file "
@@ -64,6 +65,10 @@ def setup():
                              "note: keep the page at --url as a note of its address, not the pictures on it "
                              "(--forget takes that back). "
                              "repack: write the .cbz afresh from the folder. "
+                             "rewind: go back to page --from, or to before the run --run: that page and every "
+                             "one after it set aside, and the resume point, the index, the alignment, the "
+                             "chapters and the archives put back to before them, so the next update fetches "
+                             "them again. "
                              "comicinfo: give an archive packed before archives carried a ComicInfo.xml one, "
                              "on its end, or bring it up to date; given a library, every comic in it.")
     params.add_argument("folder", help="The comic's folder, or with comicinfo, the library's.")
@@ -91,7 +96,14 @@ def setup():
     params.add_argument("--root", default=None, help="Library folder, used to name the cache.")
     params.add_argument("--dry-run", "-n", action='store_true', default=False,
                         help="With refetch, say what would be fetched and change nothing. With pack, "
-                             "comicinfo or covers, say what would be written and write nothing.")
+                             "comicinfo or covers, say what would be written and write nothing. With rewind, "
+                             "say what going back would do.")
+    params.add_argument("--from", dest="from_page", type=int, default=None, metavar="PAGE",
+                        help="With rewind, the first page to take off, by number: it and every page after it "
+                             "are set aside, and the next update starts there.")
+    params.add_argument("--run", default=None, metavar="RUN_ID",
+                        help="With rewind, a run from the comic's history, by its run_id: the comic goes back "
+                             "to where that run started, taking off every page it and any later run saved.")
     params.add_argument("--all", action='store_true', default=False,
                         help="With refetch, fetch every page again, not only those that differ.")
     params.add_argument("--repack", action='store_true', default=False,
@@ -137,7 +149,8 @@ def setup():
                         help="With chapters, write what it worked out into the comic's metadata.")
     params.add_argument("--url", default=None,
                         help="With insert, the address of the page to put in. With note, the page to keep "
-                             "as a note of its address.")
+                             "as a note of its address. With rewind, where the page given with --from is, "
+                             "when the comic's index does not reach it.")
     params.add_argument("--after", default=None,
                         help="With insert, the page it follows: its address or its number.")
     params.add_argument("--json", action='store_true', default=False,
@@ -243,6 +256,8 @@ def main():
         return covers(folder, args)
     if args.what == "note":
         return note_page(folder, args)
+    if args.what == "rewind":
+        return rewind(folder, args)
     if args.what == "index":
         if (wordpress_index if args.wordpress else walk)(folder, args) is None:
             return 2

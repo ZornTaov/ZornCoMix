@@ -16,12 +16,12 @@ from comiclib import moving, pluginfetch, plugins, pluginsetup, runlogs
 from comiclib.paths import PROJECT
 from comiclib.web.adding import add_with_plugin, parse_entries
 from comiclib.web.edits import discard_walk, fix_chapter, insert_page, preview_move, save_config, save_settings
-from comiclib.web.edits import comicinfo_view, cookie_value, save_comicinfo, try_chapter_list
+from comiclib.web.edits import comicinfo_view, cookie_value, preview_rewind, save_comicinfo, try_chapter_list
 from comiclib.web.elementpaths import element_settings, save_elements
 from comiclib.web.jobs import LogTee, Runner
 from comiclib.web.uploads import KINDS as upload_kinds, discard, pending, plan, receive
 from comiclib.web.views import chapters_label, comic_detail, config_view, find_comic, is_running, job_view
-from comiclib.web.views import is_moving, walk_needed
+from comiclib.web.views import is_moving, is_rewinding, walk_needed
 from comiclib.web.views import library_view, walked_pages
 
 #the page, read afresh on every request so editing it needs no restart. it stays beside the scripts, where
@@ -412,6 +412,25 @@ def make_handler(runner, args, uc, tee):
                     status, result = preview_move(args, comic, body.get("into"))
                     if status == 200 and not body.get("dry_run"):
                         job = runner.submit_move(name, body.get("into"))
+                        result.update(queued=job.id, label=job.label)
+                    self.reply(result, status)
+            elif path == "/api/rewind":
+                name = str(body.get("name") or "")
+                comic = find_comic(args, uc, name)
+                if comic is None:
+                    self.reply({"error": "no comic named {0}".format(name)}, 404)
+                elif is_running(runner, name):
+                    self.reply({"error": "that comic is being scraped right now; stop it or wait for it to "
+                                         "finish"}, 409)
+                elif is_moving(runner, name):
+                    self.reply({"error": "that comic is being moved; reopen it once the move has finished"}, 409)
+                elif is_rewinding(runner, name):
+                    self.reply({"error": "that comic is already waiting to go back"}, 409)
+                else:
+                    #worked out now as well as when its turn comes, as a move is
+                    status, result = preview_rewind(uc.with_config(args), comic, body)
+                    if status == 200 and not body.get("dry_run"):
+                        job = runner.submit_rewind(name, body)
                         result.update(queued=job.id, label=job.label)
                     self.reply(result, status)
             elif path == "/api/plugins/setup":

@@ -59,6 +59,18 @@ def test_the_same_paths_again_change_nothing(web, comic):
     assert code == 200 and not answer.get("saved"), answer
 
 
+def test_a_path_held_in_another_shape_does_not_stop_other_settings_being_saved(web, comic):
+    #the editor sends both paths back with every save. one written some other way - by an older scrape, or
+    #by hand in the file - is left as it is unless it was changed, rather than refusing the whole save
+    meta = read_meta(comic)
+    meta["state"]["image_xpath"] = "id('comic')/img"
+    write_meta(comic, meta)
+    code, answer = saved(web(), image_xpath="id('comic')/img", next_xpath=IMAGE, waittime=3)
+    assert code == 200 and answer.get("saved"), answer
+    meta = read_meta(comic)
+    assert meta["settings"]["waittime"] == 3 and meta["state"]["image_xpath"] == "id('comic')/img"
+
+
 @pytest.mark.parametrize("typed", ["#comic img", "img.comic", '//img\n//a[@rel="next"]'])
 def test_what_is_not_an_xpath_is_refused(web, comic, typed):
     #a css selector pasted in would match nothing, and the scrape would fall back to searching the lists
