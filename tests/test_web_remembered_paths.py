@@ -96,6 +96,15 @@ def test_the_editor_shows_and_saves_them(web, comic, browser):
     #cookies now live in the advanced section, which a comic that has some opens on
     assert browser.execute_script("return document.getElementById('e-cookies').closest('details').id") == "edit-advanced"
     assert browser.execute_script("return document.getElementById('edit-advanced').open")
+    #with everything else that can do a comic harm set wrongly: where it is saved and how, moving it, going back
+    inside = browser.execute_script("return arguments[0].map(id => !!document.getElementById(id).closest('#edit-advanced'))",
+                                    ["e-cbz_path", "e-prefix", "e-direction_check", "e-multi_page", "edit-move-box",
+                                     "edit-rewind-box", "e-image_xpath", "e-next_xpath"])
+    assert all(inside), inside
+    #and the everyday settings outside it
+    outside = browser.execute_script("return arguments[0].map(id => !document.getElementById(id).closest('#edit-advanced'))",
+                                     ["e-url", "e-increment", "e-waittime", "e-javascript", "e-cbz", "e-ended", "e-chapters"])
+    assert all(outside), outside
 
     browser.execute_script("document.getElementById('e-image_xpath').value = arguments[0];", IMAGE)
     browser.execute_script("document.getElementById('edit-save').click()")

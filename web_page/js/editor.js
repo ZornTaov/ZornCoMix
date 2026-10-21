@@ -255,6 +255,8 @@ $("edit-runs").addEventListener("click", (event) => {
   if (!undo || !editing) return;
   $("e-rewind-from").value = event.target.dataset.from;
   $("e-rewind-url").value = "";
+  //going back is folded away in the advanced settings, with everything else that can do harm set wrongly
+  $("edit-advanced").open = true;
   $("edit-rewind-box").open = true;
   $("edit-rewind-box").scrollIntoView({ block: "nearest" });
   checkRewind({ run: undo });
