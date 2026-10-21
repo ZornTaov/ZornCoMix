@@ -2,6 +2,7 @@
 // read at the top, then the library by folder, series or author, each in the order a reader expects -
 // a series by its volumes and numbers, everything else by name with numbers read as numbers
 import type { ComicSummary } from "./api";
+import { libraryDefaults, type LibrarySettings } from "./librarysettings";
 
 export type Browse = "folder" | "series" | "author" | "all";
 
@@ -67,13 +68,16 @@ export function reading(comics: ComicSummary[]): Reading {
 }
 
 // comics that have gained pages lately, newest first: everything the library has been sent, read or not.
-// those already under "new pages" - read to their end before they grew - are left there rather than shown twice
-export const RECENT_DAYS = 14;
-
-export function recentlyUpdated(comics: ComicSummary[], now: number, shown: ComicSummary[] = []): ComicSummary[] {
+// those already under "new pages" - read to their end before they grew - are left there rather than shown twice.
+// with clearRead, one read to its end is left out too: its new pages are at its end, so a comic read to there
+// has had them read, and it grew after it was read only if it has pages unread again
+export function recentlyUpdated(comics: ComicSummary[], now: number, shown: ComicSummary[] = [],
+                                settings: Pick<LibrarySettings, "recentDays" | "clearRead"> = libraryDefaults): ComicSummary[] {
+  if (settings.recentDays <= 0) return [];
   const already = new Set(shown.map((comic) => comic.id));
-  const since = now - RECENT_DAYS * 24 * 3600;
-  return comics.filter((comic) => comic.grew !== null && comic.grew >= since && !already.has(comic.id))
+  const since = now - settings.recentDays * 24 * 3600;
+  return comics.filter((comic) => comic.grew !== null && comic.grew >= since && !already.has(comic.id)
+                                  && !(settings.clearRead && readThrough(comic)))
     .sort((a, b) => (b.grew ?? 0) - (a.grew ?? 0));
 }
 

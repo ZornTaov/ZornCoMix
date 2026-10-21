@@ -1,5 +1,6 @@
 // the server's answers, typed, and the few calls the page makes
 import type { InfoForm, Said } from "./comicinfoform";
+import type { LibrarySettings } from "./librarysettings";
 import type { Settings } from "./settings";
 
 export interface ComicSummary {
@@ -175,7 +176,9 @@ function put<T>(path: string, body: unknown, keepalive = false): Promise<T> {
 }
 
 export const api = {
-  library: () => call<{ scanned: number | null; covers: GroupCovers; comics: ComicSummary[] }>("/api/library"),
+  library: () => call<{ scanned: number | null; covers: GroupCovers; settings?: Partial<LibrarySettings>;
+                        comics: ComicSummary[] }>("/api/library"),
+  saveLibrarySettings: (settings: LibrarySettings) => put<Partial<LibrarySettings>>("/api/library/settings", settings),
   scan: () => call<{ scanned: number | null }>("/api/scan", { method: "POST" }),
   async comic(id: string): Promise<Comic> {
     // pages come as [version, width, height, stand-in, media] to keep a comic of thousands of pages one small answer

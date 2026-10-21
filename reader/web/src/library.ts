@@ -4,6 +4,7 @@ import { api, type ComicSummary, type Fit, type GroupCovers } from "./api";
 import { openComicInfoDialog } from "./comicinfodialog";
 import { openCoverDialog, type CoverTarget } from "./coverdialog";
 import { el, esc, fitClass, refusal } from "./dom";
+import { cleanLibrary, type LibrarySettings, libraryDefaults, openLibrarySettings } from "./librarysettings";
 import { BROWSE_LABELS, type Browse, editableTogether, type Group, grewBy, matches, nextIssues, openingPage, pathLabel, randomPick, readShare, reading, recentlyUpdated, shelf, upTo } from "./shelves";
 
 // each name encoded alone and joined with real slashes, so a folder's address reads as its path. the whole
@@ -31,6 +32,7 @@ function remember(browse: Browse) {
 
 let cached: ComicSummary[] | null = null;
 let cachedCovers: GroupCovers = {};
+let cachedSettings: LibrarySettings = libraryDefaults;
 
 export async function openLibrary(root: HTMLElement, browse: Browse, path: string,
                                   open: (id: string, at: number | null, trial?: boolean) => void): Promise<() => void> {
@@ -45,6 +47,7 @@ export async function openLibrary(root: HTMLElement, browse: Browse, path: strin
         `<option value="${each}"${each === browse ? " selected" : ""}>${BROWSE_LABELS[each]}</option>`).join("")}</select>
       <button data-act="random" title="Open something to read, picked at random from here">Random</button>
       <button data-act="scan" title="Look for new pages now">Refresh</button>
+      <button data-act="settings" title="How the library's shelves are drawn" aria-label="Library settings">⚙</button>
     </header>
     <main></main>
     <div class="toast hidden"></div>`;
@@ -54,11 +57,13 @@ export async function openLibrary(root: HTMLElement, browse: Browse, path: strin
   const arrange = page.querySelector<HTMLSelectElement>("select")!;
   let comics: ComicSummary[] = cached ?? [];
   let covers: GroupCovers = cachedCovers;
+  let settings: LibrarySettings = cachedSettings;
 
   async function reload() {
     const found = await api.library();
     comics = cached = found.comics;
     covers = cachedCovers = found.covers ?? {};
+    settings = cachedSettings = cleanLibrary(found.settings);
   }
 
   const toast = page.querySelector<HTMLElement>(".toast")!;
@@ -174,7 +179,7 @@ export async function openLibrary(root: HTMLElement, browse: Browse, path: strin
     // what is being read comes first, wherever you are: at the top for the whole library, and inside a
     // folder, series or author for what is being read there
     const now = reading(here.within);
-    const recent = recentlyUpdated(here.within, Date.now() / 1000, now.updated);
+    const recent = recentlyUpdated(here.within, Date.now() / 1000, now.updated, settings);
     const groupsTitle = browse === "folder" ? "Folders" : browse === "series" ? "Series" : "Authors";
     main.innerHTML = section("New pages", now.updated.map((comic) => card(comic)).join(""), now.updated.length)
       + section("Continue reading", now.reading.map((comic) => card(comic)).join(""), now.reading.length)
@@ -298,6 +303,11 @@ export async function openLibrary(root: HTMLElement, browse: Browse, path: strin
     else notify(comics.length ? "Everything here is read" : "No comics yet");
   };
   arrange.addEventListener("change", () => { location.hash = browseHash(arrange.value as Browse); });
+  // drawn again as each setting changes, so what it does is seen behind the dialog
+  page.querySelector<HTMLButtonElement>('[data-act="settings"]')!.onclick = () => openLibrarySettings(settings, (changed) => {
+    settings = cachedSettings = changed;
+    draw();
+  });
   page.querySelector<HTMLButtonElement>('[data-act="scan"]')!.onclick = async (event) => {
     const button = event.target as HTMLButtonElement;
     button.disabled = true;

@@ -273,6 +273,8 @@ button {
 .dialog-row input[type="url"] { flex: 1; min-width: 180px; }
 .dialog-row input { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
 .dialog-row input[type="number"] { width: 6em; }
+.dialog-row input[type="checkbox"] { width: 18px; height: 18px; padding: 0; margin: 0 6px 0 0; vertical-align: -3px; accent-color: var(--accent); }
+.dialog-row + p.muted { margin: -4px 0 8px; font-size: 13px; }
 .dialog button.primary { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 600; }
 .dialog button:disabled { opacity: .45; cursor: default; }
 .dialog .form-message { min-height: 1.4em; margin: 6px 0 0; }
