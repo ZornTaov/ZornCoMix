@@ -457,6 +457,10 @@ class KeptIndex:
         #and where each ends, an address holding several pages having a line for each: the page after it
         #is the line after its last
         self.ends = {}
+        #the lines this run added, each for a picture it saved. never put right as the same page saved again:
+        #a site's own name can carry a number that is not the page's place - a page drawn as 109-1 and 109-2
+        #moves every page after it one on, and 110.png then "named" the line holding 109-2.png
+        self.added = set()
 
     def open(self, folder, args=None):
         held = read_metadata(folder)
@@ -564,10 +568,12 @@ class KeptIndex:
         #right, since a second line for one page moves every page after it one place out
         number = page_number(image) if image else None
         where = same_page(url)
-        if number is not None and self.at.get(where, number + 1) <= number <= self.ends.get(where, -1):
+        if number is not None and number not in self.added and \
+                self.at.get(where, number + 1) <= number <= self.ends.get(where, -1):
             self.correct(number, url, src, image, size, named)
             return
         self.last += 1
+        self.added.add(self.last)
         self.urls.add(url)
         self.pages.add((url, src))
         self.at.setdefault(same_page(url), self.last)

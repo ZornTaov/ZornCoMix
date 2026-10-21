@@ -109,6 +109,20 @@ def test_a_listed_page_saved_as_another_image_puts_its_line_right(library, chapt
         assert len([text for text in f if text.strip()]) == 20
 
 
+def test_a_page_drawn_as_two_pictures_keeps_both_on_an_address_of_several(library, chapters):
+    #an address holding several pages, one of them drawn as two pictures the site names 4-1 and 4-2. every page
+    #after them sits one further on than the number in its name, so 5.png is page 6, not the line holding 4-2
+    folder, path = comic_with(library, chapters, 2, 2)
+    kept = KeptIndex()
+    kept.open(str(folder), scrape_args("{0}/comic/2".format(SITE)))
+    for name in ("3.png", "4-1.png", "4-2.png", "5.png", "6.png"):
+        kept.add("{0}/comic/3".format(SITE), "{0}/img/{1}".format(SITE, name), name, 100, "Pages 3-7")
+    with open(path, encoding="utf-8") as f:
+        held = [json.loads(text) for text in f if text.strip()]
+    assert [one["file"] for one in held[2:]] == ["3.png", "4-1.png", "4-2.png", "5.png", "6.png"], held[2:]
+    assert [one["n"] for one in held] == list(range(1, 8))
+
+
 class Setup:
     #the little of update_comics that walk_needed asks of it
     @staticmethod
