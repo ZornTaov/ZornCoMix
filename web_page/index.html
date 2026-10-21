@@ -390,13 +390,22 @@
         <label for="e-waittime">Wait before next</label>
         <span><input type="number" id="e-waittime" min="0" style="width:80px"> seconds</span>
       </div>
-      <div class="field builtin-only">
-        <label for="e-cookies">Cookies</label>
-        <input type="text" id="e-cookies" spellcheck="false" placeholder="none — e.g. AGE_OK=yes for a site with an age gate">
-        <div class="note">What the site's "are you 18?" page sets once passed, as name=value; several put apart with ;.
-          The browser's developer tools show it under the site's cookies after passing the gate by hand.</div>
-      </div>
       <details class="advanced builtin-only" id="edit-advanced"><summary>Advanced settings</summary>
+        <div class="field"><label for="e-cookies">Cookies</label>
+          <input type="text" id="e-cookies" spellcheck="false" placeholder="none — e.g. AGE_OK=yes for a site with an age gate">
+          <div class="note">What the site's "are you 18?" page sets once passed, as name=value; several put apart with ;.
+            The browser's developer tools show it under the site's cookies after passing the gate by hand.</div></div>
+        <div class="field"><label for="e-image_xpath">Image path</label>
+          <input type="text" id="e-image_xpath" spellcheck="false" list="e-image-paths" placeholder="none — the next update searches the element paths">
+          <datalist id="e-image-paths"></datalist>
+          <div class="note">The element path this comic's pictures are found by, tried before any other. An update
+            keeps using it while it matches anything, so one that finds the wrong picture - the site's logo, a user
+            icon - has to be put right here. Blank searches the element paths and keeps the first that matches.</div></div>
+        <div class="field"><label for="e-next_xpath">Next path</label>
+          <input type="text" id="e-next_xpath" spellcheck="false" list="e-next-paths" placeholder="none — the next update searches the element paths">
+          <datalist id="e-next-paths"></datalist>
+          <div class="note">The element path pressed to reach the next page. One that stays on the page makes every
+            update stop there as caught up. The page check, under Element paths, says which paths match a page.</div></div>
         <div class="field"><label for="e-user_agent">User-Agent</label>
           <div class="agent"><input type="text" id="e-user_agent" spellcheck="false">
             <button type="button" id="e-user_agent-mine">Use this browser's</button></div>

@@ -34,6 +34,11 @@ editable = {
 }
 #of those, the ones a comic another program scrapes has too: everything else is mirror_base's own
 plugin_kept = ("cbz", "cbz_path", "ended")
+#the paths a scrape found this comic's image and next link by, which it keeps in its state rather than its
+#settings and tries ahead of every list. a wrong one is kept for as long as it matches anything - a site's
+#user icon saved as page after page, a next link that stays where it is and calls the comic caught up - so
+#they are put right here, by hand, rather than by editing the metadata file
+remembered_paths = ("image_xpath", "next_xpath")
 max_edits = 50
 
 
@@ -147,6 +152,17 @@ def cookie_value(given):
     return held or None
 
 
+def path_value(given):
+    #an element path as typed, or None for a box emptied, which leaves the next scrape to search the lists
+    #afresh. only its shape is checked: whether it finds the comic is for the page check to say, on the site
+    path = str(given or "").strip()
+    if not path:
+        return None
+    if "\n" in path or "\r" in path or not path.startswith(("/", "(", ".")):
+        raise ValueError('an element path is one XPath, starting with / - as //*[@id="comic"]//img')
+    return path
+
+
 def clean_settings(given):
     #checks each value the page sent, so a typo turns into a message rather than a comic that will not run
     cleaned, problems = {}, []
@@ -219,6 +235,14 @@ def save_settings(args, uc, runner, name, given, expected_updated):
         given = dict(given, chapters_url=None, chapters_every=None)
     else:
         cleaned, problems = clean_settings(given)
+    #a plugin's program finds its own pages, so a plugin comic has no paths to put right
+    found_by = {}
+    for key in remembered_paths:
+        if key in given and not settings.get("scraper"):
+            try:
+                found_by[key] = path_value(given[key])
+            except ValueError as error:
+                problems.append(str(error))
     if problems:
         return 400, {"error": "; ".join(problems)}
     if expected_updated and metadata.get("updated") != expected_updated:
@@ -226,6 +250,8 @@ def save_settings(args, uc, runner, name, given, expected_updated):
                               "Reopen it and make the change again."}
 
     changed = {key: [settings.get(key), value] for key, value in cleaned.items() if settings.get(key) != value}
+    state = dict(metadata.get("state") or {})
+    changed.update((key, [state.get(key), value]) for key, value in found_by.items() if state.get(key) != value)
     if own:
         was = dict(settings.get("plugin") or {})
         changed.update(("plugin." + key, [was.get(key), value]) for key, value in own.items() if was.get(key) != value)
@@ -282,6 +308,9 @@ def save_settings(args, uc, runner, name, given, expected_updated):
         if key in settings and not settings[key]:
             del settings[key]
     metadata["settings"] = settings
+    if any(state.get(key) != value for key, value in found_by.items()):
+        state.update(found_by)
+        metadata["state"] = state
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     metadata["updated"] = stamp
     history = metadata.setdefault("history", {})

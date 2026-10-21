@@ -44,7 +44,12 @@ async function openEditor(name) {
   //what a blank box falls back to, so it is plain what the comic is fetched under now
   $("e-user_agent").placeholder = (config && (config.settings.user_agent || config.user_agent_default)) || "";
   $("e-placeholders").value = (s.placeholders || []).join(" ");
-  $("edit-advanced").open = !!(s.user_agent || (s.placeholders || []).length);
+  //the paths its last scrape found it by, kept in its state; nearly every comic has them, so they do not
+  //open the section on their own the way a setting given by hand does
+  $("e-image_xpath").value = st.image_xpath || "";
+  $("e-next_xpath").value = st.next_xpath || "";
+  offerPaths();
+  $("edit-advanced").open = !!(s.user_agent || (s.placeholders || []).length || Object.keys(s.cookies || {}).length);
   const chapters = detail.chapters || {};
   $("e-chapters").value = chapters.source_url || "";
   $("e-every").value = chapters.every || "";
@@ -102,6 +107,24 @@ async function openEditor(name) {
       : "Being scraped right now; stop it or wait to edit.";
   }
   $("editor").showModal();
+}
+
+//the library's element paths, offered under the image and next path boxes with what each is for. asked
+//afresh each time the editor opens, since the element paths dialog may have changed them since; a box can
+//still be typed in if they cannot be read
+async function offerPaths() {
+  const fill = (id, list) => {
+    $(id).innerHTML = (list || []).filter((entry) => entry.enabled !== false && entry.xpath)
+      .map((entry) => `<option value="${esc(entry.xpath)}">${esc(entry.note || "")}</option>`).join("");
+  };
+  try {
+    const known = await (await fetch(api("/api/elements"))).json();
+    fill("e-image-paths", known.image);
+    fill("e-next-paths", known.next);
+  } catch (error) {
+    fill("e-image-paths", []);
+    fill("e-next-paths", []);
+  }
 }
 
 //the folder a comic sits in, by its name in the library
@@ -194,6 +217,7 @@ async function saveEditor(updateAfter) {
     : { url: $("e-url").value, increment: $("e-increment").value, cbz_path: $("e-cbz_path").value,
         waittime: $("e-waittime").value, cookies: $("e-cookies").value, user_agent: $("e-user_agent").value,
         placeholders: $("e-placeholders").value,
+        image_xpath: $("e-image_xpath").value, next_xpath: $("e-next_xpath").value,
         chapters_url: $("e-chapters").value, chapters_every: $("e-every").value };
   flags.forEach((key) => { settings[key] = $("e-" + key).checked; });
   try {
