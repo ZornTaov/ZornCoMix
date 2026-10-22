@@ -75,7 +75,8 @@ code reaching into a script still finds it; new code should import from `comicli
 `css/` is `base` (colours and controls), `page` (the sections), `dialogs`, and `elements` (the element
 paths dialog and the check result). `js/` holds one file per part of the page: `common` (`$`, `api`,
 `post`, `esc`, the time formats), `library`, `running` (the `/api/state` poll: Running now, queue, Recent,
-log), `editor`, `elements`, `listcheck`, `bounds`, `comicinfo` (a comic's ComicInfo, saved to its metadata
+log), `editor`, `elements`, `listcheck`, `bounds`, `pagefix` (the Pages dialog: which file is which page,
+said by hand through `chapters.py pagefix`), `comicinfo` (a comic's ComicInfo, saved to its metadata
 and written into its archives by a queued `chapters.py comicinfo`), `adding`, `uploads`, `settings`,
 `plugins` (a plugin's settings as a form), and `main`, which starts it all.
 
