@@ -1,4 +1,4 @@
-//the Pages dialog: which file is which page, said by hand where lining the comic up cannot settle it. what is
+//the editor's Pages tab: which file is which page, said by hand where lining the comic up cannot settle it. what is
 //said is kept in the comic's metadata, and every change lines the comic up again, so what is shown is always
 //what the last alignment came to
 
@@ -166,7 +166,7 @@ async function pfLoad() {
   fixing.report = held.report || null;
   fixing.fixes = held.fixes || [];
   fixing.settled = !!held.settled;
-  $("pf-who").textContent = `${fixing.name} — ${fixing.pages.length} page(s)`;
+  $("pf-who").textContent = `${fixing.pages.length} page(s)`;
   pfFiles();
   pfDraw();
 }
@@ -201,15 +201,15 @@ function pfPicture(n) {
   $("pf-picture").scrollIntoView({ block: "nearest" });
 }
 
-$("edit-pages").addEventListener("click", async () => {
+tabOpeners.pages = async () => {
   fixing = { name: editing.name, pages: [], report: null, fixes: [], settled: true, show: "look", from: 0, marked: null,
              picture: null };
+  pfWalking = null;
   $("pf-show").value = "look"; $("pf-go").value = "";
   $("pf-msg").className = "msg"; $("pf-msg").textContent = "Reading which file is which page…";
   $("pf-picture").hidden = true; $("pf-out").innerHTML = ""; $("pf-out-box").open = false;
-  $("pf-who").textContent = editing.name;
+  $("pf-who").textContent = "";
   pfDraw();
-  $("pagefix").showModal();
   try {
     await pfLoad();
     $("pf-msg").textContent = "";
@@ -217,7 +217,7 @@ $("edit-pages").addEventListener("click", async () => {
     $("pf-msg").className = "msg bad";
     $("pf-msg").textContent = "Could not read this comic's pages: " + error.message;
   }
-});
+};
 $("pf-show").addEventListener("change", () => {
   fixing.show = $("pf-show").value; fixing.from = 0; fixing.marked = null; $("pf-go").value = "";
   pfDraw();
@@ -297,7 +297,7 @@ let pfWalking = null;
 async function pfFollowWalk(id) {
   pfWalking = id;
   const msg = $("pf-msg");
-  while (pfWalking === id && $("pagefix").open) {
+  while (pfWalking === id && $("editor").open && editing && editing.name === fixing.name) {
     let state;
     try {
       state = await (await fetch(api("/api/state"))).json();
@@ -331,4 +331,3 @@ $("pf-walk").addEventListener("click", async () => {
     $("pf-msg").textContent = error.message;
   }
 });
-$("pf-close").addEventListener("click", () => $("pagefix").close());

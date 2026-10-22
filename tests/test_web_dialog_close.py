@@ -59,7 +59,9 @@ def test_every_dialog_closes_the_same_way(web, browser):
     page = web()
     open_page(browser, page.base + "/")
     names = browser.execute_script("return [...document.querySelectorAll('dialog')].map((d) => d.id)")
-    assert {"editor", "comicinfo", "bounds", "listcheck", "elements", "plugins", "config"} <= set(names), names
+    assert {"editor", "listcheck", "elements", "plugins", "config"} <= set(names), names
+    #the comic's chapters, pages and ComicInfo are tabs of its editor now, not dialogs stacked on it
+    assert not {"comicinfo", "bounds", "pagefix"} & set(names), names
     for name in names:
         #one ×, last in the form so it is not what the dialog opens focused on, but shown in the head's
         #top right corner; and nothing in its foot that only closes it

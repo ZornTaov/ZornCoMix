@@ -75,12 +75,18 @@ code reaching into a script still finds it; new code should import from `comicli
 `css/` is `base` (colours and controls), `page` (the sections), `dialogs`, and `elements` (the element
 paths dialog and the check result). `js/` holds one file per part of the page: `common` (`$`, `api`,
 `post`, `esc`, the time formats), `library`, `running` (the `/api/state` poll: Running now, queue, Recent,
-log), `editor`, `elements`, `listcheck`, `bounds`, `pagefix` (the Pages dialog: which file is which page,
-said by hand through `chapters.py pagefix`), `comicinfo` (a comic's ComicInfo, saved to its metadata
-and written into its archives by a queued `chapters.py comicinfo`), `adding`, `uploads`, `settings`,
+log), `editor`, `elements`, `listcheck`, `bounds`, `pagefix`, `comicinfo`, `adding`, `uploads`, `settings`,
 `plugins` (a plugin's settings as a form), and `main`, which starts it all.
 
-They are **plain scripts sharing one global scope, not modules**, on purpose: the dialogs hand each other
+A comic's editor is **one dialog in tabs**: Settings and History are `editor.js`'s own, Chapters is `bounds.js`
+(with `edit-chapterize` and the chapter list, which are `editor.js`'s), Pages is `pagefix.js` (which file is
+which page, said by hand through `chapters.py pagefix`, and Walk it again), ComicInfo is `comicinfo.js`. A tab's
+file puts what it does the first time the tab is shown for a comic into `tabOpeners` as it loads, as a plugin's
+`dialog.js` does into `pluginForms`; `showTab` runs it. The editor's foot holds every tab's buttons and message,
+each marked with the `data-tabs` it shows on. A new thing done to a comic goes in the tab it is about, not in a
+dialog stacked on the editor; only the chapter-list check stays a dialog of its own, since Add comics uses it too.
+
+The scripts are **plain scripts sharing one global scope, not modules**, on purpose: the dialogs hand each other
 state (`editing`, `checkJob`, `paths`), and an imported `let` cannot be assigned to. So a top-level name
 must be declared in exactly one file, and **only `main.js` may call anything as it loads**, since a
 script can then use what a later one declares. The one exception is a plugin's own `dialog.js`, served from
