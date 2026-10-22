@@ -8,8 +8,7 @@ import subprocess
 import sys
 
 from comiclib.browser import claim_profile
-
-PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from conftest import PROJECT
 
 #a process that claims a profile, says which, and holds it until told to let go
 CLAIMER = """

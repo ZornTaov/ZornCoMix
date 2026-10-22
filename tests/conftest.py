@@ -19,10 +19,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+import areas
+
 #the scripts under test sit one folder up, and are imported from there as well as run
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT not in sys.path:
     sys.path.insert(0, PROJECT)
+#a test borrows a fake site or a helper from a test in another area by its bare name, as it did when they all
+#sat in one folder - so every area's folder is on the path, after everything else, whichever area pytest
+#collects first. a test file's name has to stay unique across the areas for that to mean one file
+for _area in areas.AREAS:
+    _folder = os.path.join(areas.TESTS, _area)
+    if _folder not in sys.path:
+        sys.path.append(_folder)
 
 #a 1x1 png, for a page whose size does not matter
 PNG = bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489'
@@ -64,14 +73,69 @@ def share_profiles():
     os.environ["MIRROR_PROFILE_POOL"] = os.path.join(tempfile.gettempdir(), "mirror-test-profiles", worker)
 
 
+def pytest_addoption(parser):
+    parser.addoption("--affected", nargs="?", const="origin/main", default=None, metavar="BASE",
+                     help="run only the areas of the suite that what this branch changed since BASE "
+                          "(origin/main if not given) touches, by tests/areas.py")
+
+
 def pytest_configure(config):
     run_politely()
     share_profiles()
     config.addinivalue_line("markers", "browser: drives a real browser, directly or through a scrape")
     config.addinivalue_line("markers", "slow: takes more than a few seconds")
+    for area in areas.AREAS:
+        config.addinivalue_line("markers", "{0}: a test in tests/{0}/".format(area))
+    base = config.getoption("--affected")
+    if base:
+        try:
+            config.affected = areas.choose(areas.changed(base))
+        except (RuntimeError, IndexError) as failed:
+            raise pytest.UsageError("--affected could not tell what changed since {0}: {1}. Name a branch or "
+                                    "commit this one grew from, as --affected=main".format(base, failed))
+
+
+def pytest_report_header(config):
+    if getattr(config, "affected", None) is None:
+        return None
+    chosen, files, reasons = config.affected
+    if chosen is None:
+        #only what made it everything, rather than every one of a branch's files
+        said = "everything"
+        reasons = [reason for reason in reasons if reason.endswith("everything stands on it")
+                   or reason.endswith("so everything")]
+    else:
+        said = ", ".join(sorted(chosen) + sorted(files)) or "nothing"
+    lines = ["affected: " + said] + ["  " + reason for reason in reasons]
+    if any(reason.startswith(("comiclib/", "reader/")) for reason in reasons):
+        #the reader imports comiclib, and its suite is apart from this one
+        lines.append("  the reader's suite is apart: cd reader && python -m pytest")
+    return lines
+
+
+def area_of(item):
+    #the folder of tests/ a test sits in, which is its area; None for anything sitting in tests/ itself
+    parts = os.path.relpath(str(item.path), os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
+    parts = parts.split("/")
+    return parts[0] if len(parts) == 2 and parts[0] in areas.AREAS else None
 
 
 def pytest_collection_modifyitems(config, items):
+    for item in items:
+        area = area_of(item)
+        if area:
+            item.add_marker(getattr(pytest.mark, area))
+    if getattr(config, "affected", None) is not None:
+        chosen, files, reasons = config.affected
+        if chosen is not None:
+            here = os.path.dirname(os.path.abspath(__file__))
+            keep, drop = [], []
+            for item in items:
+                path = "tests/" + os.path.relpath(str(item.path), here).replace("\\", "/")
+                (keep if area_of(item) in chosen or path in files else drop).append(item)
+            if drop:
+                config.hook.pytest_deselected(items=drop)
+                items[:] = keep
     #a machine with no chrome still runs everything that does not need one, rather than failing it all
     if browser_available():
         return

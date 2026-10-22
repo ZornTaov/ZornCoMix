@@ -15,9 +15,22 @@
 !pytest.ini
 
 # the suite. two lines each, because * matches at every depth: the folder has to be let in before its
-# files can be, and anything not named here - __pycache__, a stray screenshot - stays out
+# files can be, and anything not named here - __pycache__, a stray screenshot - stays out. a test goes in
+# the folder of the area it tests (tests/areas.py), and a new area needs its own two lines here
 !tests/
 !tests/*.py
+!tests/scrape/
+!tests/scrape/*.py
+!tests/chapters/
+!tests/chapters/*.py
+!tests/archives/
+!tests/archives/*.py
+!tests/library/
+!tests/library/*.py
+!tests/plugins/
+!tests/plugins/*.py
+!tests/web/
+!tests/web/*.py
 
 !mirror_base.py
 !update_comics.py

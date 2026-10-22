@@ -1,0 +1,86 @@
+# Runs every test on every pull request, and on main after a merge: the updater's suite in two halves - what
+# needs no browser, and what drives one - and the reader's two, its server's and its page's. Nothing here
+# reaches a real site or a real library; the suites serve made-up comics on local ports.
+#
+# pull_request rather than pr-images' pull_request_target: a test needs nothing but to read the code, so a
+# fork's PR runs here with read-only permissions and no secrets, which is safe whatever it changes.
+# No path filter: a check that skips docs-only PRs could never be required before merging.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# a new push to a PR makes the run on its last commit worth nothing
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  updater:
+    name: updater (${{ matrix.part }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: offline
+            marks: not browser
+          # the runner image carries google chrome, and selenium fetches the driver that matches it
+          - part: browser
+            marks: browser
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # the python the image runs the scripts with
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      # a test that ran slow on a runner is the first thing to look at when the job nears its timeout
+      - run: python -m pytest -m "${{ matrix.marks }}" --durations=20
+
+  reader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: reader/requirements.txt
+      # httpx is what fastapi's TestClient talks to the app through; neither it nor pytest is in the image
+      - run: pip install -r reader/requirements.txt pytest httpx
+      # test_contract.py among them: what the reader relies on comiclib for
+      - run: python -m pytest
+        working-directory: reader
+
+  reader-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # the node the reader's image builds its page with
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: reader/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: reader/web
+      - run: npm test
+        working-directory: reader/web
