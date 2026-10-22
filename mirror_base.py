@@ -197,6 +197,8 @@ def setup():
     params.add_argument("--index",type=str,default=None,metavar="FILE",help="Walk the comic without downloading anything and write one line per page - its address, its image and its title - to this file. Used to work out which saved file came from which page. An existing file is carried on from where it stopped.")
     params.add_argument("--index-first",action='store_true',default=False,help="With --index, follow the comic's first-page link before walking, for a comic whose beginning was never recorded.")
     params.add_argument("--index-limit",type=int,default=0,metavar="PAGES",help="With --index, stop after this many pages. 0 means the whole comic.")
+    params.add_argument("--image-path",default=None,metavar="XPATH",help="The element path to find the comic's image by, tried before every list - as a scrape tries the one its comic remembers. chapters.py gives a walk the comic's own, which it otherwise has no folder to read from.")
+    params.add_argument("--next-path",default=None,metavar="XPATH",help="The element path to press for the next page, tried before every list. A walk given none searches the lists, and on a site where the first next path to match leads back, calls the comic looped part way through.")
     params.add_argument("--note-page",action='append',default=[],metavar="ADDRESS",help="Keep this page as a note of its address rather than the pictures on it; can be given more than once. A comic's own list, from chapters.py note, is read from its metadata; a walk is given it this way.")
     params.add_argument("--cookie",action='append',default=[],metavar="NAME=VALUE",help="A cookie the site wants before it shows the comic - the one its \"are you 18?\" page sets once passed, most often; can be given more than once. Set in the browser before the first page loads, and sent with every image fetched from the site.")
     params.add_argument("--user-agent",default=None,metavar="TEXT",help="The name to fetch this comic's images under, for a site that refuses the library's - one that drops the connection on every image is often refusing the name. Beats the user_agent in ComicScraper.json, which beats a current Chrome's. The browser keeps its own.")
@@ -298,6 +300,12 @@ def setup():
         image_xpath = state["image_xpath"]
     if not args.element_find_next_manual and state.get("next_xpath"):
         next_xpath = state["next_xpath"]
+    #given outright, which a walk is: it has no folder of the comic's to read them from, and searching the lists
+    #afresh found a next link on a page of several that led back, and the walk called the comic looped there
+    if not args.element_find_manual and getattr(args, "image_path", None):
+        image_xpath = args.image_path
+    if not args.element_find_next_manual and getattr(args, "next_path", None):
+        next_xpath = args.next_path
 
     return driver, increment, args
 

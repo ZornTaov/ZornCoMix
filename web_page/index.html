@@ -382,41 +382,16 @@
         <div class="note">What that page is counted as. Only shows in filenames with numbering on.
           <button type="button" class="link" id="e-next-number"></button></div>
       </div>
-      <div class="field">
-        <label for="e-cbz_path">Archive</label>
-        <input type="text" id="e-cbz_path" spellcheck="false" placeholder="default: CBZs/… beside the Uncompressed folder">
-      </div>
       <div class="field builtin-only">
         <label for="e-waittime">Wait before next</label>
         <span><input type="number" id="e-waittime" min="0" style="width:80px"> seconds</span>
       </div>
-      <div class="field builtin-only">
-        <label for="e-cookies">Cookies</label>
-        <input type="text" id="e-cookies" spellcheck="false" placeholder="none — e.g. AGE_OK=yes for a site with an age gate">
-        <div class="note">What the site's "are you 18?" page sets once passed, as name=value; several put apart with ;.
-          The browser's developer tools show it under the site's cookies after passing the gate by hand.</div>
-      </div>
-      <details class="advanced builtin-only" id="edit-advanced"><summary>Advanced settings</summary>
-        <div class="field"><label for="e-user_agent">User-Agent</label>
-          <div class="agent"><input type="text" id="e-user_agent" spellcheck="false">
-            <button type="button" id="e-user_agent-mine">Use this browser's</button></div>
-          <div class="note">The name this comic's pictures and chapter pages are fetched under, for a site that
-            refuses the library's; blank for the library's, set in Settings.</div></div>
-        <div class="field"><label for="e-placeholders">Not out yet</label>
-          <input type="text" id="e-placeholders" spellcheck="false" placeholder="none — e.g. https://example.com/img/coming-soon.png">
-          <div class="note">A picture the site shows where a page will be once it is out, as on an address filled a
-            day at a time. Never saved: an update stops there and starts from it next time. Its address, from the
-            browser's Copy image address; several put apart with spaces.</div></div>
-      </details>
       <div class="field">
         <label>Options</label>
         <div class="row">
-          <label class="check builtin-only"><input type="checkbox" id="e-prefix"> number pages</label>
           <label class="check builtin-only"><input type="checkbox" id="e-javascript"> javascript</label>
           <label class="check builtin-only"><input type="checkbox" id="e-firefox"> firefox</label>
           <label class="check"><input type="checkbox" id="e-cbz"> make cbz</label>
-          <label class="check builtin-only"><input type="checkbox" id="e-direction_check"> direction check</label>
-          <label class="check builtin-only" title="Save every page the comic puts on one address, not just the first. Off reads one page an address however many are there."><input type="checkbox" id="e-multi_page"> several pages an address</label>
         </div>
       </div>
       <div class="field builtin-only">
@@ -436,6 +411,46 @@
         <label>Status</label>
         <label class="check"><input type="checkbox" id="e-ended"> ended, leave it alone</label>
       </div>
+      <!--what can leave a comic saving the wrong pages, under the wrong names or in the wrong place if set wrongly,
+          folded away so it is changed on purpose-->
+      <details class="advanced" id="edit-advanced"><summary>Advanced settings</summary>
+        <div class="note advanced-why">Set wrongly, these can save the wrong pages, number them wrongly or put the
+          comic somewhere else. Change them on purpose.</div>
+        <div class="field"><label for="e-cbz_path">Archive</label>
+          <input type="text" id="e-cbz_path" spellcheck="false" placeholder="default: CBZs/… beside the Uncompressed folder"></div>
+        <div class="field builtin-only">
+          <label>Saving</label>
+          <div class="row">
+            <label class="check" title="Put each page's number in front of its filename. Turned off part way, the pages after it are named another way."><input type="checkbox" id="e-prefix"> number pages</label>
+            <label class="check" title="Stop when the next link leads back to a page numbered before this one."><input type="checkbox" id="e-direction_check"> direction check</label>
+            <label class="check" title="Save every page the comic puts on one address, not just the first. Off reads one page an address however many are there."><input type="checkbox" id="e-multi_page"> several pages an address</label>
+          </div>
+        </div>
+        <div class="field builtin-only"><label for="e-cookies">Cookies</label>
+          <input type="text" id="e-cookies" spellcheck="false" placeholder="none — e.g. AGE_OK=yes for a site with an age gate">
+          <div class="note">What the site's "are you 18?" page sets once passed, as name=value; several put apart with ;.
+            The browser's developer tools show it under the site's cookies after passing the gate by hand.</div></div>
+        <div class="field builtin-only"><label for="e-image_xpath">Image path</label>
+          <input type="text" id="e-image_xpath" spellcheck="false" list="e-image-paths" placeholder="none — the next update searches the element paths">
+          <datalist id="e-image-paths"></datalist>
+          <div class="note">The element path this comic's pictures are found by, tried before any other. An update
+            keeps using it while it matches anything, so one that finds the wrong picture - the site's logo, a user
+            icon - has to be put right here. Blank searches the element paths and keeps the first that matches.</div></div>
+        <div class="field builtin-only"><label for="e-next_xpath">Next path</label>
+          <input type="text" id="e-next_xpath" spellcheck="false" list="e-next-paths" placeholder="none — the next update searches the element paths">
+          <datalist id="e-next-paths"></datalist>
+          <div class="note">The element path pressed to reach the next page. One that stays on the page makes every
+            update stop there as caught up. The page check, under Element paths, says which paths match a page.</div></div>
+        <div class="field builtin-only"><label for="e-user_agent">User-Agent</label>
+          <div class="agent"><input type="text" id="e-user_agent" spellcheck="false">
+            <button type="button" id="e-user_agent-mine">Use this browser's</button></div>
+          <div class="note">The name this comic's pictures and chapter pages are fetched under, for a site that
+            refuses the library's; blank for the library's, set in Settings.</div></div>
+        <div class="field builtin-only"><label for="e-placeholders">Not out yet</label>
+          <input type="text" id="e-placeholders" spellcheck="false" placeholder="none — e.g. https://example.com/img/coming-soon.png">
+          <div class="note">A picture the site shows where a page will be once it is out, as on an address filled a
+            day at a time. Never saved: an update stops there and starts from it next time. Its address, from the
+            browser's Copy image address; several put apart with spaces.</div></div>
       <details id="edit-move-box"><summary>Move to another folder</summary>
         <div class="field move-field">
           <label for="e-move-into">Move into</label>
@@ -450,6 +465,27 @@
           <button type="button" id="e-move-check">See what would move</button>
           <button type="button" id="e-move-go" disabled>Move it</button>
         </div>
+      </details>
+      <details id="edit-rewind-box" class="builtin-only"><summary>Go back to an earlier page</summary>
+        <div class="field move-field">
+          <label for="e-rewind-from">From page</label>
+          <span><input type="number" id="e-rewind-from" min="1" style="width:110px"></span>
+          <div class="note">That page and every page after it are taken off, into the comic's <code>.set aside</code>
+            folder rather than deleted, and its record of which page is which, its chapters and its archives go back
+            with them; the next update starts at that page. For pages saved as the wrong picture, or past a next link
+            that went wrong: put the image or next path right above first. Each of the recent runs can be undone
+            this way too.</div>
+        </div>
+        <div class="field move-field">
+          <label for="e-rewind-url">Its address</label>
+          <input type="text" id="e-rewind-url" spellcheck="false" placeholder="only when the comic's record does not know it">
+        </div>
+        <div class="move-plan" id="e-rewind-plan" hidden></div>
+        <div class="row move-row">
+          <button type="button" id="e-rewind-check">See what would go</button>
+          <button type="button" id="e-rewind-go" disabled>Go back</button>
+        </div>
+      </details>
       </details>
       <details id="edit-runs-box"><summary>Recent runs and edits</summary><div id="edit-runs"></div></details>
     </div>

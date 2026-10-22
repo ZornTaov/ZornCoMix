@@ -268,7 +268,6 @@ def set_aside_pages(folder, names):
     #every archive without anyone having asked for that. (moved, refused) as lists of (name, why)
     _, by_number, _ = numbered_files(folder)
     going = set(names)
-    aside = os.path.join(folder, SET_ASIDE)
     moved, refused = [], []
     for name in names:
         number = page_number(name)
@@ -278,16 +277,24 @@ def set_aside_pages(folder, names):
         if not [other for other in by_number[number] if other not in going]:
             refused.append((name, "nothing else would be left on its page number"))
             continue
-        os.makedirs(aside, exist_ok=True)
-        target = os.path.join(aside, name)
-        stem, ending = os.path.splitext(name)
-        again = 1
-        while os.path.exists(target):
-            again += 1
-            target = os.path.join(aside, "{0} ({1}){2}".format(stem, again, ending))
+        target = aside_target(folder, name)
         os.replace(os.path.join(folder, name), target)
         moved.append((name, os.path.relpath(target, folder)))
     return moved, refused
+
+
+def aside_target(folder, name):
+    #where a file goes in the comic's set-aside folder: under its own name, or numbered on from it when a
+    #file of that name was set aside before, so nothing set aside is ever written over
+    aside = os.path.join(folder, SET_ASIDE)
+    os.makedirs(aside, exist_ok=True)
+    target = os.path.join(aside, name)
+    stem, ending = os.path.splitext(name)
+    again = 1
+    while os.path.exists(target):
+        again += 1
+        target = os.path.join(aside, "{0} ({1}){2}".format(stem, again, ending))
+    return target
 
 
 def joined_pages(folder, args, numbered=False):
@@ -364,6 +371,14 @@ def walk(folder, args):
     #pages this comic keeps as a note of their address, so the walk counts each as the one page it is
     for address in metadata.get("notes") or []:
         command += ["--note-page", address]
+    #and the paths its scrapes found it by, so the walk follows the same links an update does. searching the
+    #lists afresh, a walk of a comic of several pages an address took a next link that led back, and stopped
+    #at its second address calling the comic looped
+    state = metadata.get("state") or {}
+    if state.get("image_xpath"):
+        command += ["--image-path", state["image_xpath"]]
+    if state.get("next_xpath"):
+        command += ["--next-path", state["next_xpath"]]
     if args.first:
         command.append("--index-first")
     if args.limit:
@@ -450,6 +465,10 @@ class KeptIndex:
         #and where each ends, an address holding several pages having a line for each: the page after it
         #is the line after its last
         self.ends = {}
+        #the lines this run added, each for a picture it saved. never put right as the same page saved again:
+        #a site's own name can carry a number that is not the page's place - a page drawn as 109-1 and 109-2
+        #moves every page after it one on, and 110.png then "named" the line holding 109-2.png
+        self.added = set()
 
     def open(self, folder, args=None):
         held = read_metadata(folder)
@@ -557,10 +576,12 @@ class KeptIndex:
         #right, since a second line for one page moves every page after it one place out
         number = page_number(image) if image else None
         where = same_page(url)
-        if number is not None and self.at.get(where, number + 1) <= number <= self.ends.get(where, -1):
+        if number is not None and number not in self.added and \
+                self.at.get(where, number + 1) <= number <= self.ends.get(where, -1):
             self.correct(number, url, src, image, size, named)
             return
         self.last += 1
+        self.added.add(self.last)
         self.urls.add(url)
         self.pages.add((url, src))
         self.at.setdefault(same_page(url), self.last)

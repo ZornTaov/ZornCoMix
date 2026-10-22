@@ -119,3 +119,34 @@ def test_where_the_comic_was_moved_from_outlives_a_run(saving, mirror):
                    "history": {"moves": moves}}, f)
     meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
     assert meta["history"]["moves"] == moves
+
+
+def test_a_save_waits_for_a_reader_holding_the_file(tmp_path, monkeypatch):
+    #on windows a file open in another process cannot be replaced: a test polling it, the reader, a virus
+    #scanner. the save tried once and failed, and the web page's request went unanswered
+    from comiclib import metadata
+    real, refused = metadata.os.replace, []
+
+    def held_twice(source, target):
+        if len(refused) < 2:
+            refused.append(target)
+            raise PermissionError(5, "Access is denied")
+        real(source, target)
+    monkeypatch.setattr(metadata.os, "replace", held_twice)
+    monkeypatch.setattr(metadata.time, "sleep", lambda seconds: None)
+    path = tmp_path / "mirror_metadata.json"
+    metadata.write_json(str(path), {"schema": 2})
+    assert len(refused) == 2 and load(path) == {"schema": 2}
+    assert not (tmp_path / "mirror_metadata.json.writing").exists()
+
+
+def test_each_time_the_comic_went_back_outlives_a_run(saving, mirror):
+    #the run after going back is the one that fetches the pages again, and it is what says which pages were
+    #set aside, and where to find one that went
+    rewinds = [{"at": "2026-10-20T00:00:00Z", "from_page": 2, "newest_was": 3, "run": None,
+                "set_aside": [".set aside/0002_page.jpg"], "archives_set_aside": [], "index_was": None}]
+    with open(saving / "mirror_metadata.json", "w", encoding="utf-8") as f:
+        json.dump({"schema": 2, "settings": {"url": "https://example.com/comic/1/"},
+                   "history": {"rewinds": rewinds}}, f)
+    meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
+    assert meta["history"]["rewinds"] == rewinds

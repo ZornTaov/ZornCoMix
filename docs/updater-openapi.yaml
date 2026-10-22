@@ -448,7 +448,7 @@ paths:
                   description: The comic's folder name
                 settings:
                   type: object
-                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended, cookies, user_agent, placeholders). cookies is "name=value; name=value" or an object of name to value; empty removes them. user_agent is the name this comic's images and chapter pages are fetched under, one line of text; empty removes it, and the library's is used. placeholders is the pictures the site shows where a page will be once it is out, as whole http(s) addresses or paths from their first /, put apart by spaces or given as a list; empty removes them
+                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended, cookies, user_agent, placeholders). cookies is "name=value; name=value" or an object of name to value; empty removes them. user_agent is the name this comic's images and chapter pages are fetched under, one line of text; empty removes it, and the library's is used. placeholders is the pictures the site shows where a page will be once it is out, as whole http(s) addresses or paths from their first /, put apart by spaces or given as a list; empty removes them. image_xpath and next_xpath are the element paths a scrape remembers having found this comic's image and next link by, kept in its state rather than its settings and tried before every list; each is one XPath starting with / ( or ., and empty forgets it, so the next scrape searches the element paths. A plugin comic has neither
                 updated:
                   type: ["string", "null"]
                   description: Expected updated timestamp (optimistic concurrency)
@@ -920,6 +920,64 @@ paths:
                         stays:
                           type: boolean
                     description: What will be renamed
+                  queued:
+                    type: integer
+                    description: Job ID (when not dry_run)
+                  label:
+                    type: string
+                    description: Job label (when not dry_run)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/rewind:
+    post:
+      tags: [Library]
+      summary: Preview or queue taking a comic back to an earlier page
+      description: >
+        That page and every page after it are moved into the comic's ".set aside" folder, and its resume
+        point, index, alignment, chapters and archives are put back to before them, so the next update
+        fetches them again. Runs chapters.py rewind, with --dry-run for a preview; a real one is previewed
+        too, so going back that cannot be done is refused at once rather than queued. Not for a plugin comic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                from:
+                  type: integer
+                  minimum: 1
+                  description: The first page to take off, by number. One of from or run is needed
+                run:
+                  type: string
+                  description: A run_id from the comic's runs; the comic goes back to the page that run started on
+                url:
+                  type: string
+                  description: Where the page given as from is, when the comic's index does not reach it and no run started there
+                dry_run:
+                  type: boolean
+                  description: Preview only, do not queue going back
+      responses:
+        "200":
+          description: Preview or queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lines:
+                    type: array
+                    items:
+                      type: string
+                    description: What going back does, a line for each part
                   queued:
                     type: integer
                     description: Job ID (when not dry_run)
@@ -1477,7 +1535,7 @@ components:
           type: array
           items:
             type: object
-          description: Recent runs (newest first, up to 8)
+          description: Recent runs (newest first, up to 8), each with its run_id, which POST /api/rewind takes as run
         edits:
           type: array
           items:
@@ -1494,6 +1552,9 @@ components:
           type: boolean
         moving:
           type: boolean
+        rewinding:
+          type: boolean
+          description: Going back to an earlier page is queued or under way; its settings cannot be saved until it finishes
 
     ElementPath:
       type: object

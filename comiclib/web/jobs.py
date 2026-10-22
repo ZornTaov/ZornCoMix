@@ -20,8 +20,9 @@ from comiclib.cookies import as_args
 from comiclib.exits import USAGE
 from comiclib.metadata import METADATA_FILE, write_json
 from comiclib.paths import config_folder
+from comiclib.web.edits import rewind_command
 from comiclib.web.uploads import Refused, mark_queued, place
-from comiclib.web.views import chapters_label, comicinfo_label, find_comic, job_view, move_label
+from comiclib.web.views import chapters_label, comicinfo_label, find_comic, job_view, move_label, rewind_label
 
 #how far back the page's Recent list reaches. it is kept in the config folder, so a restart - which a
 #restart file makes routine - does not empty it; and capped by count too, against a week of something
@@ -598,6 +599,42 @@ class Runner:
             return code
 
         return self.submit(Job("comicinfo", comicinfo_label(name), work))
+
+    def submit_rewind(self, name, given):
+        #a comic taken back to an earlier page: in the queue, so no scrape is adding pages while they are taken
+        #off. through chapters.py, so the page and the command line go back the same way; planned again when
+        #its turn comes, since an update queued ahead of it may have saved more
+        def work(job):
+            args = self.uc.with_config(self.args)
+            comic = find_comic(args, self.uc, name)
+            if comic is None:
+                job.error = "there is no comic named {0} any more".format(name)
+                print("ERROR: {0}: {1}".format(job.label, job.error), flush=True)
+                return 1
+            command, problem = rewind_command(args, comic, given)
+            if problem:
+                job.error = problem
+                return USAGE
+            job.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                           errors="replace", env=dict(os.environ, PYTHONUNBUFFERED="1"),
+                                           **own_group())
+            said = []
+            for line in job.process.stdout:
+                print("  " + line.rstrip(), flush=True)
+                if line.strip():
+                    job.doing = line.strip()
+                    said.append(line.strip())
+            code = job.process.wait()
+            if code == 0:
+                job.outcome = next((line[len("Done: "):] for line in said
+                                    if line.startswith("Done: the next update starts")), "went back")
+            else:
+                errors = [line for line in said if line.startswith("ERROR")]
+                job.error = errors[0][len("ERROR: "):] if errors else "chapters.py rewind stopped with exit code {0}; its output " \
+                                                     "is in the log".format(code)
+            return code
+
+        return self.submit(Job("rewind", rewind_label(name), work))
 
 
 def remember_chapters(comic, listing, every=None, make_folder=False):

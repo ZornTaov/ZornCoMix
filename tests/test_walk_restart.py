@@ -76,6 +76,30 @@ def test_a_record_that_begins_in_the_middle_is_thrown_away_on_restart(config, li
     assert [one["n"] for one in lines] == list(range(1, PAGES + 1)), [one["n"] for one in lines]
 
 
+class BackLinked(Comic):
+    #every page's link marked rel="next", which the shipped paths find first, leads back to the beginning; the
+    #way on is a link only this comic's own path knows. a scrape goes by that path, and a walk has to as well
+    def page(self, number):
+        onward = '<a class="onward" href="/p/{0}">On</a>'.format(number + 1) if number < self.pages else ""
+        return ('<html><head><title>Comic {0}</title></head><body><a rel="next" href="/p/1">Start</a>'
+                '<img id="cc-comic" width="240" height="240" src="/img/{0:04d}.png">{1}</body></html>'.format(
+                    number, onward))
+
+
+def test_a_walk_follows_the_links_the_comics_scrapes_do(config, library, comic, serve):
+    site = serve(BackLinked)
+    write_metadata(comic, site)
+    meta = json.loads((comic / "mirror_metadata.json").read_text(encoding="utf-8"))
+    meta["state"] = {"image_xpath": '//*[@id="cc-comic"]', "next_xpath": '//a[@class="onward"]'}
+    write_meta(comic, meta)
+    done = run("chapters.py", "index", comic, "--root", library, "--start", site + "/p/1", timeout=600)
+    made = [p for p in (config / "index").iterdir() if p.name.endswith(".jsonl")]
+    assert len(made) == 1, (made, done.stdout[-600:])
+    lines = read_index(made[0])
+    assert [one["url"].rsplit("/", 1)[-1] for one in lines] == [str(n) for n in range(1, PAGES + 1)], \
+        done.stdout[-600:]
+
+
 def test_without_restart_a_record_carries_on_as_before(config, library, comic, site):
     write_metadata(comic, site, CACHE)
     write_index(config / "index" / CACHE, [

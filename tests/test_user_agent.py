@@ -261,7 +261,14 @@ def test_the_advanced_settings_take_this_browsers_name(web, comic, browser):
     browser.execute_script("document.getElementById('edit-advanced').open = true;"
                            "document.getElementById('e-user_agent-mine').click();"
                            "document.getElementById('edit-save').click()")
-    wait_until(lambda: (read_meta(comic)["settings"].get("user_agent") == mine) or None,
-               why="the comic's name was never saved")
+    try:
+        wait_until(lambda: (read_meta(comic)["settings"].get("user_agent") == mine) or None,
+                   why="the comic's name was never saved")
+    except AssertionError:
+        #what the editor said, which is the only account of a save that went wrong
+        raise AssertionError("the comic's name was never saved; the editor said {0!r} with {1!r} in the box, and "
+                             "the page's log ends:\n{2}".format(
+                                 browser.execute_script("return document.getElementById('edit-msg').textContent"),
+                                 value("e-user_agent"), page.said()[-2500:]))
     errors = console_errors(browser)
     assert not errors, errors

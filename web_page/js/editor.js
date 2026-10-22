@@ -44,7 +44,12 @@ async function openEditor(name) {
   //what a blank box falls back to, so it is plain what the comic is fetched under now
   $("e-user_agent").placeholder = (config && (config.settings.user_agent || config.user_agent_default)) || "";
   $("e-placeholders").value = (s.placeholders || []).join(" ");
-  $("edit-advanced").open = !!(s.user_agent || (s.placeholders || []).length);
+  //the paths its last scrape found it by, kept in its state; nearly every comic has them, so they do not
+  //open the section on their own the way a setting given by hand does
+  $("e-image_xpath").value = st.image_xpath || "";
+  $("e-next_xpath").value = st.next_xpath || "";
+  offerPaths();
+  $("edit-advanced").open = !!(s.user_agent || (s.placeholders || []).length || Object.keys(s.cookies || {}).length);
   const chapters = detail.chapters || {};
   $("e-chapters").value = chapters.source_url || "";
   $("e-every").value = chapters.every || "";
@@ -75,15 +80,20 @@ async function openEditor(name) {
   $("e-next-number").textContent = `use ${next}, the number after the pages held`;
   $("e-next-number").onclick = () => { $("e-increment").value = next; };
 
+  //a run that saved pages can be undone: the comic goes back to the page it started on. a plugin's comic
+  //keeps where it is up to in its plugin's program, so it has no going back
+  const undoable = (r) => !plugin && r.run_id && r.start_page_number && r.pages_saved;
   const runs = detail.runs.map((r) => `<tr><td>${esc(when(r.started))}</td><td class="num">${r.pages_saved ?? ""}</td>
     <td>${esc(r.stop_reason || "")}${r.exit_code ? " (exit " + r.exit_code + ")" : ""}</td>
-    <td>${r.last_page_number ?? ""}</td><td>${link(r.last_url)}</td></tr>`).join("");
+    <td>${r.last_page_number ?? ""}</td><td>${link(r.last_url)}</td>
+    <td>${undoable(r) ? `<button type="button" class="link" data-undo="${esc(r.run_id)}" data-from="${r.start_page_number}"
+      title="Go back to page ${r.start_page_number}, where this run started">Undo</button>` : ""}</td></tr>`).join("");
   const edits = detail.edits.map((e) => `<div class="history-item line">${esc(when(e.at))}: ${esc(Object.entries(e.changed)
     .map(([key, pair]) => `${key} ${JSON.stringify(pair[0])} → ${JSON.stringify(pair[1])}`).join(", "))}</div>`).join("");
   //a week of its updates, each one's output in full, newest first - an update that found nothing new is here too
   const logs = (detail.logs || []).map((l) => logLink(l.name, when(l.at))).join(" · ");
   $("edit-runs").innerHTML = (runs ? `<div class="table-wrap" style="max-height:none"><table class="runs"><thead><tr><th>Started</th>
-    <th>Saved</th><th>Ended</th><th>At #</th><th>Last page</th></tr></thead><tbody>${runs}</tbody></table></div>` : "") +
+    <th>Saved</th><th>Ended</th><th>At #</th><th>Last page</th><th></th></tr></thead><tbody>${runs}</tbody></table></div>` : "") +
     (logs ? `<div class="muted" style="margin-top:10px">What each update said</div><div class="line">${logs}</div>` : "") +
     (edits ? `<div class="muted" style="margin-top:10px">Edits</div>${edits}` : "");
   $("edit-runs-box").hidden = !runs && !edits && !logs;
@@ -93,15 +103,38 @@ async function openEditor(name) {
   placesAsked = false;
   $("edit-move-box").open = false;
   resetMove();
+  $("e-rewind-from").value = "";
+  $("e-rewind-url").value = "";
+  $("edit-rewind-box").open = false;
+  resetRewind();
 
-  const busy = detail.running || detail.moving;
-  ["edit-save", "edit-save-update", "e-move-check"].forEach((id) => { $(id).disabled = busy; });
+  const busy = detail.running || detail.moving || detail.rewinding;
+  ["edit-save", "edit-save-update", "e-move-check", "e-rewind-check"].forEach((id) => { $(id).disabled = busy; });
   if (busy) {
     msg.className = "msg bad";
     msg.textContent = detail.moving ? "Waiting to be moved; reopen it once the move has finished."
+      : detail.rewinding ? "Waiting to go back to an earlier page; reopen it once that has finished."
       : "Being scraped right now; stop it or wait to edit.";
   }
   $("editor").showModal();
+}
+
+//the library's element paths, offered under the image and next path boxes with what each is for. asked
+//afresh each time the editor opens, since the element paths dialog may have changed them since; a box can
+//still be typed in if they cannot be read
+async function offerPaths() {
+  const fill = (id, list) => {
+    $(id).innerHTML = (list || []).filter((entry) => entry.enabled !== false && entry.xpath)
+      .map((entry) => `<option value="${esc(entry.xpath)}">${esc(entry.note || "")}</option>`).join("");
+  };
+  try {
+    const known = await (await fetch(api("/api/elements"))).json();
+    fill("e-image-paths", known.image);
+    fill("e-next-paths", known.next);
+  } catch (error) {
+    fill("e-image-paths", []);
+    fill("e-next-paths", []);
+  }
 }
 
 //the folder a comic sits in, by its name in the library
@@ -185,6 +218,64 @@ $("e-move-go").addEventListener("click", async () => {
   }
 });
 
+//going back, like moving, only ever does what was last shown: a page or run changed after looking has to be
+//looked at again. what was looked at is what is sent
+let rewindChecked = null;
+function resetRewind() {
+  rewindChecked = null;
+  $("e-rewind-plan").hidden = true;
+  $("e-rewind-plan").innerHTML = "";
+  $("e-rewind-go").disabled = true;
+}
+
+async function checkRewind(asked) {
+  const msg = $("edit-msg");
+  resetRewind();
+  msg.className = "msg"; msg.textContent = "Looking…";
+  try {
+    const result = await post("/api/rewind", Object.assign({ name: editing.name, dry_run: true }, asked));
+    $("e-rewind-plan").innerHTML = result.lines.map((line) => `<div>${esc(line)}</div>`).join("");
+    $("e-rewind-plan").hidden = false;
+    $("e-rewind-go").disabled = false;
+    rewindChecked = asked;
+    msg.textContent = "";
+  } catch (error) {
+    msg.className = "msg bad";
+    msg.textContent = error.message;
+  }
+}
+
+["e-rewind-from", "e-rewind-url"].forEach((id) => $(id).addEventListener("input", resetRewind));
+$("e-rewind-check").addEventListener("click", () =>
+  checkRewind({ from: $("e-rewind-from").value.trim(), url: $("e-rewind-url").value.trim() }));
+//undoing a run is going back to the page it started on, by the run itself, so the address it was told to
+//start from is used whatever the comic's record says
+$("edit-runs").addEventListener("click", (event) => {
+  const undo = event.target.dataset.undo;
+  if (!undo || !editing) return;
+  $("e-rewind-from").value = event.target.dataset.from;
+  $("e-rewind-url").value = "";
+  //going back is folded away in the advanced settings, with everything else that can do harm set wrongly
+  $("edit-advanced").open = true;
+  $("edit-rewind-box").open = true;
+  $("edit-rewind-box").scrollIntoView({ block: "nearest" });
+  checkRewind({ run: undo });
+});
+$("e-rewind-go").addEventListener("click", async () => {
+  const msg = $("edit-msg");
+  if (rewindChecked === null) return;
+  try {
+    const result = await post("/api/rewind", Object.assign({ name: editing.name }, rewindChecked));
+    //the metadata is about to be rewritten, so nothing more is saved from what this dialog was opened with
+    ["edit-save", "edit-save-update", "e-move-check", "e-rewind-check", "e-rewind-go"].forEach((id) => { $(id).disabled = true; });
+    msg.className = "msg good";
+    msg.textContent = `Queued (${result.label}); watch it under Running now, then reopen the comic to update it.`;
+  } catch (error) {
+    msg.className = "msg bad";
+    msg.textContent = error.message;
+  }
+});
+
 async function saveEditor(updateAfter) {
   const msg = $("edit-msg");
   msg.className = "msg"; msg.textContent = "Saving…";
@@ -194,6 +285,7 @@ async function saveEditor(updateAfter) {
     : { url: $("e-url").value, increment: $("e-increment").value, cbz_path: $("e-cbz_path").value,
         waittime: $("e-waittime").value, cookies: $("e-cookies").value, user_agent: $("e-user_agent").value,
         placeholders: $("e-placeholders").value,
+        image_xpath: $("e-image_xpath").value, next_xpath: $("e-next_xpath").value,
         chapters_url: $("e-chapters").value, chapters_every: $("e-every").value };
   flags.forEach((key) => { settings[key] = $("e-" + key).checked; });
   try {

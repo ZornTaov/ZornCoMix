@@ -249,8 +249,16 @@ def library(tmp_path, config):
 
 
 def read_meta(folder):
-    with open(os.path.join(str(folder), "mirror_metadata.json"), encoding="utf-8") as f:
-        return json.load(f)
+    #the page writes the file aside and moves it into place, and on windows opening it in that moment is
+    #refused - so a test polling it while a save lands asks again rather than failing
+    for attempt in range(50):
+        try:
+            with open(os.path.join(str(folder), "mirror_metadata.json"), encoding="utf-8") as f:
+                return json.load(f)
+        except PermissionError:
+            if attempt == 49:
+                raise
+            time.sleep(0.05)
 
 
 def write_meta(folder, metadata):
@@ -363,31 +371,59 @@ def console_errors(driver):
 
 
 # ---------------- the web page ----------------
+def same_path(said, root):
+    return bool(said) and os.path.normcase(os.path.abspath(said)) == os.path.normcase(os.path.abspath(str(root)))
+
+
 class WebUI:
     #update_comics serving its page over a library, and a client for its api
     def __init__(self, root, config, password=None, extra=(), env=None):
-        self.port = free_port()
-        self.base = "http://127.0.0.1:{0}".format(self.port)
         self.password = password
         env = dict(env or {}, **({"MIRROR_WEB_PASSWORD": password} if password else {}))
-        self.process = subprocess.Popen(
-            [sys.executable, os.path.join(PROJECT, "update_comics.py"), str(root), "--web", str(self.port),
-             "--web-host", "127.0.0.1", "--progress", "0", "--config", str(config)] + list(extra),
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
-            env=dict(os.environ, PYTHONUNBUFFERED="1", **env))
-        #what the container log would show, kept for a test to look through
-        self.log = []
-        threading.Thread(target=lambda: [self.log.append(line) for line in self.process.stdout],
-                         daemon=True).start()
-        for _ in range(120):
-            try:
-                self.call("/api/state")
+        #a port found free and let go can be found free by another test running alongside, whose page then
+        #has it: this page is refused it and ends, while the other answers there. so it is only up once the
+        #page answering is serving this test's library, and a port answering with another library, or a page
+        #that ended, is given up and the page started again on another
+        self.seen = None
+        for _ in range(5):
+            self.port = free_port()
+            self.base = "http://127.0.0.1:{0}".format(self.port)
+            self.process = subprocess.Popen(
+                [sys.executable, os.path.join(PROJECT, "update_comics.py"), str(root), "--web", str(self.port),
+                 "--web-host", "127.0.0.1", "--progress", "0", "--config", str(config)] + list(extra),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
+                env=dict(os.environ, PYTHONUNBUFFERED="1", **env))
+            #what the container log would show, kept for a test to look through
+            self.log = []
+            threading.Thread(target=lambda log=self.log, out=self.process.stdout: [log.append(line) for line in out],
+                             daemon=True).start()
+            up = self.came_up(root)
+            if up == "up":
                 return
+            self.stop()
+            if up != "taken":
+                break
+        raise RuntimeError("the web page never came up (its port last answered with the library {0}):\n{1}".format(
+            self.seen, "".join(self.log[-20:])))
+
+    def came_up(self, root):
+        #"up" once this page's own process serves this library, waiting while it starts; "taken" when another
+        #test's page answers on its port, or this page's process ended (a port it could not bind, said so in
+        #its log); "never" when nothing answered at all
+        for _ in range(120):
+            if self.process.poll() is not None:
+                return "taken"
+            try:
+                _, state = self.call("/api/state")
             except (OSError, urllib.error.URLError):
-                if self.process.poll() is not None:
-                    break
                 time.sleep(0.25)
-        raise RuntimeError("the web page never came up:\n" + "".join(self.log[-20:]))
+                continue
+            self.seen = state.get("root") if isinstance(state, dict) else state
+            #this page's own once it serves this library; any other answer is someone else's page on its port
+            if isinstance(state, dict) and same_path(state.get("root"), root):
+                return "up" if self.process.poll() is None else "taken"
+            return "taken"
+        return "never"
 
     def call(self, path, body=None, auth=True, ctype="application/json"):
         #(status, answer), where the answer is json when the page said it was and bytes otherwise
