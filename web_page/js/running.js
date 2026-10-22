@@ -125,6 +125,8 @@ function renderState(state) {
     const done = state.history.find((j) => j.id === chapterJob.id);
     if (done) {
       if (editing && editing.name === chapterJob.name && $("editor").open && done.decide) {
+        //asked on the tab it is about, whichever tab was being looked at meanwhile
+        showTab("chapters");
         showDecision(done.decide);
         $("edit-msg").className = "msg bad";
         $("edit-msg").textContent = "It stopped to ask what to do; the choices are above.";

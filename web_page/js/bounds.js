@@ -1,4 +1,5 @@
-//chapter boundaries: correcting where a chapter starts, and putting in a page the comic's own links skip
+//the editor's Chapters tab: correcting where a chapter starts, and putting in a page the comic's own links skip.
+//what it says goes in the editor's own message line, edit-msg, which the Chapters tab shares with saving
 
 let bounds = { name: "", list: [], fixes: [], pages: [] };
 
@@ -76,7 +77,7 @@ function drawBounds() {
 }
 
 async function sendFix(body) {
-  const msg = $("bd-msg");
+  const msg = $("edit-msg");
   const keep = $("bd-wrap").scrollTop;
   msg.className = "msg";
   msg.textContent = bounds.packed ? "Working it out and writing the archives that changed…" : "Working it out…";
@@ -101,17 +102,16 @@ async function sendFix(body) {
   }
 }
 
-$("edit-boundaries").addEventListener("click", async () => {
+tabOpeners.chapters = async () => {
   bounds = { name: editing.name, list: editing.chapters.list || [], fixes: editing.chapters.fixes || [],
              packed: !!editing.chapters.packed, pages: [] };
-  $("bd-who").textContent = `${editing.name} — ${bounds.list.length} chapter(s)`;
-  $("bd-msg").className = "msg"; $("bd-msg").textContent = "";
+  $("bd-who").textContent = `— ${bounds.list.length} chapter(s)`;
   $("bd-new-at").value = ""; $("bd-new-label").value = ""; $("bd-picked").textContent = "";
+  $("bd-insert-box").open = false; $("bd-in-said").textContent = "";
   drawBounds();
   drawPicker();
-  $("bounds").showModal();
-  //the comic's own pages, so a boundary can be chosen rather than guessed at. fetched after the dialog
-  //is up, since it is a help rather than a thing to wait for
+  //the comic's own pages, so a boundary can be chosen rather than guessed at. fetched after the tab is
+  //shown, since it is a help rather than a thing to wait for
   try {
     const held = await post("/api/pages", { name: bounds.name });
     bounds.pages = held.pages || [];
@@ -121,7 +121,7 @@ $("edit-boundaries").addEventListener("click", async () => {
   } catch (error) {
     $("bd-picked").textContent = "Could not read this comic's pages: " + error.message;
   }
-});
+};
 $("bd-new-at").addEventListener("input", sayPicked);
 $("bd-rows").addEventListener("click", (event) => {
   const act = event.target.dataset.bdAct;
@@ -136,13 +136,13 @@ $("bd-rows").addEventListener("change", (event) => {
   const row = event.target.closest("tr");
   const at = pageFrom(row.querySelector('[data-bd="at"]').value);
   const label = row.querySelector('[data-bd="label"]').value.trim();
-  if (!label) { $("bd-msg").className = "msg bad"; $("bd-msg").textContent = "A chapter needs a name."; return; }
+  if (!label) { $("edit-msg").className = "msg bad"; $("edit-msg").textContent = "A chapter needs a name."; return; }
   //moving a boundary is the same correction as naming one: this chapter starts at that page
   sendFix({ at: what === "at" ? at : row.dataset.url, label: label });
 });
 $("bd-add").addEventListener("click", () => {
   const at = pageFrom($("bd-new-at").value), label = $("bd-new-label").value.trim();
-  if (!at || !label) { $("bd-msg").className = "msg bad"; $("bd-msg").textContent = "Give a page and a name."; return; }
+  if (!at || !label) { $("edit-msg").className = "msg bad"; $("edit-msg").textContent = "Give a page and a name."; return; }
   $("bd-new-at").value = ""; $("bd-new-label").value = ""; $("bd-picked").textContent = "";
   filledIn = "";
   sendFix({ at: at, label: label });
@@ -151,11 +151,10 @@ $("bd-reset").addEventListener("click", () => {
   if (!bounds.fixes.length) return;
   if (confirm("Undo every correction made by hand? The boundaries come back only when the chapters are worked out again.")) sendFix({ clear: true });
 });
-$("bd-close").addEventListener("click", () => $("bounds").close());
 
 //putting in a page the comic's own links skip past
 async function insertPage(dryRun) {
-  const msg = $("bd-msg"), url = $("bd-in-url").value.trim(), after = pageFrom($("bd-in-after").value);
+  const msg = $("edit-msg"), url = $("bd-in-url").value.trim(), after = pageFrom($("bd-in-after").value);
   if (!/^https?:\/\/\S+$/.test(url) || !after) {
     msg.className = "msg bad";
     msg.textContent = "Give the page's full address, and the page it follows.";

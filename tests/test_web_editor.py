@@ -155,3 +155,34 @@ def test_the_editor_opens_without_console_errors(scraped, web, browser):
         time.sleep(0.3)
     errors = console_errors(browser)
     assert not errors, errors
+
+
+def test_the_editor_shows_one_tab_at_a_time_and_its_foot_follows(scraped, web, browser):
+    #settings, chapters, pages, ComicInfo and history, each its own tab rather than a dialog stacked on the
+    #editor, with the foot holding what the tab shown does and nothing of the others
+    page = web()
+    open_page(browser, page.base + "/")
+    script = browser.execute_script
+    script("openEditor(arguments[0])", NAME)
+    wait_until(lambda: script("return document.getElementById('editor').open"), why="the editor never opened")
+    shown = lambda: script(
+        "return [[...document.querySelectorAll('#editor .tab-panel')].filter((p) => !p.hidden).map((p) => p.dataset.panel),"
+        " [...document.querySelectorAll('#editor .edit-foot button')].filter((b) => b.offsetParent).map((b) => b.id)]")
+    assert shown() == [["settings"], ["edit-save", "edit-save-update"]], shown()
+    expected = {"edit-boundaries": ["chapters", ["bd-reset", "edit-save", "edit-save-update"]],
+                "edit-pages": ["pages", ["pf-walk", "pf-align", "pf-reset"]],
+                "edit-comicinfo": ["comicinfo", ["ci-save"]],
+                "edit-history": ["history", []]}
+    for tab, (panel, buttons) in expected.items():
+        script("document.getElementById(arguments[0]).click()", tab)
+        assert shown() == [[panel], buttons], (tab, shown())
+        assert script("return document.getElementById(arguments[0]).getAttribute('aria-selected')", tab) == "true"
+    #each tab reads what it needs the first time it is shown: the ComicInfo boxes and the comic's runs
+    wait_until(lambda: script("return document.querySelectorAll('#ci-boxes input').length") > 0,
+               why="the ComicInfo tab never drew its boxes")
+    assert "Started" in script("return document.getElementById('edit-runs').innerText")
+    #and a comic opened again starts on its settings
+    script("document.getElementById('editor').close(); openEditor(arguments[0])", NAME)
+    wait_until(lambda: shown()[0] == ["settings"], why="the editor did not open on its settings")
+    errors = console_errors(browser)
+    assert not errors, errors

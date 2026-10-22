@@ -1,4 +1,4 @@
-//a comic's ComicInfo, opened from its editor: what its archives say it is, kept in its metadata's info block
+//the editor's ComicInfo tab: what a comic's archives say it is, kept in its metadata's info block
 //and written into every archive it has. the boxes are the server's lists - the same the reader's info page
 //draws from - so the two never offer different things
 
@@ -56,8 +56,9 @@ async function openComicInfo() {
     comicInfo = await response.json();
     if (!response.ok) throw new Error(comicInfo.error || response.statusText);
   } catch (error) {
-    $("edit-msg").className = "msg bad";
-    $("edit-msg").textContent = "Could not read its ComicInfo: " + error.message;
+    msg.className = "msg bad";
+    msg.textContent = "Could not read its ComicInfo: " + error.message;
+    $("ci-boxes").innerHTML = "";
     return;
   }
   ciValues = {};
@@ -65,7 +66,6 @@ async function openComicInfo() {
   //every tag beyond the nine it says, or that is worked out for it, in the schema's order
   ciShown = comicInfo.form.extra.map((field) => field[0]).filter((key) => ciValues[key] || comicInfo.worked[key]);
   ciRemoved = new Set();
-  $("ci-who").textContent = comicInfo.name;
   $("ci-chapters").textContent = comicInfo.chapters
     ? `Kept as ${comicInfo.chapters} chapter archives: each says the comic's series and who made it, but its own title and its first page's address.`
     : "";
@@ -78,10 +78,9 @@ async function openComicInfo() {
       : "Being scraped right now; stop it or wait to edit.";
   }
   ciDraw();
-  $("comicinfo").showModal();
 }
 
-$("edit-comicinfo").addEventListener("click", openComicInfo);
+tabOpeners.comicinfo = openComicInfo;
 $("ci-boxes").addEventListener("change", (event) => {
   if (event.target.id !== "ci-add" || !event.target.value) return;
   const key = event.target.value, order = comicInfo.form.extra.map((field) => field[0]);
@@ -124,4 +123,3 @@ $("ci-save").addEventListener("click", async () => {
     msg.textContent = error.message;
   }
 });
-$("ci-close").addEventListener("click", () => $("comicinfo").close());

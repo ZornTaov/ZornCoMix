@@ -9,6 +9,7 @@ import shutil
 import requests
 
 from comiclib import cookies
+from comiclib.chapters import pagefixes
 from comiclib.chapters.align import do_align
 from comiclib.download import fetch
 from comiclib.exits import MirrorError
@@ -98,7 +99,8 @@ def fetch_missing(folder, args, pages):
     #site's name for its image, with the page's number in front - and a page kept as a note of its address
     #written as that note. what is already here is never written over
     lines = {line["n"]: line for line in read_index(index_path(folder, args.root, args))}
-    wanted = [page for page in pages if not page.get("file") and page["n"] in lines]
+    #a line said by hand to be no page is not a page missing
+    wanted = [page for page in pages if not page.get("file") and page["n"] in lines and page.get("how") != "dropped"]
     notes = [page for page in wanted if not lines[page["n"]].get("src")
              and (lines[page["n"]].get("file") or "").endswith(".url")]
     pictures = [page for page in wanted if lines[page["n"]].get("src")]
@@ -177,6 +179,10 @@ def refetch(folder, args):
         if only:
             if page["n"] in only:
                 wanted.append((page, held))
+        elif page.get("how") == "hand":
+            #pinned by hand, usually because what the site serves there is another page's picture: fetched
+            #again for being a different size, the page would become the very picture it was pinned against
+            continue
         elif args.all or (page["bytes"] and held != page["bytes"]):
             wanted.append((page, held))
     if only:
@@ -257,6 +263,9 @@ def refetch(folder, args):
                 page["file"] = fresh_names[page["n"]]
         write_json(alignment, saved, indent=1)
         print("  {0} name(s) put right in the alignment too.".format(len(renamed)))
+        metadata = read_metadata(folder)
+        if metadata and pagefixes.renamed(metadata, {was: now for _, was, now in renamed}):
+            write_metadata(folder, metadata)
     print("Replaced {0} page(s); left {1} alone as no better than what was here.".format(done, kept))
     for n, why in failed[:8]:
         print("  page {0} was not replaced: {1}".format(n, why))
@@ -381,6 +390,8 @@ def renumber(folder, args):
         for made in (metadata.get("history") or {}).get("hand_made") or []:
             if made.get("file") in renamed:
                 made["file"] = renamed[made["file"]]
+        #and so is a page pinned to its file by hand
+        pagefixes.renamed(metadata, renamed)
         if numbering:
             if not settings.get("prefix"):
                 settings["prefix"] = True
@@ -523,6 +534,9 @@ def insert_page(folder, args):
             #all been renamed and their archives no longer hold what they should
             print("  {0} chapter(s) start later than they did; their archives need writing again: "
                   "chapters.py pack {1}".format(len(shifted), folder))
+        #a fix naming a file that moved along, or a page by its number, moves along with it
+        pagefixes.renamed(metadata, {was: now for _, was, now in moved})
+        pagefixes.moved_along(metadata, at)
         write_metadata(folder, metadata)
     print()
     return do_align(folder, args)

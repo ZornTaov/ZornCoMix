@@ -152,7 +152,7 @@ def remember_cache(folder, path):
         write_metadata(folder, metadata)
 
 
-def save_alignment(path, folder, pages, aligned, how, settled):
+def save_alignment(path, folder, pages, aligned, how, settled, report=None):
     out = {
         "comic": folder,
         "settled": settled,
@@ -160,6 +160,10 @@ def save_alignment(path, folder, pages, aligned, how, settled):
                    "src": page.get("src"), "file": name, "how": way}
                   for page, name, way in zip(pages, aligned, how)],
     }
+    #what kept it from settling, if anything: the files no page claims, the pages whose size is another
+    #file's, the stretches that would not count out and the fixes that could not be used
+    if report is not None:
+        out["report"] = report
     write_json(path, out, indent=1)
     return path
 
@@ -328,11 +332,13 @@ def walk(folder, args):
     if getattr(args, "restart", False) and os.path.exists(cache):
         #a record written from somewhere other than the first page cannot be carried on from: its page
         #numbers are counted from wherever it began, and a walk resuming from its last line starts at the
-        #comic's newest page and stops there. said plainly and thrown away, rather than merged into.
+        #comic's newest page and stops there. nor can one a scrape got wrong - several pictures of one address
+        #folded into one line - since a walk only ever adds to the end. said plainly and set aside, with its
+        #alignment, rather than merged into or deleted: a walk that goes wrong then loses nothing
         held = read_index(cache)
-        print("Throwing away the record of {0} page(s) in {1}, and walking from the start.".format(
-            len(held), cache))
-        os.remove(cache)
+        moved = set_aside(cache)
+        print("Throwing away the record of {0} page(s) in {1}, and walking from the start. It is kept as "
+              "{2}.".format(len(held), cache, ", ".join(os.path.basename(aside) for _, aside in moved)))
     metadata = read_metadata(folder)
     if (metadata.get("settings") or {}).get("scraper"):
         #another program scrapes this comic, and keeps what it knows of the site to itself: the pages it

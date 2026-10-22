@@ -235,8 +235,10 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
     #what this comic is known to be missing, and which of its files were made by hand. worked out by
     #chapters.py, which takes minutes to do, so a scrape must not throw it away
     #and each time it was taken back to an earlier page, with what was set aside, which says where to look
-    #for a page that went
-    for kept in ("gaps", "gaps_note", "hand_made", "gaps_checked", "index_cache", "rewinds"):
+    #for a page that went. the pages put back by hand and inserted were once missing from this list, so the
+    #first scrape after either quietly forgot it, and a page found elsewhere read as a stray again
+    for kept in ("gaps", "gaps_note", "hand_made", "gaps_checked", "index_cache", "rewinds", "recovered",
+                 "inserted"):
         if old_history.get(kept) is not None:
             metadata["history"][kept] = old_history[kept]
     if metadata["history"].get("index_cache") is None:
@@ -254,6 +256,9 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
     #the pages said by hand to be kept as a note of their address, which every run goes on keeping so
     if previous.get("notes"):
         metadata["notes"] = previous["notes"]
+    #and which file is which page, said by hand where the walk and the files could not settle it
+    if previous.get("page_fixes"):
+        metadata["page_fixes"] = previous["page_fixes"]
 
     #written aside and moved into place: this is rewritten after every page, and a run killed halfway
     #through writing it would otherwise leave a comic with no readable settings at all

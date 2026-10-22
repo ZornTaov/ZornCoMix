@@ -1,5 +1,6 @@
-//the editor a comic's Edit button opens: its settings, what its runs have said, and working out its
-//chapters
+//the editor a comic's Edit button opens, in tabs: its settings, its chapters, its pages, its ComicInfo and
+//what its runs have said. this file holds the tabs themselves, the settings and the history; the chapters'
+//boundaries are bounds.js, the pages pagefix.js and the ComicInfo comicinfo.js
 
 const flags = ["prefix", "javascript", "firefox", "cbz", "direction_check", "multi_page", "ended"];
 //the ones a comic has unless it says otherwise, so a file written before the setting existed shows the
@@ -9,6 +10,29 @@ let editing = null;
 //the chapters job the editor queued, watched by running.js so that if it stops to ask, the question is
 //put here while the editor is still open
 let chapterJob = null;
+
+//the editor's tabs. each part of the page that has one says what to do the first time it is shown for a comic,
+//by putting it here as it loads - bounds.js, pagefix.js and comicinfo.js - so opening the editor reads nothing
+//a tab nobody looks at would need
+const tabOpeners = {};
+let editTab = "settings";
+let tabsOpened = new Set();
+
+function showTab(name) {
+  editTab = name;
+  document.querySelectorAll("#edit-tabs [data-tab]").forEach((tab) => {
+    tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+  });
+  document.querySelectorAll("#editor .tab-panel").forEach((panel) => { panel.hidden = panel.dataset.panel !== name; });
+  //the foot holds what the tab shown does, and nothing of the others
+  document.querySelectorAll("#editor .edit-foot [data-tabs]").forEach((part) => {
+    part.hidden = !part.dataset.tabs.split(" ").includes(name);
+  });
+  if (!tabsOpened.has(name) && tabOpeners[name]) {
+    tabsOpened.add(name);
+    tabOpeners[name]();
+  }
+}
 
 
 async function openEditor(name) {
@@ -96,7 +120,7 @@ async function openEditor(name) {
     <th>Saved</th><th>Ended</th><th>At #</th><th>Last page</th><th></th></tr></thead><tbody>${runs}</tbody></table></div>` : "") +
     (logs ? `<div class="muted" style="margin-top:10px">What each update said</div><div class="line">${logs}</div>` : "") +
     (edits ? `<div class="muted" style="margin-top:10px">Edits</div>${edits}` : "");
-  $("edit-runs-box").hidden = !runs && !edits && !logs;
+  if (!runs && !edits && !logs) $("edit-runs").innerHTML = `<div class="empty">Never run, and never edited here.</div>`;
 
   $("e-move-into").value = parentOf(detail.name);
   showPlaces(movePlaces(detail.name));
@@ -116,8 +140,16 @@ async function openEditor(name) {
       : detail.rewinding ? "Waiting to go back to an earlier page; reopen it once that has finished."
       : "Being scraped right now; stop it or wait to edit.";
   }
+  //every comic opens on its settings, and each other tab reads what it needs afresh when first shown
+  tabsOpened = new Set();
+  showTab("settings");
   $("editor").showModal();
 }
+
+$("edit-tabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-tab]");
+  if (tab && editing) showTab(tab.dataset.tab);
+});
 
 //the library's element paths, offered under the image and next path boxes with what each is for. asked
 //afresh each time the editor opens, since the element paths dialog may have changed them since; a box can
@@ -255,8 +287,8 @@ $("edit-runs").addEventListener("click", (event) => {
   if (!undo || !editing) return;
   $("e-rewind-from").value = event.target.dataset.from;
   $("e-rewind-url").value = "";
-  //going back is folded away in the advanced settings, with everything else that can do harm set wrongly
-  $("edit-advanced").open = true;
+  //going back is with the rest of what is done to a comic's pages
+  showTab("pages");
   $("edit-rewind-box").open = true;
   $("edit-rewind-box").scrollIntoView({ block: "nearest" });
   checkRewind({ run: undo });

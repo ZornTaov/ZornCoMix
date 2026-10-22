@@ -728,11 +728,85 @@ paths:
                     type: array
                     items:
                       type: object
+                      properties:
+                        n:
+                          type: integer
+                        url:
+                          type: string
+                          nullable: true
+                        title:
+                          type: string
+                          nullable: true
+                        short:
+                          type: string
+                          description: The title without what every page's title shares
+                        file:
+                          type: string
+                          nullable: true
+                          description: The file this page is held as; null for a page missing or dropped
+                        how:
+                          type: string
+                          nullable: true
+                          description: >-
+                            How the page was matched to its file - hand, size, name, order or time - or dropped, a
+                            line said to be no page; null for a page with no file here
+                        src:
+                          type: string
+                          nullable: true
+                          description: The picture the site shows on this page
+                        bytes:
+                          type: integer
+                          nullable: true
+                          description: The size the site gives that picture
                   walked:
                     type: boolean
                   settled:
                     type: boolean
                     description: Present when walked is true
+                  report:
+                    type: object
+                    nullable: true
+                    description: What kept the comic from settling at its last alignment; null for one lined up before alignments kept it
+                    properties:
+                      spare:
+                        type: array
+                        items:
+                          type: string
+                        description: Files no page claims
+                      conflict:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            n:
+                              type: integer
+                            file:
+                              type: string
+                            sized_as:
+                              type: array
+                              items:
+                                type: string
+                        description: Pages whose size by the site is another file's
+                      trouble:
+                        type: array
+                        items:
+                          type: object
+                        description: Stretches where the pages walked and the files held do not count out
+                      astray:
+                        type: array
+                        items:
+                          type: object
+                        description: Pages whose file is not the picture the site shows there
+                      fixes:
+                        type: array
+                        items:
+                          type: string
+                        description: Page fixes that could not be used, and why
+                  fixes:
+                    type: array
+                    description: Page fixes said by hand, as kept in the comic's metadata page_fixes
+                    items:
+                      $ref: "#/components/schemas/PageFix"
                   why:
                     type: string
                     description: Present when walked is false
@@ -740,6 +814,134 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/ServerError"
+
+  /api/pagefix:
+    post:
+      tags: [Chapters]
+      summary: Say which file is which page
+      description: >-
+        Pins a page to its file, says a line of the walk is no page, places a file the walk never saw after a page,
+        saves a new picture for a page (the old file set aside, the page pinned to the new one), or takes any of these
+        back. Kept in the comic's metadata and run through chapters.py pagefix, which lines the comic up again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                at:
+                  type: string
+                  description: The page, by number or address. With file, pins it; with drop, says it is no page
+                file:
+                  type: string
+                  description: With at, the file the page is; without at, a file the walk never saw
+                after:
+                  type: string
+                  description: With file and no at, the page the file reads after
+                drop:
+                  type: boolean
+                forget:
+                  type: boolean
+                  description: Take back what was said about the page at at, or the file given
+                clear:
+                  type: boolean
+                  description: Take back every page fix
+                align:
+                  type: boolean
+                  description: Say nothing, only line the comic up again, so its alignment reports what stands in its way
+                src:
+                  type: string
+                  description: Which picture at that page's address is meant, for an address holding several
+                note:
+                  type: string
+                picture:
+                  type: string
+                  description: With at, the page's new picture as base64, optionally as a data URL
+                picture_url:
+                  type: string
+                  description: With at, the address to fetch the page's new picture from
+      responses:
+        "200":
+          description: Saved, and the comic lined up again; settled says whether it settled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  output:
+                    type: string
+                  settled:
+                    type: boolean
+        "400":
+          description: The fix was refused (may include output)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  output:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The comic is being scraped, moved, taken back or walked again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: The picture is too big to send this way
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/walkagain:
+    post:
+      tags: [Chapters]
+      summary: Walk a comic again from its first page
+      description: >-
+        Queues a job that sets the comic's record of which page is which (and its alignment) aside as
+        .replaced-<time>, walks the comic from its first page saving nothing, and lines it up: chapters.py index
+        --restart. For a record nothing else can put right, such as one a scrape folded several pictures of an
+        address into one line of. Page fixes are kept. Its outcome under Recent says how many pages were walked and
+        whether the comic settled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: integer
+                  label:
+                    type: string
+        "400":
+          description: The comic is scraped by a plugin and cannot be walked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/insert:
     post:
@@ -1330,6 +1532,36 @@ components:
         is accepted; only the password is checked.
 
   schemas:
+    PageFix:
+      type: object
+      description: >-
+        One thing said by hand about which file is which page. A page is named by its address (with src for an
+        address holding several pictures), or by its number for a line the site has no address for
+      required: [what]
+      properties:
+        what:
+          type: string
+          enum: [pin, drop, stray]
+        url:
+          type: string
+        src:
+          type: string
+        page:
+          type: integer
+        file:
+          type: string
+          description: For pin, the file the page is; for stray, the file placed
+        after:
+          type: string
+          description: For stray, the address of the page it reads after
+        after_page:
+          type: integer
+          description: For stray, the page it reads after, by number, where that page has no address
+        note:
+          type: string
+        made:
+          type: string
+          format: date-time
     Error:
       type: object
       required: [error]

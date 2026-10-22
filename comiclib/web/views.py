@@ -144,6 +144,19 @@ def is_rewinding(runner, name):
                for job in [runner.current] + list(runner.waiting))
 
 
+def walk_label(name):
+    #what a job walking a comic again from its first page is called, which is also how one queued is found again
+    return "Walk again: {0}".format(name)
+
+
+def is_walking(runner, name):
+    #a walk from the start queued or under way. it sets the comic's record aside when its turn comes, so a page
+    #fix said in between would be lined up against a record about to go
+    label = walk_label(name)
+    return any(job is not None and job.kind == "walk" and job.label == label
+               for job in [runner.current] + list(runner.waiting))
+
+
 def read_metadata(path):
     metadata = sidecar.load(path)
     #an old sidecar is brought up to date first, so the edit lands in the one place a run reads it
@@ -301,7 +314,9 @@ def walked_pages(args, comic):
     for page in pages:
         said = str(page.get("title") or "")
         page["short"] = (said[shared:] if shared and len(said) > shared else said).strip(" -|:–")
-    return 200, {"pages": pages, "walked": True, "settled": bool(held.get("settled"))}
+    #and for the Pages dialog, what kept it from settling and what was said about its pages by hand
+    return 200, {"pages": pages, "walked": True, "settled": bool(held.get("settled")),
+                 "report": held.get("report"), "fixes": held.get("fixes") or []}
 
 
 def config_view(args, uc):

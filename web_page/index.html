@@ -292,78 +292,20 @@
   </form>
 </dialog>
 
-<dialog id="bounds">
-  <form method="dialog">
-    <div class="dlg-head"><h3>Chapter boundaries</h3><span class="muted" id="bd-who"></span></div>
-    <div class="dlg-body">
-      <div class="help">Where each chapter starts, as the archive page or the comic's own addresses were
-        read. A site that names one page oddly - a cover called <code>20-an-odd-name</code> where every
-        other is <code>issue-20-cover</code> - puts a boundary in the wrong place, and no rule can tell.
-        Change one here and it is written down as a correction: working the chapters out again, from a
-        fresh reading of the archive or of the addresses, keeps it. Renaming a chapter to one that is
-        already there moves that chapter to the new page instead of adding a second of the same name.
-        A comic whose chapter archives are already written has the ones that changed written again on the
-        spot, since an archive holding a boundary you just corrected is a wrong archive.</div>
-      <div class="table-wrap" id="bd-wrap"><table id="bd-table"><thead><tr>
-        <th style="width:3.5em">No</th><th>Chapter</th><th style="width:15em">Starts at</th>
-        <th style="width:4.5em">Pages</th><th>First page</th><th></th>
-      </tr></thead><tbody id="bd-rows"></tbody></table></div>
-      <div class="row" style="margin-top:10px">
-        <input type="text" id="bd-new-at" list="bd-pages" placeholder="page" style="width:11em">
-        <input type="text" id="bd-new-label" placeholder="a chapter starts at that page, called this" style="flex:1; min-width:200px">
-        <button type="button" id="bd-add">Add a boundary</button>
-      </div>
-      <datalist id="bd-pages"></datalist>
-      <div class="note" id="bd-picked"></div>
-      <details id="bd-insert-box" style="margin-top:10px">
-        <summary>Put in a page the comic's links skip</summary>
-        <div class="help" style="margin-top:8px">Some comics have a page their own next links walk straight
-          past, reachable only from an archive page. Give its address and the page it follows: it is read
-          the way a scrape reads one, its image saved, and every page after it moves along one so the order
-          still reads true. Nothing is touched until the page has actually been fetched.</div>
-        <div class="row">
-          <input type="text" id="bd-in-url" spellcheck="false" placeholder="https://example.com/comic/the-skipped-page" style="flex:1; min-width:220px">
-        </div>
-        <div class="row">
-          <input type="text" id="bd-in-after" list="bd-pages" placeholder="the page it follows" style="flex:1; min-width:160px">
-          <button type="button" id="bd-in-try">See what it would do</button>
-          <button type="button" id="bd-in-go">Put it in</button>
-        </div>
-        <div class="check-result" id="bd-in-said"></div>
-      </details>
-      <div class="note" id="bd-fixes"></div>
-    </div>
-    <div class="dlg-foot">
-      <div class="msg" id="bd-msg"></div>
-      <button type="button" id="bd-reset">Undo every correction</button>
-    </div>
-    <button type="button" class="dlg-x" id="bd-close" aria-label="Close" title="Close">×</button>
-  </form>
-</dialog>
-
-<dialog id="comicinfo">
-  <form method="dialog">
-    <div class="dlg-head"><h3>ComicInfo</h3><span class="muted" id="ci-who"></span></div>
-    <div class="dlg-body">
-      <div class="help">What this comic's archives say it is, in each one's ComicInfo.xml: the series, who made it,
-        what it is about. Kept in its metadata, so every update after says the same, and written into every
-        archive it has already when saved. A box left empty keeps what is worked out, shown greyed; any other tag
-        of the ComicInfo schema can be added at the end.</div>
-      <div class="note" id="ci-chapters"></div>
-      <div id="ci-boxes"></div>
-    </div>
-    <div class="dlg-foot">
-      <div class="msg" id="ci-msg"></div>
-      <button type="button" class="primary" id="ci-save">Save and write the archives</button>
-    </div>
-    <button type="button" class="dlg-x" id="ci-close" aria-label="Close" title="Close">×</button>
-  </form>
-</dialog>
-
 <dialog id="editor">
   <form method="dialog" id="edit-form">
     <div class="dlg-head"><h3 id="edit-name"></h3><span class="muted" id="edit-updated"></span></div>
+    <!--one tab for each kind of thing done to a comic. each loads the first time it is shown, and the buttons
+        that used to open a dialog of their own are the tabs themselves, under the same names-->
+    <div class="tabs" role="tablist" id="edit-tabs">
+      <button type="button" role="tab" data-tab="settings" id="edit-tab-settings">Settings</button>
+      <button type="button" role="tab" data-tab="chapters" class="builtin-only" id="edit-boundaries">Chapters</button>
+      <button type="button" role="tab" data-tab="pages" class="builtin-only" id="edit-pages">Pages</button>
+      <button type="button" role="tab" data-tab="comicinfo" id="edit-comicinfo">ComicInfo</button>
+      <button type="button" role="tab" data-tab="history" id="edit-history">History</button>
+    </div>
     <div class="dlg-body">
+      <section class="tab-panel" data-panel="settings" role="tabpanel">
       <dl class="facts" id="edit-facts"></dl>
       <div class="field plugin-only">
         <label>Scraped by</label>
@@ -394,19 +336,6 @@
           <label class="check"><input type="checkbox" id="e-cbz"> make cbz</label>
         </div>
       </div>
-      <div class="field builtin-only">
-        <label for="e-chapters">Chapter list</label>
-        <input type="text" id="e-chapters" spellcheck="false" placeholder="the comic's archive page — blank to read its own addresses">
-        <div class="note"><span id="e-chapters-note"></span>
-          <button type="button" class="link" id="e-discard-walk" hidden>Discard that walk</button></div>
-      </div>
-      <div class="field builtin-only">
-        <label for="e-every">Or cut every</label>
-        <span><input type="number" id="e-every" min="1" style="width:110px" placeholder="off"> pages</span>
-        <div class="note">For a comic with no chapters of its own that has grown too big for a reader to open
-          as one archive: 100 makes pages 1–100 one archive, 101–200 the next. Leave the chapter list blank to use it.</div>
-      </div>
-      <div class="decide" id="edit-decide" hidden></div>
       <div class="field">
         <label>Status</label>
         <label class="check"><input type="checkbox" id="e-ended"> ended, leave it alone</label>
@@ -466,15 +395,113 @@
           <button type="button" id="e-move-go" disabled>Move it</button>
         </div>
       </details>
-      <details id="edit-rewind-box" class="builtin-only"><summary>Go back to an earlier page</summary>
+      </details>
+      </section>
+
+      <section class="tab-panel" data-panel="chapters" role="tabpanel" hidden>
+      <div class="field">
+        <label for="e-chapters">Chapter list</label>
+        <div class="agent"><input type="text" id="e-chapters" spellcheck="false" placeholder="the comic's archive page — blank to read its own addresses">
+          <button type="button" id="edit-checklist" title="read that page and say what it would be read as, changing nothing">Check it</button></div>
+        <div class="note"><span id="e-chapters-note"></span>
+          <button type="button" class="link" id="e-discard-walk" hidden>Discard that walk</button></div>
+      </div>
+      <div class="field">
+        <label for="e-every">Or cut every</label>
+        <span><input type="number" id="e-every" min="1" style="width:110px" placeholder="off"> pages</span>
+        <div class="note">For a comic with no chapters of its own that has grown too big for a reader to open
+          as one archive: 100 makes pages 1–100 one archive, 101–200 the next. Leave the chapter list blank to use it.</div>
+      </div>
+      <div class="decide" id="edit-decide" hidden></div>
+      <div class="row">
+        <button type="button" class="primary" id="edit-chapterize">Work out chapters</button>
+        <span class="note">Saves the two above, then works the chapters out and writes their archives, as a queued
+          job: walking the comic first when nothing records which page is which.</span>
+      </div>
+      <h4 class="panel-head">Where each chapter starts <span class="muted" id="bd-who"></span></h4>
+      <div class="help">As the archive page or the comic's own addresses were read. A site that names one page oddly
+        puts a boundary in the wrong place, and no rule can tell: change one here and it is kept as a correction,
+        which working the chapters out again keeps too. Naming a chapter that is already there moves it to that
+        page. Archives already written have the ones that changed written again on the spot.</div>
+      <div class="table-wrap" id="bd-wrap"><table id="bd-table"><thead><tr>
+        <th style="width:3.5em">No</th><th>Chapter</th><th style="width:15em">Starts at</th>
+        <th style="width:4.5em">Pages</th><th>First page</th><th></th>
+      </tr></thead><tbody id="bd-rows"></tbody></table></div>
+      <div class="row" style="margin-top:10px">
+        <input type="text" id="bd-new-at" list="bd-pages" placeholder="page" style="width:11em">
+        <input type="text" id="bd-new-label" placeholder="a chapter starts at that page, called this" style="flex:1; min-width:200px">
+        <button type="button" id="bd-add">Add a boundary</button>
+      </div>
+      <datalist id="bd-pages"></datalist>
+      <div class="note" id="bd-picked"></div>
+      <div class="note" id="bd-fixes"></div>
+      <details id="bd-insert-box" style="margin-top:10px">
+        <summary>Put in a page the comic's links skip</summary>
+        <div class="help" style="margin-top:8px">Some comics have a page their own next links walk straight
+          past, reachable only from an archive page. Give its address and the page it follows: it is read
+          the way a scrape reads one, its image saved, and every page after it moves along one so the order
+          still reads true. Nothing is touched until the page has actually been fetched.</div>
+        <div class="row">
+          <input type="text" id="bd-in-url" spellcheck="false" placeholder="https://example.com/comic/the-skipped-page" style="flex:1; min-width:220px">
+        </div>
+        <div class="row">
+          <input type="text" id="bd-in-after" list="bd-pages" placeholder="the page it follows" style="flex:1; min-width:160px">
+          <button type="button" id="bd-in-try">See what it would do</button>
+          <button type="button" id="bd-in-go">Put it in</button>
+        </div>
+        <div class="check-result" id="bd-in-said"></div>
+      </details>
+      </section>
+
+      <section class="tab-panel" data-panel="pages" role="tabpanel" hidden>
+      <div class="muted" id="pf-who"></div>
+      <div class="help">Which file is which page, as the comic was last lined up against its walk. Where names and
+        sizes cannot settle it - a site showing the page before's picture in a page's slot, a page shown twice, a
+        page found elsewhere that the walk never saw - say so here; it is kept in the comic's metadata, and the
+        comic is lined up again at once. <b>Pin</b> says a page is the file beside it, <b>Not a page</b> that a line
+        of the walk is no page at all, <b>New picture</b> saves the right picture for a page and pins it.</div>
+      <div class="pf-said" id="pf-said"></div>
+      <div class="row" style="margin-top:10px">
+        <select id="pf-show">
+          <option value="look">What needs looking at</option>
+          <option value="fixed">What was said by hand</option>
+          <option value="all">Every page</option>
+        </select>
+        <input type="number" id="pf-go" min="1" placeholder="go to page" style="width:9em">
+        <button type="button" class="small" id="pf-earlier">Earlier</button>
+        <span class="note" id="pf-count"></span>
+        <button type="button" class="small" id="pf-later">Later</button>
+      </div>
+      <div class="table-wrap" id="pf-wrap"><table id="pf-table"><thead><tr>
+        <th style="width:4em">Page</th><th>Title</th><th>File here</th><th style="width:5.5em">Matched</th>
+        <th>Site's picture</th><th></th>
+      </tr></thead><tbody id="pf-rows"></tbody></table></div>
+      <datalist id="pf-files"></datalist>
+      <div id="pf-spare"></div>
+      <div class="pf-picture" id="pf-picture" hidden>
+        <div><b id="pf-pic-what"></b></div>
+        <div class="row">
+          <input type="file" id="pf-pic-file" accept="image/*">
+          <span class="muted">or</span>
+          <input type="text" id="pf-pic-url" spellcheck="false" placeholder="https://example.com/the-right-picture.png" style="flex:1; min-width:220px">
+        </div>
+        <img id="pf-pic-preview" alt="" hidden>
+        <div class="row">
+          <button type="button" class="primary" id="pf-pic-go">Save it as this page</button>
+          <button type="button" id="pf-pic-cancel">Cancel</button>
+        </div>
+      </div>
+      <details id="pf-out-box" style="margin-top:10px"><summary>What the last lining up said</summary>
+        <div class="check-result" id="pf-out"></div></details>
+      <details id="edit-rewind-box" style="margin-top:10px"><summary>Go back to an earlier page</summary>
         <div class="field move-field">
           <label for="e-rewind-from">From page</label>
           <span><input type="number" id="e-rewind-from" min="1" style="width:110px"></span>
           <div class="note">That page and every page after it are taken off, into the comic's <code>.set aside</code>
             folder rather than deleted, and its record of which page is which, its chapters and its archives go back
             with them; the next update starts at that page. For pages saved as the wrong picture, or past a next link
-            that went wrong: put the image or next path right above first. Each of the recent runs can be undone
-            this way too.</div>
+            that went wrong: put the image or next path right, in Settings, first. Each run under History can be
+            undone this way too.</div>
         </div>
         <div class="field move-field">
           <label for="e-rewind-url">Its address</label>
@@ -486,18 +513,38 @@
           <button type="button" id="e-rewind-go" disabled>Go back</button>
         </div>
       </details>
-      </details>
-      <details id="edit-runs-box"><summary>Recent runs and edits</summary><div id="edit-runs"></div></details>
+      </section>
+
+      <section class="tab-panel" data-panel="comicinfo" role="tabpanel" hidden>
+      <div class="help">What this comic's archives say it is, in each one's ComicInfo.xml: the series, who made it,
+        what it is about. Kept in its metadata, so every update after says the same, and written into every
+        archive it has already when saved. A box left empty keeps what is worked out, shown greyed; any other tag
+        of the ComicInfo schema can be added at the end.</div>
+      <div class="note" id="ci-chapters"></div>
+      <div id="ci-boxes"></div>
+      </section>
+
+      <section class="tab-panel" data-panel="history" role="tabpanel" hidden>
+      <div id="edit-runs-box"><div id="edit-runs"></div></div>
+      </section>
     </div>
+    <!--what the foot holds follows the tab shown: data-tabs names the tabs each part is for-->
     <div class="dlg-foot edit-foot">
-      <div class="msg" id="edit-msg"></div>
-      <div class="foot-tools">
-        <button type="button" class="builtin-only" id="edit-checklist">Check chapter list</button>
-        <button type="button" class="builtin-only" id="edit-boundaries">Chapter boundaries</button>
-        <button type="button" class="builtin-only" id="edit-chapterize">Work out chapters</button>
-        <button type="button" id="edit-comicinfo">Edit ComicInfo</button>
+      <div class="msg" id="edit-msg" data-tabs="settings chapters history"></div>
+      <div class="msg" id="pf-msg" data-tabs="pages"></div>
+      <div class="msg" id="ci-msg" data-tabs="comicinfo"></div>
+      <div class="foot-tools" data-tabs="chapters">
+        <button type="button" id="bd-reset">Undo every boundary correction</button>
       </div>
-      <div class="foot-save">
+      <div class="foot-tools" data-tabs="pages">
+        <button type="button" id="pf-walk" title="set this record aside, walk the comic from its first page saving nothing, and line it up">Walk it again</button>
+        <button type="button" id="pf-align" title="read the folder and line the comic up against its walk again">Line it up again</button>
+        <button type="button" id="pf-reset">Undo every page fix</button>
+      </div>
+      <div class="foot-save" data-tabs="comicinfo">
+        <button type="button" class="primary" id="ci-save">Save and write the archives</button>
+      </div>
+      <div class="foot-save" data-tabs="settings chapters">
         <button type="button" id="edit-save">Save</button>
         <button type="button" class="primary" id="edit-save-update">Save and update now</button>
       </div>
@@ -512,6 +559,7 @@
 <script src="js/elements.js"></script>
 <script src="js/listcheck.js"></script>
 <script src="js/bounds.js"></script>
+<script src="js/pagefix.js"></script>
 <script src="js/comicinfo.js"></script>
 <script src="js/adding.js"></script>
 <script src="js/uploads.js"></script>

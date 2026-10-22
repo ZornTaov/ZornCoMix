@@ -5,6 +5,9 @@
   --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1dc;
   --accent: #2f5fd0; --accent-ink: #ffffff; --ok: #217a45; --bad: #b3261e; --warn: #9a6400;
   --run: #2f5fd0; --soft: #efeee9; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  /*so what the browser draws itself - a select's opened list, a file picker's button, the scrollbars -
+    goes dark with the rest, rather than staying light inside a dark page*/
+  color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -35,8 +38,12 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.danger { color: var(--bad); }
 button.small { padding: 2px 8px; font-size: 12px; }
 button:disabled { opacity: .5; cursor: default; }
-input[type=text], input[type=password], input[type=number], textarea { font: inherit; color: var(--ink); background: var(--bg);
+input[type=text], input[type=password], input[type=number], textarea, select { font: inherit; color: var(--ink); background: var(--bg);
   border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+select { padding: 5px 6px; cursor: pointer; }
+input[type=file] { font: inherit; color: var(--muted); }
+input[type=file]::file-selector-button { font: inherit; border: 1px solid var(--line); background: var(--soft);
+  color: var(--ink); border-radius: 6px; padding: 5px 11px; margin-right: 8px; cursor: pointer; }
 textarea { width: 100%; font-family: var(--mono); font-size: 12.5px; min-height: 110px; resize: vertical; }
 .muted { color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }

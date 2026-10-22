@@ -150,3 +150,25 @@ def test_each_time_the_comic_went_back_outlives_a_run(saving, mirror):
                    "history": {"rewinds": rewinds}}, f)
     meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
     assert meta["history"]["rewinds"] == rewinds
+
+
+def test_pages_put_back_or_inserted_by_hand_outlive_a_run(saving, mirror):
+    #both were once left off the list a scrape carries over, so the first daily run after a page was put
+    #back forgot it, and the next alignment called the page a stray
+    recovered = [{"file": "0002a_found.jpg", "note": "from the artist's own page", "at": "2026-10-20T00:00:00Z"}]
+    inserted = [{"at": "2026-10-20T00:00:00Z", "url": "https://example.com/comic/2a/", "after": 2}]
+    with open(saving / "mirror_metadata.json", "w", encoding="utf-8") as f:
+        json.dump({"schema": 2, "settings": {"url": "https://example.com/comic/1/"},
+                   "history": {"recovered": recovered, "inserted": inserted}}, f)
+    meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
+    assert meta["history"]["recovered"] == recovered
+    assert meta["history"]["inserted"] == inserted
+
+
+def test_which_file_is_which_page_said_by_hand_outlives_a_run(saving, mirror):
+    fixes = [{"what": "pin", "url": "https://example.com/comic/2/", "file": "0002_page.jpg",
+              "made": "2026-10-22T00:00:00Z"}]
+    with open(saving / "mirror_metadata.json", "w", encoding="utf-8") as f:
+        json.dump({"schema": 2, "settings": {"url": "https://example.com/comic/1/"}, "page_fixes": fixes}, f)
+    meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
+    assert meta["page_fixes"] == fixes

@@ -63,7 +63,7 @@ archives, and keep them up to date unattended.
 | `schedule` | The daily time, and the `update-now` file that starts a run sooner |
 | `moving` | Moving a comic to another folder of the library: its pages, its archive or chapter archives to the matching place on the CBZs shelf, the settings naming them, and its index named in the comic so it is still found. Renames only, undone if one fails. Each rename goes into `history.moves`, which the reader reads (through `metadata.moves`/`before_moves`) to carry a comic's place, settings and cover to its new id - so a scrape must keep that key, as `runrecord` does |
 | `web/` | The web page's server: the one job queue (`jobs`), what the page is shown (`views`), the element paths as it edits them (`elementpaths`), the add form (`adding`), a comic uploaded as a zip and put in or adopted (`uploads`), the changes it can make (`edits`), and the http handler (`server`). The page itself is `web_page/`, at the top |
-| `chapters/` | Walking a comic to record which page is which, and `KeptIndex`, the index a scrape adds to as it goes (`index`), the same index read from a WordPress site's post list instead of walked (`wordpress`), lining that up against the files (`align`), reading an archive page (`archive_page`) or the addresses (`addresses`) for chapters, the chapter list and its corrections (`chapterlist`), a chapter's own number read from its label (`numbering`), packing per chapter (`packing`), renumbering, inserting and refetching pages (`pageops`), and going back to an earlier page (`rewind`: the pages from it on set aside, and the resume point, the index and alignment, the chapters and archives put back to before them - each go-back recorded in `history.rewinds`, which a scrape keeps as `runrecord` does) |
+| `chapters/` | Walking a comic to record which page is which, and `KeptIndex`, the index a scrape adds to as it goes (`index`), the same index read from a WordPress site's post list instead of walked (`wordpress`), lining that up against the files (`align`), which file is which page said by hand where that cannot settle it (`pagefixes`: a page pinned to its file, a line that is no page, a file the walk never saw placed after a page - kept in the metadata's `page_fixes`, which a scrape carries, and used by every alignment, so a correction is never written into the index or the alignment, where the next walk or align would lose it), reading an archive page (`archive_page`) or the addresses (`addresses`) for chapters, the chapter list and its corrections (`chapterlist`), a chapter's own number read from its label (`numbering`), packing per chapter (`packing`), renumbering, inserting and refetching pages (`pageops`), and going back to an earlier page (`rewind`: the pages from it on set aside, and the resume point, the index and alignment, the chapters and archives put back to before them - each go-back recorded in `history.rewinds`, which a scrape keeps as `runrecord` does) |
 
 The scripts import what they use by its old name (`chapters.page_key`, `mirror_base.metadata_file`), so
 code reaching into a script still finds it; new code should import from `comiclib`.
@@ -75,11 +75,18 @@ code reaching into a script still finds it; new code should import from `comicli
 `css/` is `base` (colours and controls), `page` (the sections), `dialogs`, and `elements` (the element
 paths dialog and the check result). `js/` holds one file per part of the page: `common` (`$`, `api`,
 `post`, `esc`, the time formats), `library`, `running` (the `/api/state` poll: Running now, queue, Recent,
-log), `editor`, `elements`, `listcheck`, `bounds`, `comicinfo` (a comic's ComicInfo, saved to its metadata
-and written into its archives by a queued `chapters.py comicinfo`), `adding`, `uploads`, `settings`,
+log), `editor`, `elements`, `listcheck`, `bounds`, `pagefix`, `comicinfo`, `adding`, `uploads`, `settings`,
 `plugins` (a plugin's settings as a form), and `main`, which starts it all.
 
-They are **plain scripts sharing one global scope, not modules**, on purpose: the dialogs hand each other
+A comic's editor is **one dialog in tabs**: Settings and History are `editor.js`'s own, Chapters is `bounds.js`
+(with `edit-chapterize` and the chapter list, which are `editor.js`'s), Pages is `pagefix.js` (which file is
+which page, said by hand through `chapters.py pagefix`, and Walk it again), ComicInfo is `comicinfo.js`. A tab's
+file puts what it does the first time the tab is shown for a comic into `tabOpeners` as it loads, as a plugin's
+`dialog.js` does into `pluginForms`; `showTab` runs it. The editor's foot holds every tab's buttons and message,
+each marked with the `data-tabs` it shows on. A new thing done to a comic goes in the tab it is about, not in a
+dialog stacked on the editor; only the chapter-list check stays a dialog of its own, since Add comics uses it too.
+
+The scripts are **plain scripts sharing one global scope, not modules**, on purpose: the dialogs hand each other
 state (`editing`, `checkJob`, `paths`), and an imported `let` cannot be assigned to. So a top-level name
 must be declared in exactly one file, and **only `main.js` may call anything as it loads**, since a
 script can then use what a later one declares. The one exception is a plugin's own `dialog.js`, served from

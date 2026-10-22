@@ -4,10 +4,44 @@
 dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink);
   padding: 0; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
 dialog[open] { display: flex; overflow: hidden; }
-/*a table of six columns, one of them a page picked by number and name: at the usual width that box showed
-  "1 ·" and the buttons beside it broke over two lines*/
-dialog#bounds { width: min(960px, calc(100vw - 32px)); }
+/*the editor, in tabs: wide, for the Pages tab's file name and site's picture side by side and the Chapters tab's
+  page picked by number and name, and one height whichever tab is shown, so moving between them does not jump.
+  the settings keep the width a form reads at*/
+dialog#editor { width: min(1100px, calc(100vw - 32px)); height: min(860px, calc(100vh - 32px)); }
+#editor .tab-panel[data-panel="settings"], #editor .tab-panel[data-panel="comicinfo"] { max-width: 760px; margin: 0 auto; }
+#editor .tab-panel[data-panel="history"] { max-width: 900px; margin: 0 auto; }
+/*a tab with nothing to press and nothing said, History most often, has no foot at all rather than an empty bar*/
+#editor .edit-foot:not(:has(> :not([hidden]):not(.msg:empty))) { display: none; }
+.tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted);
+  padding: 8px 12px 7px; }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+#editor .edit-foot [data-tabs][hidden] { display: none; }
+/*a tab's panel is the dialog's body, not one of the page's boxed sections*/
+#editor .tab-panel { background: none; border: 0; border-radius: 0; padding: 0; }
+.panel-head { font-size: 13px; margin: 18px 0 4px; }
+/*the small print of a tab, outside a field as much as in one*/
+#editor .tab-panel .note { font-size: 12px; color: var(--muted); }
+#editor .tab-panel .row > .note { flex: 1 1 260px; }
+#pf-rows a, #bd-rows a { color: var(--accent); }
 #bd-rows td:last-child { white-space: nowrap; }
+#pf-rows td { vertical-align: top; }
+#pf-rows td:last-child { white-space: nowrap; }
+#pf-rows td.file, #pf-rows td.site { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+#pf-rows tr.context td { color: var(--muted); }
+#pf-rows tr.wrong td:first-child { box-shadow: inset 3px 0 var(--bad); }
+#pf-rows tr.fixed td:first-child { box-shadow: inset 3px 0 var(--ok); }
+#pf-rows tr.marked td { background: var(--soft); }
+#pf-rows .why { display: block; font-size: 11.5px; color: var(--bad); font-family: inherit; }
+#pf-rows input[type=text] { width: 100%; font-family: var(--mono); font-size: 12px; }
+.pf-said:not(:empty) { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }
+.pf-said .bad { color: var(--bad); } .pf-said .good { color: var(--ok); }
+.pf-said ul { margin: 4px 0 0; padding-left: 18px; }
+#pf-spare:not(:empty) { margin-top: 12px; }
+#pf-spare .row { font-size: 12.5px; }
+.pf-picture { margin-top: 12px; padding: 10px; border: 1px solid var(--accent); border-radius: 6px; }
+.pf-picture img { display: block; max-width: 100%; max-height: 260px; margin: 8px 0; border: 1px solid var(--line); }
 /*every dialog, not just the editor: the form has to be a column that may shrink, or it grows to its
   content, the dialog's overflow cuts it off at the screen's edge, and the buttons go with it. a check
   result or the opened help can push a dialog past a 720p screen*/

@@ -201,7 +201,7 @@ def chapter_contents(folder, chapters, pages):
     held = folder_pages(folder, others=True)
     recovered = recovered_files(folder)
     if parcels and recovered:
-        placed = place_recovered(held, parcels, recovered)
+        placed = place_recovered(held, parcels, recovered, pages)
         if placed:
             print("  {0} page(s) the site no longer serves, put back by hand, kept where they read: "
                   "{1}{2}".format(len(placed), placed[:3], "..." if len(placed) > 3 else ""))

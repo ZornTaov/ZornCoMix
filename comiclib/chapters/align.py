@@ -3,6 +3,8 @@
 #to settle before a comic can be chaptered: missing pages are tolerated, unplaced files are not.
 import os
 
+from comiclib.chapters import pagefixes
+from comiclib.comicinfo import measure
 from comiclib.chapters.index import alignment_path, fill_sizes, index_path, read_index, remember_cache, save_alignment
 from comiclib.metadata import METADATA_FILE as metadata_file, now_stamp as time_stamp, read as read_metadata
 from comiclib.metadata import write as write_metadata
@@ -13,15 +15,18 @@ from comiclib.standin import video_types
 def recovered_files(folder, metadata=None):
     #pages the site itself no longer serves, which the reader found somewhere else and put in the folder
     #by hand. a walk cannot see them, so without being told, every tool here would call such a file a
-    #stray and refuse to settle or to pack around it.
+    #stray and refuse to settle or to pack around it. said either way: marked recovered, or placed by a fix
     metadata = read_metadata(folder) if metadata is None else metadata
-    return {str(one.get("file")): one
-            for one in ((metadata.get("history") or {}).get("recovered") or []) if one.get("file")}
+    found = {str(one.get("file")): one
+             for one in ((metadata.get("history") or {}).get("recovered") or []) if one.get("file")}
+    found.update(pagefixes.strays(pagefixes.fixes_in(metadata)))
+    return found
 
 
-def place_recovered(held, parcels, recovered):
+def place_recovered(held, parcels, recovered, pages=None):
     #a recovered page reads where it sits in the folder, which is where the reader put it: after the page
     #it follows. so it joins the chapter that page belongs to, rather than being appended somewhere tidy.
+    #one a fix says follows a particular page follows that page's file instead, wherever its own name sorts
     known = {}
     for chapter, names in parcels:
         for name in names:
@@ -30,7 +35,12 @@ def place_recovered(held, parcels, recovered):
     for at, name in enumerate(held):
         if name not in recovered or name in known:
             continue
-        before = next((held[back] for back in range(at - 1, -1, -1) if held[back] in known), None)
+        said = recovered[name]
+        ats = pagefixes.where(pages, said, "after", "after_page") if pages and (
+            said.get("after") or said.get("after_page")) else []
+        before = (pages[ats[-1]].get("file") if ats else None)
+        if before not in known:
+            before = next((held[back] for back in range(at - 1, -1, -1) if held[back] in known), None)
         names = known[before] if before else (parcels[0][1] if parcels else None)
         if names is None:
             continue
@@ -79,11 +89,13 @@ def anchors_within(size_pages, size_files, name_pages, name_files, why):
     return longest_run(sorted(found.items()))
 
 
-def align(pages, files, folder=None, held=None):
+def align(pages, files, folder=None, held=None, pins=()):
     #pages are what the walk saw, in order; files are what is on disk, in order. the answer is which file
     #each page was saved as. anchors - pages whose image name is still recognisable in a filename - pin
     #positions exactly; between two anchors, a stretch that holds the same number of each lines up one to
     #one. a stretch where the counts differ is left unaligned and reported rather than guessed at.
+    #pins are (page, file) said by hand, already agreeing with each other: the anchors everything else is
+    #found between, so a name or size can never carry a page across one
     #by name: the page whose image is still recognisable in a filename
     name_pages, name_files = {}, {}
     for at, page in enumerate(pages):
@@ -105,13 +117,14 @@ def align(pages, files, folder=None, held=None):
             if name in held:
                 size_files.setdefault(held[name], []).append(at)
 
-    why = {}
-    anchors = anchors_within(size_pages, size_files, name_pages, name_files, why)
+    why = {at: "hand" for at, _ in pins}
+    anchors = sorted(pins)
     #a size two pages of a long comic happen to share - eight thousand jpegs of half a megabyte each make that
     #a certainty, not a fluke - anchors neither, and the stretch around them will not count out. between
     #two anchors already agreed, only a handful of pages and files are left, and among those the size
     #almost always points at one of each. so each stretch is asked again, on its own, until nothing more
-    #is found; an anchor found there cannot cross the ones either side of it, which is what keeps it honest
+    #is found; an anchor found there cannot cross the ones either side of it, which is what keeps it honest.
+    #the first time round the one stretch is the whole comic, or the stretches between the pins
     while True:
         more = []
         edges = [(-1, -1)] + anchors + [(len(pages), len(files))]
@@ -164,12 +177,39 @@ def anchor_kinds(pages, files, anchors, folder):
     return kinds
 
 
-def verify(folder, files, pages, aligned, held=None):
+def shape_on_disk(folder, name):
+    #a held file's (width, height), from its first bytes; None when it does not say
+    try:
+        with open(os.path.join(folder, name), 'rb') as f:
+            return measure(lambda count: (f.seek(0), f.read(count))[1])
+    except OSError:
+        return None
+
+
+def same_picture_could_be(folder, placed, others):
+    #whether the file placed at a page could be the same picture as a file of the size the site gives it.
+    #if the site really serves that other page's picture here, a scrape saved that picture here too, so the
+    #two are one picture and one shape. two shapes are two pictures, and the size they share is chance - in
+    #a comic of thousands of differently drawn pages, two will match to the byte. a shape that cannot be read,
+    #or the same shape, as every page of a comic drawn to one size has, says nothing, and the doubt stands
+    mine = shape_on_disk(folder, placed)
+    if mine is None:
+        return True
+    for other in others:
+        theirs = shape_on_disk(folder, other)
+        if theirs is None or theirs == mine:
+            return True
+    return False
+
+
+def verify(folder, files, pages, aligned, held=None, trusted=(), chance=None):
     #every placement can be checked, not just the anchored ones: the file on disk should be as big as the
     #site says its image is. a size that differs is not proof of anything on its own - a comic that moved
     #host years ago serves re-encoded images that no longer match what was downloaded then. what does
     #prove something is the site's size matching a DIFFERENT file in this folder: that is a page sitting
-    #where another page's file is, which is exactly what a wrong alignment looks like.
+    #where another page's file is, which is exactly what a wrong alignment looks like. trusted pages were
+    #pinned by hand, most often because the site serves another page's picture in their slot, so what the
+    #site says of them is no evidence of anything
     held = file_sizes(folder) if held is None else held
     held_sizes = {}
     for name in files:
@@ -177,26 +217,40 @@ def verify(folder, files, pages, aligned, held=None):
             held_sizes.setdefault(held[name], []).append(name)
     agree, changed, conflict = 0, 0, []
     for page, name in zip(pages, aligned):
-        if not name or not page.get("bytes"):
+        if not name or not page.get("bytes") or page["n"] in trusted:
             continue
         if held.get(name) == page["bytes"]:
             agree += 1
-        elif page["bytes"] in held_sizes:
+        elif page["bytes"] in held_sizes and same_picture_could_be(folder, name, held_sizes[page["bytes"]][:4]):
             conflict.append((page["n"], name, held_sizes[page["bytes"]][:2]))
         else:
+            #chance, when given, learns the pages whose size is another file's by coincidence alone
+            if chance is not None and page["bytes"] in held_sizes:
+                chance.append((page["n"], name, held_sizes[page["bytes"]][:2]))
             changed += 1
     return agree, changed, conflict
 
 
-def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), recovered=None, held=None):
+def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), recovered=None, held=None,
+             fixed=None):
+    #what the alignment came to, said for a person, and as a report the alignment keeps for the web page.
+    #fixed is what the page fixes came to: the lines dropped, the pages pinned, and what could not be done
     matched = [name for name in aligned if name]
     recovered = recovered or {}
+    fixed = fixed or {}
+    pinned = fixed.get("pinned") or set()
     spare = [name for name in files if name not in set(matched)]
     print("{0}".format(folder))
-    ways = ", ".join("{0} by {1}".format(how.count(way), way) for way in ("size", "name", "order", "time")
+    ways = ", ".join("{0} by {1}".format(how.count(way), way) for way in ("hand", "size", "name", "order", "time")
                      if how.count(way))
     print("  {0} pages walked, {1} files held, {2} lined up ({3})".format(
         len(pages), len(files), len(matched), ways or "none"))
+    if fixed.get("dropped"):
+        print("  {0} line(s) of the index are no page, said by hand, and hold no file".format(fixed["dropped"]))
+    for problem in fixed.get("problems") or []:
+        print("  FIX NOT USED: {0}".format(problem))
+    if fixed.get("waiting"):
+        print("  {0} page fix(es) wait for a page the index does not hold yet".format(len(fixed["waiting"])))
     if anchors:
         kinds = anchor_kinds(pages, files, anchors, folder)
         first, last = anchors[0], anchors[-1]
@@ -231,8 +285,9 @@ def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), r
     if filmed:
         print("  {0} page(s) are held as video rather than as a picture: {1}{2}".format(
             len(filmed), filmed[:4], "..." if len(filmed) > 4 else ""))
+    #a page pinned by hand is often pinned exactly because its file is not what the site serves there
     named = [(page, name) for page, name in zip(pages, aligned)
-             if name and page.get("src") and not video_types.search(name)]
+             if name and page.get("src") and not video_types.search(name) and page["n"] not in pinned]
     #a site's own name can start with a number of its own - 1337_part_1.png - which page_key takes for the
     #number a scrape puts in front. the file numbered for this page, 0341_1337_part_1.png, is that very image
     def named_after(src, name):
@@ -251,7 +306,8 @@ def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), r
             if len(astray) > 6:
                 print("      ... and {0} more".format(len(astray) - 6))
             print("      chapters.py refetch {0} --page <n> --as-named puts one right.".format(folder))
-    agree, changed, conflict = verify(folder, files, pages, aligned, held)
+    chance = []
+    agree, changed, conflict = verify(folder, files, pages, aligned, held, pinned, chance)
     #a size says where a page is only where sizes say anything at all. a site that re-exported its whole
     #archive - every image re-encoded at four fifths the size - leaves every one of them different, and then
     #a size that happens to match some other file among thousands is a coincidence rather than a page in
@@ -264,6 +320,11 @@ def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), r
         print("      page {0:<5} placed at {1:<26} but its size belongs to {2}".format(n, name[:26], others))
     if len(conflict) > 8:
         print("      ... and {0} more".format(len(conflict) - 8))
+    if chance:
+        print("  {0} page(s) the site gives the size of another file here, which is a different shape of "
+              "picture, so the size is chance: {1}".format(
+                  len(chance), ", ".join("page {0} ({1}, like {2})".format(n, name, others[0])
+                                         for n, name, others in chance[:4])))
     if conflict and not sizes_tell:
         print("      only {0} of {1} sizes match the site at all, so these are coincidences among "
               "thousands of files rather than pages out of place.".format(agree, agree + changed))
@@ -271,15 +332,27 @@ def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), r
         print("  UNRESOLVED {0}: {1}".format(problem["where"], problem["detail"]))
     #what chaptering needs is that every file is placed. a page the comic has and this folder does not
     #leaves a gap in the reading, but the files either side of it are still placed correctly.
-    settled = not trouble and not spare and not (conflict and sizes_tell)
+    #a fix that could not be used is a person's word going unheard, which is not settled either
+    settled = not trouble and not spare and not (conflict and sizes_tell) and not fixed.get("problems")
     if settled and missing:
         print("  settled: every file is placed. The {0} page(s) above are missing from this folder, "
               "not misplaced.".format(len(missing)))
     elif settled:
         print("  settled: every page has a file and every file has a page")
     else:
-        print("  NOT settled: fix the above, or align by hand, before chaptering")
-    return settled
+        print("  NOT settled: fix the above, or say which file is which page in the Pages dialog, or with "
+              "chapters.py pagefix {0}, before chaptering".format(folder))
+    #kept in the alignment, so the web page can show what is wrong without lining the comic up again
+    report = {
+        "spare": spare,
+        "conflict": [{"n": n, "file": name, "sized_as": others}
+                     for n, name, others in (conflict if sizes_tell else [])],
+        "trouble": trouble,
+        "astray": [{"n": page["n"], "file": name} for page, name in astray] if named and
+        len(astray) <= len(named) / 2 else [],
+        "fixes": list(fixed.get("problems") or []),
+    }
+    return settled, report
 
 
 def gap_notes(pages, aligned):
@@ -353,9 +426,10 @@ def do_align(folder, args):
         print("ERROR: no index for {0} yet. Run: chapters.py index {1}".format(folder, folder))
         return 2
     pages = read_index(cache)
+    metadata = read_metadata(folder)
     #a page the site has lost belongs to no walked page, so it takes no part in the lining up: left in,
     #it would leave a stretch with one more file than pages and nothing would settle
-    recovered = recovered_files(folder)
+    recovered = recovered_files(folder, metadata)
     #videos count here, and only here: a page held as one is a page this folder has, and leaving it out
     #made it read as a page gone missing and the file itself as something nothing claims
     held = folder_pages(folder, others=True)
@@ -365,18 +439,53 @@ def do_align(folder, args):
     #file was most of the time a comic of thousands took, run against a library on a network share
     print("  reading the size of every file ...", flush=True)
     sizes = file_sizes(folder)
-    fill_sizes(cache, pages)
+    dry = getattr(args, "dry_run", False)
+    if not dry:
+        #asking the site writes what it says into the index, which a look that changes nothing must not.
+        #so a look at a comic whose sizes were never asked lines it up by names and order alone
+        fill_sizes(cache, pages)
+    #a line said to be no page keeps its place in the index and takes no part in the lining up
+    fixed = pagefixes.plan(pages, files, pagefixes.fixes_in(metadata))
+    live = [at for at in range(len(pages)) if at not in fixed["dropped"]]
+    walked = [pages[at] for at in live]
+    place = {at: step for step, at in enumerate(live)}
+    pins = sorted((place[at], files.index(name)) for at, name in fixed["pins"].items())
+    #pins have to run forwards through the folder too: a file pinned to an early page that sorts after one
+    #pinned to a later page cannot be read in the comic's order, and both cannot be right
+    agreeing = longest_run(pins)
+    for at, to in pins:
+        if (at, to) not in agreeing:
+            fixed["problems"].append("page {0} is pinned to {1}, which sorts in the folder out of the order the "
+                                     "other pins read in. Rename it so it sorts where it reads".format(
+                                         walked[at]["n"], files[to]))
     if args.by_time:
-        aligned, how = by_written_order(folder, pages, files)
+        aligned, how = by_written_order(folder, walked, files)
         if aligned is None:
             return 2
         anchors, trouble = [], []
+        if agreeing:
+            print("  lined up by when files were written, so the {0} page(s) pinned by hand are only "
+                  "checked, not used".format(len(agreeing)))
+            for at, to in agreeing:
+                if aligned[at] != files[to]:
+                    fixed["problems"].append("page {0} is pinned to {1}, but was written as {2}".format(
+                        walked[at]["n"], files[to], aligned[at]))
     else:
-        aligned, how, anchors, trouble = align(pages, files, folder, sizes)
-    settled = describe(folder, pages, files, aligned, how, anchors, trouble, rescued, recovered, sizes)
-    where = save_alignment(alignment_path(cache), folder, pages, aligned, how, settled)
+        aligned, how, anchors, trouble = align(walked, files, folder, sizes, agreeing)
+    said = {"pinned": {walked[at]["n"] for at, _ in agreeing}, "dropped": len(fixed["dropped"]),
+            "problems": fixed["problems"], "waiting": fixed["waiting"]}
+    settled, report = describe(folder, walked, files, aligned, how, anchors, trouble, rescued, recovered, sizes,
+                               said)
+    if dry:
+        print("  a dry run: nothing was written")
+        return 0 if settled else 1
+    #every line of the index has its place in the alignment, a dropped one too, since position is meaning
+    every, ways = [None] * len(pages), ["dropped"] * len(pages)
+    for step, at in enumerate(live):
+        every[at], ways[at] = aligned[step], how[step]
+    where = save_alignment(alignment_path(cache), folder, pages, every, ways, settled, report)
     remember_cache(folder, cache)
     print("  written to {0}".format(where))
     if settled:
-        save_gaps(folder, pages, aligned)
+        save_gaps(folder, walked, aligned)
     return 0 if settled else 1

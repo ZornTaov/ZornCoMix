@@ -1,10 +1,13 @@
 #the changes the page can make: a comic's settings, the library's settings, and the chapter tools, which
 #run chapters.py so that the page and the command line mean exactly the same thing by each.
+import base64
+import binascii
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 
 from comiclib import comicinfo, cookies, moving, placeholders, plugins, useragent
@@ -146,6 +149,89 @@ def fix_chapter(args, comic, given):
         return 400, {"error": output.strip().splitlines()[0] if output.strip() else "that did not work",
                      "output": output[-2000:]}
     return 200, {"output": output[-4000:]}
+
+
+#the biggest picture the page may send for one page, base64 and all: a long strip is a few megabytes
+max_picture = 40 * 1024 * 1024
+
+
+def fix_page(args, comic, given):
+    #which file is which page, said from the Pages dialog, run through chapters.py pagefix so the page and
+    #the command line mean the same by it. it lines the comic up again, which reads the folder but fetches
+    #nothing - unless a picture is given by its address, which is one fetch
+    script = os.path.join(os.path.dirname(os.path.abspath(args.script)), "chapters.py")
+    command = [sys.executable, "-u", script, "pagefix", comic.folder]
+    if args.root:
+        command += ["--root", args.root]
+    at = str(given.get("at") or "").strip()
+    name = os.path.basename(str(given.get("file") or "").strip())
+    picture = str(given.get("picture") or "")
+    picture_url = str(given.get("picture_url") or "").strip()
+    if given.get("align"):
+        #lining it up again with nothing said: an alignment from before alignments kept what stood in their
+        #way has nothing for the dialog to show until it is made again
+        command[3] = "align"
+    elif given.get("clear"):
+        command.append("--clear")
+    elif picture or picture_url:
+        if not at:
+            return 400, {"error": "say which page the picture is for"}
+        command += ["--at", at]
+    elif at:
+        command += ["--at", at]
+        if given.get("forget"):
+            command.append("--forget")
+        elif given.get("drop"):
+            command.append("--drop")
+        elif name:
+            command += ["--file", name]
+        else:
+            return 400, {"error": "say which file page {0} is, or that it is no page".format(at)}
+    elif name:
+        command += ["--file", name]
+        if given.get("forget"):
+            command.append("--forget")
+        elif str(given.get("after") or "").strip():
+            command += ["--after", str(given["after"]).strip()]
+    else:
+        return 400, {"error": "say which page, or which file, this is about"}
+    for key in ("src", "note"):
+        if str(given.get(key) or "").strip():
+            command += ["--" + key, str(given[key]).strip()]
+    spare = None
+    if picture_url:
+        if not re.match(r"^https?://\S+$", picture_url):
+            return 400, {"error": "the picture's address has to be a full http(s) address"}
+        command += ["--picture", picture_url]
+    elif picture:
+        #sent as base64 in the json, since only json is taken from the page; written to a file of its own for
+        #chapters.py to read, outside the library and the config folder both, and removed after
+        if len(picture) > max_picture:
+            return 413, {"error": "that picture is too big to send this way"}
+        try:
+            data = base64.b64decode(picture.split(",", 1)[-1], validate=True)
+        except (ValueError, binascii.Error):
+            return 400, {"error": "the picture did not arrive whole; choose it again"}
+        handle, spare = tempfile.mkstemp(prefix="zcm-picture-")
+        with os.fdopen(handle, "wb") as f:
+            f.write(data)
+        command += ["--picture", spare]
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, errors="replace",
+                              env=dict(os.environ, PYTHONUNBUFFERED="1"), timeout=1800)
+    except subprocess.SubprocessError as error:
+        return 500, {"error": "could not work that out: {0}".format(error)}
+    finally:
+        if spare and os.path.exists(spare):
+            os.remove(spare)
+    output = ((done.stdout or "") + (done.stderr or "")).strip()
+    #1 is the comic lining up unsettled, which is an answer rather than a failure: the dialog shows what is
+    #still wrong. 2 is the fix refused
+    if done.returncode == 2:
+        said = [line for line in output.splitlines() if line.strip().startswith("ERROR")]
+        return 400, {"error": (said[0][len("ERROR: "):] if said else "that did not work")[:400],
+                     "output": output[-4000:]}
+    return 200, {"output": output[-8000:], "settled": done.returncode == 0}
 
 
 def try_chapter_list(args, comic, given):

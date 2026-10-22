@@ -27,6 +27,7 @@ from comiclib.chapters.index import (alignment_path, fill_sizes, head_size, inde
                                      walk)
 from comiclib.chapters.links import (link_targets, looks_like_pages, page_at, page_shape,  # noqa: F401
                                      same_page, says_it_twice)
+from comiclib.chapters.pagefixes import edit_page_fixes, fixes_in  # noqa: F401
 from comiclib.chapters.packing import (already_packed, chapter_contents, chapter_file,  # noqa: F401
                                        chapter_folder, drop_single, pack, repack, retell, tidy_name,
                                        verify_chapters)
@@ -47,7 +48,7 @@ def setup():
         description="Line a comic's saved files up with the pages they came from.")
     params.add_argument("what", choices=["index", "align", "show", "chapters", "fix", "try", "pack",
                                          "refetch", "repack", "renumber", "recovered", "insert", "comicinfo",
-                                         "covers", "note", "rewind"],
+                                         "covers", "note", "rewind", "pagefix"],
                         help="index: walk the comic (or, with --wordpress, read its list of posts) and "
                              "line it up. align: line up a walk already done. "
                              "show: what the last alignment says. refetch: fetch again any page whose file "
@@ -58,6 +59,10 @@ def setup():
                              "renumber: rename the files so each carries its page number, or with "
                              "--original, the site's own name for it. "
                              "recovered: note a page the site has lost that you put back by hand. "
+                             "pagefix: say which file is which page where the alignment cannot - --at a page "
+                             "with --file to pin it to its file, or --drop for a line that is no page, or --file "
+                             "with --after for a file the walk never saw - kept in the metadata and used by every "
+                             "alignment after. "
                              "insert: put in a page the comic's own links skip past. "
                              "pack: write one .cbz per chapter, and beside each the banner the chapter list "
                              "shows for it, as its cover. "
@@ -152,13 +157,22 @@ def setup():
                              "as a note of its address. With rewind, where the page given with --from is, "
                              "when the comic's index does not reach it.")
     params.add_argument("--after", default=None,
-                        help="With insert, the page it follows: its address or its number.")
+                        help="With insert, the page it follows: its address or its number. With pagefix and "
+                             "--file, the page the file reads after.")
     params.add_argument("--json", action='store_true', default=False,
                         help="With show, print every page as JSON, for a page picker to offer.")
     params.add_argument("--file", default=None,
-                        help="With recovered, the filename of the page you put there by hand.")
+                        help="With recovered, the filename of the page you put there by hand. With pagefix, the "
+                             "file a page is pinned to, or with no --at, a file the walk never saw.")
     params.add_argument("--note", default=None,
-                        help="With recovered, where it came from, kept with it in the metadata.")
+                        help="With recovered or pagefix, why, kept with it in the metadata.")
+    params.add_argument("--picture", default=None,
+                        help="With pagefix and --at, the right picture for that page - a file, or its address - "
+                             "saved in place of the one held for it, which is set aside, and the page pinned to "
+                             "it.")
+    params.add_argument("--src", default=None,
+                        help="With pagefix, which of the pictures at that page's address is meant, for an "
+                             "address holding several.")
     params.add_argument("--no-repack", action='store_true', default=False,
                         help="With fix, leave the chapter archives alone, even where the correction "
                              "changed what belongs in one.")
@@ -172,18 +186,19 @@ def setup():
                         help="With align, line the pages up by the order their files were written, for a "
                              "comic this scraper downloaded in one pass without numbering them.")
     params.add_argument("--at", default=None,
-                        help="With fix, the page the correction is about: its address, or its page number.")
+                        help="With fix or pagefix, the page the correction is about: its address, or its page "
+                             "number.")
     params.add_argument("--label", default=None,
                         help="With fix, what the chapter starting at that page is called. Naming a chapter "
                              "that is already there moves it to this page rather than adding another.")
     params.add_argument("--drop", action='store_true', default=False,
                         help="With fix, no chapter starts at that page, whatever the archive or the "
-                             "addresses say.")
+                             "addresses say. With pagefix, that line of the index is no page at all.")
     params.add_argument("--forget", action='store_true', default=False,
-                        help="With fix, take back the correction made about that page. With note, stop "
-                             "keeping that page as a note.")
+                        help="With fix or pagefix, take back the correction made about that page. With note, "
+                             "stop keeping that page as a note.")
     params.add_argument("--clear", action='store_true', default=False,
-                        help="With fix, take back every correction made about this comic.")
+                        help="With fix or pagefix, take back every correction made about this comic.")
     params.add_argument("--script", default=None, help="Path to mirror_base.py.")
     params.add_argument("--like", default=None,
                         help="With try, one of the comic's page addresses, when its folder does not say.")
@@ -217,10 +232,15 @@ def main():
             return 2
         saved = json.load(open(path, encoding='utf-8'))
         if args.json:
-            #every page, for something that wants to offer them to choose from rather than read them
+            #every page, for something that wants to offer them to choose from or to put right: how each was
+            #matched, the site's picture and its size, what kept the comic from settling, and what was said
+            #about its pages by hand
+            sizes = {line["n"]: line.get("bytes") for line in read_index(index_path(folder, args.root, args))}
             json.dump({"comic": saved["comic"], "settled": saved.get("settled"),
+                       "report": saved.get("report"), "fixes": fixes_in(read_metadata(folder)),
                        "pages": [{"n": page["n"], "url": page["url"], "title": page.get("title"),
-                                  "file": page.get("file")} for page in saved["pages"]]},
+                                  "file": page.get("file"), "how": page.get("how"), "src": page.get("src"),
+                                  "bytes": sizes.get(page["n"])} for page in saved["pages"]]},
                       sys.stdout)
             return 0
         print("{0}: {1} pages, {2}".format(saved["comic"], len(saved["pages"]),
@@ -244,6 +264,18 @@ def main():
         return renumber(folder, args)
     if args.what == "recovered":
         return mark_recovered(folder, args)
+    if args.what == "pagefix":
+        cache = index_path(folder, args.root, args)
+        if not os.path.exists(cache):
+            print("ERROR: {0} has no index yet, so there are no pages to say anything about. Run: chapters.py "
+                  "index {0}".format(folder))
+            return 2
+        aligned = alignment_path(cache)
+        held = {}
+        if os.path.exists(aligned):
+            with open(aligned, encoding="utf-8") as f:
+                held = {page["n"]: page.get("file") for page in json.load(f).get("pages") or []}
+        return edit_page_fixes(folder, args, read_index(cache), do_align, held)
     if args.what == "insert":
         return insert_page(folder, args)
     if args.what == "refetch":

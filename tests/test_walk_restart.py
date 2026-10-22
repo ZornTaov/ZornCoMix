@@ -2,6 +2,7 @@
 #comic's page 1. such a record cannot be carried on from, and nothing should write one. a real browser walks
 #a five page comic served from here.
 import json
+import os
 
 import pytest
 
@@ -69,6 +70,9 @@ def test_a_record_that_begins_in_the_middle_is_thrown_away_on_restart(config, li
     done = run("chapters.py", "index", comic, "--root", library, "--restart", "--start", site + "/p/1",
                timeout=600)
     assert "Throwing away the record of 1 page(s)" in done.stdout, done.stdout[:500]
+    #set aside rather than deleted, so a walk that goes wrong loses nothing
+    kept = [name for name in os.listdir(str(config / "index")) if ".replaced-" in name and name.endswith(".jsonl")]
+    assert len(kept) == 1 and read_index(config / "index" / kept[0])[0]["file"] == "0005.png", kept
     lines = read_index(config / "index" / CACHE)
     assert len(lines) == PAGES, "the whole comic should be walked: {0}".format([one.get("url") for one in lines])
     assert lines[0]["url"].endswith("/p/1"), lines[:1]
@@ -98,6 +102,32 @@ def test_a_walk_follows_the_links_the_comics_scrapes_do(config, library, comic, 
     lines = read_index(made[0])
     assert [one["url"].rsplit("/", 1)[-1] for one in lines] == [str(n) for n in range(1, PAGES + 1)], \
         done.stdout[-600:]
+
+
+def test_walking_again_from_the_web_page_makes_the_record_afresh(config, library, comic, site, web):
+    #a record a scrape folded several pictures into one line of reaches the newest page, so working out chapters
+    #never walks it again: the Pages dialog's Walk it again does, as a queued job
+    write_metadata(comic, site, CACHE)
+    write_index(config / "index" / CACHE, [{"n": 1, "url": site + "/p/1", "src": site + "/img/0001.png",
+                                            "file": "0001.png", "title": "Comic 1", "bytes": len(PNG_240)}])
+    page = web()
+    code, answer = page.call("/api/walkagain", {"name": "Uncompressed/MyComic"})
+    assert code == 200 and answer["label"] == "Walk again: Uncompressed/MyComic", answer
+    assert page.wait_idle(600), "the walk never finished"
+    _, state = page.call("/api/state")
+    done = next(job for job in state["history"] if job["id"] == answer["queued"])
+    assert not done["error"] and done["outcome"].startswith("{0} pages walked".format(PAGES)), done
+    assert len(read_index(config / "index" / CACHE)) == PAGES
+    assert [name for name in os.listdir(str(config / "index")) if ".replaced-" in name and name.endswith(".jsonl")]
+
+
+def test_a_comic_another_program_scrapes_is_not_walked(config, library, comic, site, web):
+    write_metadata(comic, site)
+    meta = json.loads((comic / "mirror_metadata.json").read_text(encoding="utf-8"))
+    meta["settings"]["scraper"] = "example"
+    write_meta(comic, meta)
+    code, answer = web().call("/api/walkagain", {"name": "Uncompressed/MyComic"})
+    assert code == 400 and "plugin" in answer["error"], answer
 
 
 def test_without_restart_a_record_carries_on_as_before(config, library, comic, site):
