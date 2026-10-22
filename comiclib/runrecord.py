@@ -256,6 +256,9 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
     #the pages said by hand to be kept as a note of their address, which every run goes on keeping so
     if previous.get("notes"):
         metadata["notes"] = previous["notes"]
+    #and which file is which page, said by hand where the walk and the files could not settle it
+    if previous.get("page_fixes"):
+        metadata["page_fixes"] = previous["page_fixes"]
 
     #written aside and moved into place: this is rewritten after every page, and a run killed halfway
     #through writing it would otherwise leave a comic with no readable settings at all

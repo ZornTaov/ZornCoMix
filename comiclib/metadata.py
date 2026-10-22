@@ -282,4 +282,6 @@ def migrate(old):
         fresh["info"] = old["info"]
     if old.get("notes"):
         fresh["notes"] = old["notes"]
+    if old.get("page_fixes"):
+        fresh["page_fixes"] = old["page_fixes"]
     return fresh

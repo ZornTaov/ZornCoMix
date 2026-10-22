@@ -152,7 +152,7 @@ def remember_cache(folder, path):
         write_metadata(folder, metadata)
 
 
-def save_alignment(path, folder, pages, aligned, how, settled):
+def save_alignment(path, folder, pages, aligned, how, settled, report=None):
     out = {
         "comic": folder,
         "settled": settled,
@@ -160,6 +160,10 @@ def save_alignment(path, folder, pages, aligned, how, settled):
                    "src": page.get("src"), "file": name, "how": way}
                   for page, name, way in zip(pages, aligned, how)],
     }
+    #what kept it from settling, if anything: the files no page claims, the pages whose size is another
+    #file's, the stretches that would not count out and the fixes that could not be used
+    if report is not None:
+        out["report"] = report
     write_json(path, out, indent=1)
     return path
 
