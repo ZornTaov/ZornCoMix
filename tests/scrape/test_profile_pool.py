@@ -21,8 +21,11 @@ sys.stdin.read()
 
 
 def claimer(tmp_path, pool):
+    #written once: writing it again for each claimer empties it first, and a claimer started a moment before
+    #read the empty file, ran nothing and claimed nothing - which linux starts processes quickly enough to do
     script = tmp_path / "claimer.py"
-    script.write_text(CLAIMER, encoding="utf-8")
+    if not script.exists():
+        script.write_text(CLAIMER, encoding="utf-8")
     return subprocess.Popen([sys.executable, str(script), str(pool)], cwd=PROJECT, stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, text=True, env=dict(os.environ, PYTHONPATH=PROJECT))
 
