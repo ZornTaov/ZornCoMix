@@ -114,6 +114,31 @@ def test_a_file_the_walk_never_saw_is_placed_from_the_page(repeat, library, web)
 
 
 @pytest.mark.browser
+def test_every_page_of_a_long_comic_is_drawn_a_block_at_a_time(library, chapters, web, browser):
+    #a row of inputs and buttons for each of a comic's thousands of pages, drawn again after every change,
+    #made the dialog crawl: only a block is ever drawn, and going to a page opens the block holding it
+    lines = [(SITE + str(n), "p{0}.png".format(n), 300 + n) for n in range(1, 251)]
+    folder = build(library, chapters, lines, {"p{0}.png".format(n): 300 + n for n in range(1, 251)})
+    run("chapters.py", "align", folder, "--root", library)
+    page = web()
+    open_page(browser, page.base + "/")
+    browser.execute_script("openEditor(arguments[0]).then(() => document.getElementById('edit-pages').click())", NAME)
+    wait_until(lambda: browser.execute_script("return document.getElementById('pf-who').innerText").endswith("250 page(s)"),
+               why="the pages never loaded")
+    script = browser.execute_script
+    script("const s = document.getElementById('pf-show'); s.value = 'all'; s.dispatchEvent(new Event('change'))")
+    rows = lambda: script("return [...document.querySelectorAll('#pf-rows tr')].map(r => Number(r.dataset.n))")
+    assert rows() == list(range(1, 101)), rows()[:3]
+    assert "rows 1-100 of 250" in script("return document.getElementById('pf-count').innerText")
+    script("document.getElementById('pf-later').click()")
+    assert rows()[0] == 101 and len(rows()) == 100
+    script("const g = document.getElementById('pf-go'); g.value = '230'; g.dispatchEvent(new Event('change'))")
+    assert rows() == list(range(201, 251)), rows()[:3]
+    assert script("return document.querySelector(\"#pf-rows tr[data-n='230']\").classList.contains('marked')")
+    assert script("return document.getElementById('pf-later').disabled")
+
+
+@pytest.mark.browser
 def test_the_dialog_shows_the_page_and_pins_it(repeat, web, browser):
     page = web()
     open_page(browser, page.base + "/")

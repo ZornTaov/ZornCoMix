@@ -16,6 +16,7 @@ dialog#pagefix { width: min(1100px, calc(100vw - 32px)); }
 #pf-rows tr.context td { color: var(--muted); }
 #pf-rows tr.wrong td:first-child { box-shadow: inset 3px 0 var(--bad); }
 #pf-rows tr.fixed td:first-child { box-shadow: inset 3px 0 var(--ok); }
+#pf-rows tr.marked td { background: var(--soft); }
 #pf-rows .why { display: block; font-size: 11.5px; color: var(--bad); font-family: inherit; }
 #pf-rows input[type=text] { width: 100%; font-family: var(--mono); font-size: 12px; }
 .pf-said:not(:empty) { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }

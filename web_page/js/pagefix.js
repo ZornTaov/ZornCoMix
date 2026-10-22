@@ -2,7 +2,12 @@
 //said is kept in the comic's metadata, and every change lines the comic up again, so what is shown is always
 //what the last alignment came to
 
-let fixing = { name: "", pages: [], report: null, fixes: [], settled: true, show: "look", around: null, picture: null };
+let fixing = { name: "", pages: [], report: null, fixes: [], settled: true, show: "look", from: 0, marked: null,
+               picture: null };
+
+//rows drawn at once. a comic runs to thousands of pages, and a row of inputs and buttons for each of them -
+//drawn again whole after every change - made the dialog crawl; a block of these is all that is ever drawn
+const PF_BLOCK = 100;
 
 //an address as the server compares them: scheme, www and a trailing slash say nothing about which page it is
 function pfSame(url) {
@@ -54,13 +59,10 @@ function pfSummary(wrongs) {
   return lines.join("") + (said.length ? `<ul>${said.map((s) => `<li>${s}</li>`).join("")}</ul>` : "");
 }
 
+//every row the filter chooses, as [page, kind]; only a block of them is drawn
 function pfVisible(wrongs) {
   const pages = fixing.pages;
-  if (fixing.around) {
-    const n = fixing.around;
-    return pages.filter((p) => Math.abs(p.n - n) <= 10).map((p) => [p, p.n === n ? "" : "context"]);
-  }
-  if (fixing.show === "all") return pages.slice(0, 2000).map((p) => [p, ""]);
+  if (fixing.show === "all") return pages.map((p) => [p, ""]);
   const wanted = new Set();
   for (const page of pages) {
     const fixed = pfFixFor(page) || page.how === "hand" || page.how === "dropped";
@@ -73,13 +75,14 @@ function pfVisible(wrongs) {
       || (pages[at + 1] && wanted.has(pages[at + 1].n));
     if (near) shown.push([page, wanted.has(page.n) ? "" : "context"]);
   });
-  return shown.slice(0, 600);
+  return shown;
 }
 
 function pfRow(page, kind, wrongs) {
   const fix = pfFixFor(page);
   const why = wrongs.get(page.n);
-  const classes = [kind, why && !kind ? "wrong" : "", fix ? "fixed" : ""].filter(Boolean).join(" ");
+  const classes = [kind, why && !kind ? "wrong" : "", fix ? "fixed" : "",
+    fixing.marked === page.n ? "marked" : ""].filter(Boolean).join(" ");
   const said = fix ? (fix.what === "pin" ? `pinned by hand${fix.note ? ": " + fix.note : ""}`
     : `no page, said by hand${fix.note ? ": " + fix.note : ""}`) : "";
   return `<tr data-n="${page.n}" class="${classes}">
@@ -118,14 +121,43 @@ function pfSpare() {
 function pfDraw() {
   const wrongs = pfWrongs();
   $("pf-said").innerHTML = pfSummary(wrongs);
-  const shown = pfVisible(wrongs);
-  $("pf-rows").innerHTML = shown.map(([page, kind]) => pfRow(page, kind, wrongs)).join("")
+  const chosen = pfVisible(wrongs);
+  //a change can leave the block past the end, when what it put right drops out of what needs looking at
+  if (fixing.from >= chosen.length) fixing.from = Math.max(0, Math.floor((chosen.length - 1) / PF_BLOCK) * PF_BLOCK);
+  const block = chosen.slice(fixing.from, fixing.from + PF_BLOCK);
+  $("pf-rows").innerHTML = block.map(([page, kind]) => pfRow(page, kind, wrongs)).join("")
     || `<tr><td colspan="6" class="muted">${fixing.pages.length ? "Nothing here needs looking at." : "This comic has not been lined up against a walk, so there are no pages to show."}</td></tr>`;
-  $("pf-count").textContent = fixing.pages.length ? `${shown.length} of ${fixing.pages.length} page(s) shown` : "";
-  const files = new Set(fixing.pages.map((p) => p.file).filter(Boolean).concat((fixing.report || {}).spare || []));
-  $("pf-files").innerHTML = [...files].map((f) => `<option value="${esc(f)}"></option>`).join("");
+  $("pf-count").textContent = !chosen.length ? "" : chosen.length <= PF_BLOCK
+    ? `${chosen.length} row(s) of ${fixing.pages.length} page(s)`
+    : `rows ${fixing.from + 1}-${fixing.from + block.length} of ${chosen.length}, of ${fixing.pages.length} page(s)`;
+  $("pf-earlier").hidden = $("pf-later").hidden = chosen.length <= PF_BLOCK;
+  $("pf-earlier").disabled = fixing.from === 0;
+  $("pf-later").disabled = fixing.from + PF_BLOCK >= chosen.length;
   $("pf-spare").innerHTML = pfSpare();
   $("pf-reset").disabled = !fixing.fixes.length;
+}
+
+//the files a pin can name, offered as a box is typed in. built once a load, not on every redraw: a comic's
+//thousands of names are the same until the comic is lined up again
+function pfFiles() {
+  const files = new Set(fixing.pages.map((p) => p.file).filter(Boolean).concat((fixing.report || {}).spare || []));
+  $("pf-files").innerHTML = [...files].map((f) => `<option value="${esc(f)}"></option>`).join("");
+}
+
+//the block holding a page, every page shown, with that page's row marked and scrolled to
+function pfGoTo(n) {
+  const at = fixing.pages.findIndex((p) => p.n === n);
+  if (at < 0) {
+    $("pf-msg").className = "msg bad";
+    $("pf-msg").textContent = `This comic has no page ${n}; it has ${fixing.pages.length}.`;
+    return;
+  }
+  fixing.show = "all"; $("pf-show").value = "all";
+  fixing.from = Math.floor(at / PF_BLOCK) * PF_BLOCK;
+  fixing.marked = n;
+  pfDraw();
+  const row = document.querySelector(`#pf-rows tr[data-n="${n}"]`);
+  if (row) row.scrollIntoView({ block: "center" });
 }
 
 async function pfLoad() {
@@ -135,6 +167,7 @@ async function pfLoad() {
   fixing.fixes = held.fixes || [];
   fixing.settled = !!held.settled;
   $("pf-who").textContent = `${fixing.name} — ${fixing.pages.length} page(s)`;
+  pfFiles();
   pfDraw();
 }
 
@@ -169,7 +202,8 @@ function pfPicture(n) {
 }
 
 $("edit-pages").addEventListener("click", async () => {
-  fixing = { name: editing.name, pages: [], report: null, fixes: [], settled: true, show: "look", around: null, picture: null };
+  fixing = { name: editing.name, pages: [], report: null, fixes: [], settled: true, show: "look", from: 0, marked: null,
+             picture: null };
   $("pf-show").value = "look"; $("pf-go").value = "";
   $("pf-msg").className = "msg"; $("pf-msg").textContent = "Reading which file is which page…";
   $("pf-picture").hidden = true; $("pf-out").innerHTML = ""; $("pf-out-box").open = false;
@@ -184,12 +218,17 @@ $("edit-pages").addEventListener("click", async () => {
     $("pf-msg").textContent = "Could not read this comic's pages: " + error.message;
   }
 });
-$("pf-show").addEventListener("change", () => { fixing.show = $("pf-show").value; fixing.around = null; $("pf-go").value = ""; pfDraw(); });
+$("pf-show").addEventListener("change", () => {
+  fixing.show = $("pf-show").value; fixing.from = 0; fixing.marked = null; $("pf-go").value = "";
+  pfDraw();
+  $("pf-wrap").scrollTop = 0;
+});
 $("pf-go").addEventListener("change", () => {
   const n = Number($("pf-go").value);
-  fixing.around = n > 0 ? n : null;
-  pfDraw();
+  if (n > 0) pfGoTo(n);
 });
+$("pf-earlier").addEventListener("click", () => { fixing.from = Math.max(0, fixing.from - PF_BLOCK); pfDraw(); $("pf-wrap").scrollTop = 0; });
+$("pf-later").addEventListener("click", () => { fixing.from += PF_BLOCK; pfDraw(); $("pf-wrap").scrollTop = 0; });
 $("pf-rows").addEventListener("click", (event) => {
   const act = event.target.dataset.pfAct;
   if (!act) return;
