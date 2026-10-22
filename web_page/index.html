@@ -341,6 +341,58 @@
   </form>
 </dialog>
 
+<dialog id="pagefix">
+  <form method="dialog">
+    <div class="dlg-head"><h3>Pages</h3><span class="muted" id="pf-who"></span></div>
+    <div class="dlg-body">
+      <div class="help">Which file is which page, as the comic was last lined up against its walk. Where names and
+        sizes cannot settle it - a site showing the page before's picture in a page's slot, a page shown twice, a
+        page found elsewhere that the walk never saw - say so here. What you say is kept in the comic's metadata,
+        so every alignment after keeps it, and the comic is lined up again at once to show what it comes to.
+        <b>Pin</b> says a page is the file beside it, whatever the site says of its picture; <b>Not a page</b>
+        says a line of the walk is no page at all; <b>New picture</b> saves the right picture for a page, setting
+        the old one aside, and pins it.</div>
+      <div class="pf-said" id="pf-said"></div>
+      <div class="row" style="margin-top:10px">
+        <select id="pf-show">
+          <option value="look">What needs looking at</option>
+          <option value="fixed">What was said by hand</option>
+          <option value="all">Every page</option>
+        </select>
+        <input type="number" id="pf-go" min="1" placeholder="go to page" style="width:9em">
+        <span class="note" id="pf-count"></span>
+      </div>
+      <div class="table-wrap" id="pf-wrap"><table id="pf-table"><thead><tr>
+        <th style="width:4em">Page</th><th>Title</th><th>File here</th><th style="width:5.5em">Matched</th>
+        <th>Site's picture</th><th></th>
+      </tr></thead><tbody id="pf-rows"></tbody></table></div>
+      <datalist id="pf-files"></datalist>
+      <div id="pf-spare"></div>
+      <div class="pf-picture" id="pf-picture" hidden>
+        <div><b id="pf-pic-what"></b></div>
+        <div class="row">
+          <input type="file" id="pf-pic-file" accept="image/*">
+          <span class="muted">or</span>
+          <input type="text" id="pf-pic-url" spellcheck="false" placeholder="https://example.com/the-right-picture.png" style="flex:1; min-width:220px">
+        </div>
+        <img id="pf-pic-preview" alt="" hidden>
+        <div class="row">
+          <button type="button" class="primary" id="pf-pic-go">Save it as this page</button>
+          <button type="button" id="pf-pic-cancel">Cancel</button>
+        </div>
+      </div>
+      <details id="pf-out-box" style="margin-top:10px"><summary>What the last lining up said</summary>
+        <div class="check-result" id="pf-out"></div></details>
+    </div>
+    <div class="dlg-foot">
+      <div class="msg" id="pf-msg"></div>
+      <button type="button" id="pf-align" title="read the folder and line the comic up against its walk again">Line it up again</button>
+      <button type="button" id="pf-reset">Undo every page fix</button>
+    </div>
+    <button type="button" class="dlg-x" id="pf-close" aria-label="Close" title="Close">×</button>
+  </form>
+</dialog>
+
 <dialog id="comicinfo">
   <form method="dialog">
     <div class="dlg-head"><h3>ComicInfo</h3><span class="muted" id="ci-who"></span></div>
@@ -493,6 +545,7 @@
       <div class="msg" id="edit-msg"></div>
       <div class="foot-tools">
         <button type="button" class="builtin-only" id="edit-checklist">Check chapter list</button>
+        <button type="button" class="builtin-only" id="edit-pages">Pages</button>
         <button type="button" class="builtin-only" id="edit-boundaries">Chapter boundaries</button>
         <button type="button" class="builtin-only" id="edit-chapterize">Work out chapters</button>
         <button type="button" id="edit-comicinfo">Edit ComicInfo</button>
@@ -512,6 +565,7 @@
 <script src="js/elements.js"></script>
 <script src="js/listcheck.js"></script>
 <script src="js/bounds.js"></script>
+<script src="js/pagefix.js"></script>
 <script src="js/comicinfo.js"></script>
 <script src="js/adding.js"></script>
 <script src="js/uploads.js"></script>

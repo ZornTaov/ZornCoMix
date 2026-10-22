@@ -301,7 +301,9 @@ def walked_pages(args, comic):
     for page in pages:
         said = str(page.get("title") or "")
         page["short"] = (said[shared:] if shared and len(said) > shared else said).strip(" -|:–")
-    return 200, {"pages": pages, "walked": True, "settled": bool(held.get("settled"))}
+    #and for the Pages dialog, what kept it from settling and what was said about its pages by hand
+    return 200, {"pages": pages, "walked": True, "settled": bool(held.get("settled")),
+                 "report": held.get("report"), "fixes": held.get("fixes") or []}
 
 
 def config_view(args, uc):

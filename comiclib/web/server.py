@@ -16,7 +16,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from comiclib import moving, pluginfetch, plugins, pluginsetup, runlogs
 from comiclib.paths import PROJECT
 from comiclib.web.adding import add_with_plugin, parse_entries
-from comiclib.web.edits import discard_walk, fix_chapter, insert_page, preview_move, save_config, save_settings
+from comiclib.web.edits import discard_walk, fix_chapter, fix_page, insert_page, preview_move, save_config
+from comiclib.web.edits import save_settings
 from comiclib.web.edits import comicinfo_view, cookie_value, preview_rewind, save_comicinfo, try_chapter_list
 from comiclib.web.elementpaths import element_settings, save_elements
 from comiclib.web.jobs import LogTee, Runner
@@ -384,6 +385,21 @@ def make_handler(runner, args, uc, tee):
                     self.reply({"error": "that comic is being moved; reopen it once the move has finished"}, 409)
                 else:
                     status, result = fix_chapter(uc.with_config(args), comic, body)
+                    self.reply(result, status)
+            elif path == "/api/pagefix":
+                name = str(body.get("name") or "")
+                comic = find_comic(args, uc, name)
+                if comic is None:
+                    self.reply({"error": "no comic named {0}".format(name)}, 404)
+                elif is_running(runner, name):
+                    self.reply({"error": "that comic is being scraped right now"}, 409)
+                elif is_moving(runner, name):
+                    self.reply({"error": "that comic is being moved; reopen it once the move has finished"}, 409)
+                elif is_rewinding(runner, name):
+                    self.reply({"error": "that comic is going back to an earlier page; reopen it once that "
+                                         "has finished"}, 409)
+                else:
+                    status, result = fix_page(uc.with_config(args), comic, body)
                     self.reply(result, status)
             elif path == "/api/discardwalk":
                 name = str(body.get("name") or "")

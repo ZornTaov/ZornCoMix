@@ -166,6 +166,10 @@ def setup():
                              "file a page is pinned to, or with no --at, a file the walk never saw.")
     params.add_argument("--note", default=None,
                         help="With recovered or pagefix, why, kept with it in the metadata.")
+    params.add_argument("--picture", default=None,
+                        help="With pagefix and --at, the right picture for that page - a file, or its address - "
+                             "saved in place of the one held for it, which is set aside, and the page pinned to "
+                             "it.")
     params.add_argument("--src", default=None,
                         help="With pagefix, which of the pictures at that page's address is meant, for an "
                              "address holding several.")
@@ -266,7 +270,12 @@ def main():
             print("ERROR: {0} has no index yet, so there are no pages to say anything about. Run: chapters.py "
                   "index {0}".format(folder))
             return 2
-        return edit_page_fixes(folder, args, read_index(cache), do_align)
+        aligned = alignment_path(cache)
+        held = {}
+        if os.path.exists(aligned):
+            with open(aligned, encoding="utf-8") as f:
+                held = {page["n"]: page.get("file") for page in json.load(f).get("pages") or []}
+        return edit_page_fixes(folder, args, read_index(cache), do_align, held)
     if args.what == "insert":
         return insert_page(folder, args)
     if args.what == "refetch":

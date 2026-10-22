@@ -10,9 +10,11 @@
 #  stray  this file is a page the walk never saw, read after the page named. a page the site has lost,
 #         found elsewhere, which is what history.recovered says without saying where it goes
 import os
+import re
 
 from comiclib.chapters.links import same_page
 from comiclib.metadata import now_stamp, read as read_metadata, write as write_metadata
+from comiclib.pages import numbered_name, saved_name, type_from_bytes
 
 KINDS = ("pin", "drop", "stray")
 
@@ -140,14 +142,93 @@ def page_named(pages, said):
     return page, None
 
 
-def edit_page_fixes(folder, args, pages, align_again):
+def picture_name(page, held_as, kind, prefix):
+    #what a page's new picture is called: the name its file has now, so it reads where it did, with the ending
+    #its own bytes call for - a reader goes by the ending to know how to open an entry. a page that had no
+    #file is named as a scrape would name it, numbered when the comic numbers its pages
+    if held_as:
+        stem, ending = os.path.splitext(held_as)
+        same = ending.lower().lstrip(".").replace("jpeg", "jpg") == kind
+        return held_as if same else "{0}.{1}".format(stem, kind)
+    name = saved_name(page.get("src") or page.get("url") or "page")
+    name = "{0}.{1}".format(os.path.splitext(name)[0], kind)
+    return numbered_name(page["n"], name) if prefix else name
+
+
+def replace_picture(folder, page, held_as, data, prefix):
+    #the right picture for a page, from wherever the person found it. the copy that was there is set aside
+    #rather than deleted, so a wrong choice is undone by moving it back; the new one is written aside first,
+    #so a failure part way leaves the page as it was. (name, where the old one went), or (None, why)
+    from comiclib.chapters.index import aside_target
+    kind = type_from_bytes(data)
+    if not kind:
+        return None, "that is not a picture this can tell the kind of (png, jpg, gif, webp or bmp)"
+    name = picture_name(page, held_as, kind, prefix)
+    if name != held_as and os.path.exists(os.path.join(folder, name)):
+        return None, "{0} is already here, as another page; move it first".format(name)
+    spare = os.path.join(folder, name + ".writing")
+    with open(spare, "wb") as f:
+        f.write(data)
+    went = None
+    if held_as and os.path.exists(os.path.join(folder, held_as)):
+        target = aside_target(folder, held_as)
+        os.replace(os.path.join(folder, held_as), target)
+        went = os.path.relpath(target, folder)
+    os.replace(spare, os.path.join(folder, name))
+    return name, went
+
+
+def picture_from(said, session=None):
+    #the picture's bytes, from a file on this machine or an address; (bytes, None) or (None, why)
+    said = str(said or "").strip()
+    if re.match(r'^https?://', said):
+        import requests
+        from comiclib import cookies
+        try:
+            answer = (session or cookies.session()).get(said, timeout=120)
+            answer.raise_for_status()
+        except requests.RequestException as error:
+            return None, "could not fetch {0}: {1}".format(said, str(error)[:160])
+        return answer.content, None
+    try:
+        with open(said, "rb") as f:
+            return f.read(), None
+    except OSError as error:
+        return None, "could not read {0}: {1}".format(said, error)
+
+
+def edit_page_fixes(folder, args, pages, align_again, held=None):
     #the command: say what a page is, take it back, or list what has been said. every change lines the comic
-    #up again, since a fix is only worth what the alignment makes of it
+    #up again, since a fix is only worth what the alignment makes of it. held is the file each page is held
+    #as by the last alignment, which a new picture for the page replaces
     metadata = read_metadata(folder)
     if not metadata:
         print("ERROR: no metadata in {0}.".format(folder))
         return 2
     fixes = fixes_in(metadata)
+    if getattr(args, "picture", None):
+        if not args.at:
+            print("ERROR: say which page the picture is for, with --at.")
+            return 2
+        page, why = page_named(pages, args.at)
+        if page is None:
+            print("ERROR: {0}.".format(why))
+            return 2
+        data, why = picture_from(args.picture)
+        if data is None:
+            print("ERROR: {0}.".format(why))
+            return 2
+        prefix = bool((metadata.get("settings") or {}).get("prefix"))
+        name, went = replace_picture(folder, page, (held or {}).get(page["n"]), data, prefix)
+        if name is None:
+            print("ERROR: {0}.".format(went))
+            return 2
+        print("saved the new picture for page {0} as {1}{2}".format(
+            page["n"], name, "; the old one is in {0}".format(went) if went else ""))
+        #and the page is that file, which is the point: the site's own picture for it is what was wrong
+        args.file = name
+        metadata = read_metadata(folder)
+        fixes = fixes_in(metadata)
     if not (args.at or args.file or args.clear):
         print("{0}: {1} page fix(es) by hand".format(folder, len(fixes)))
         for fix in fixes:
