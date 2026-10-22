@@ -3,7 +3,9 @@
 #in the metadata, so every alignment after - and a fresh one from nothing - keeps them.
 import json
 import os
+import struct
 import zipfile
+import zlib
 
 import pytest
 
@@ -167,6 +169,51 @@ def test_a_dry_run_lines_up_and_writes_nothing(repeat, library, chapters):
     code, out = ch("align", repeat, "--root", library, "--dry-run")
     assert "a dry run: nothing was written" in out, out.strip().splitlines()[-2:]
     assert not os.path.exists(chapters.alignment_path(chapters.index_path(str(repeat), str(library), None)))
+
+
+def png(width, height, pad):
+    #a picture of this shape, padded out to a chosen size so two of different shapes can match to the byte
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+    head = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    body = chunk(b"IDAT", zlib.compress(b"\x00" * (1 + 3 * width) * height)) + chunk(b"IEND", b"")
+    return head + chunk(b"tEXt", b"x" * max(0, pad - len(head) - len(body) - 12)) + body
+
+
+def size_twins(library, chapters, shapes):
+    #page 3's site size is page 1's file's to the byte, and its own file is another size: the shape of a
+    #site a scrape's copy of page 3 differs from, beside a page that happens to match it
+    files = {"p1.png": png(*shapes[0], 2000), "p2.png": png(40, 40, 2100), "p3.png": png(*shapes[1], 2300),
+             "p4.png": png(40, 40, 2400)}
+    folder = library / "Uncompressed" / "Toy"
+    folder.mkdir()
+    for name, data in files.items():
+        (folder / name).write_bytes(data)
+    sizes = {name: len(data) for name, data in files.items()}
+    write_meta(folder, {"settings": {"url": SITE + "4", "cbz_path": "CBZs/Toy/Toy.cbz"}, "history": {}})
+    write_index(chapters.index_path(str(folder), str(library), None),
+                [{"n": n, "url": SITE + str(n), "src": SITE + "img/p{0}.png".format(n), "file": "p{0}.png".format(n),
+                  "title": "Toy", "bytes": sizes["p1.png"] if n == 3 else sizes["p{0}.png".format(n)]}
+                 for n in range(1, 5)])
+    return folder
+
+
+def test_a_size_shared_by_pictures_of_different_shapes_is_chance(library, chapters):
+    #two differently drawn pages that happen to match to the byte: what the two files here hold says the
+    #site's size for page 3 is not page 1's picture
+    folder = size_twins(library, chapters, [(60, 20), (20, 60)])
+    code, out = ch("align", folder, "--root", library)
+    assert code == 0 and "NOT settled" not in out, out.strip().splitlines()[-4:]
+    assert "1 page(s) the site gives the size of another file here, which is a different shape" in out, \
+        [line for line in out.splitlines() if "chance" in line]
+
+
+def test_a_size_shared_by_pictures_of_one_shape_is_still_doubted(library, chapters):
+    #the same shape is what a site serving page 1's picture again at page 3 looks like, and what every page
+    #of a comic drawn to one size looks like: it proves nothing, so the doubt stands
+    folder = size_twins(library, chapters, [(40, 60), (40, 60)])
+    code, out = ch("align", folder, "--root", library)
+    assert code == 1 and "page 3" in out and "its size belongs to" in out, out.strip().splitlines()[-4:]
 
 
 def test_show_json_says_how_each_page_was_matched_and_what_is_wrong(repeat, library):

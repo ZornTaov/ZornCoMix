@@ -4,6 +4,7 @@
 import os
 
 from comiclib.chapters import pagefixes
+from comiclib.comicinfo import measure
 from comiclib.chapters.index import alignment_path, fill_sizes, index_path, read_index, remember_cache, save_alignment
 from comiclib.metadata import METADATA_FILE as metadata_file, now_stamp as time_stamp, read as read_metadata
 from comiclib.metadata import write as write_metadata
@@ -176,7 +177,32 @@ def anchor_kinds(pages, files, anchors, folder):
     return kinds
 
 
-def verify(folder, files, pages, aligned, held=None, trusted=()):
+def shape_on_disk(folder, name):
+    #a held file's (width, height), from its first bytes; None when it does not say
+    try:
+        with open(os.path.join(folder, name), 'rb') as f:
+            return measure(lambda count: (f.seek(0), f.read(count))[1])
+    except OSError:
+        return None
+
+
+def same_picture_could_be(folder, placed, others):
+    #whether the file placed at a page could be the same picture as a file of the size the site gives it.
+    #if the site really serves that other page's picture here, a scrape saved that picture here too, so the
+    #two are one picture and one shape. two shapes are two pictures, and the size they share is chance - in
+    #a comic of thousands of differently drawn pages, two will match to the byte. a shape that cannot be read,
+    #or the same shape, as every page of a comic drawn to one size has, says nothing, and the doubt stands
+    mine = shape_on_disk(folder, placed)
+    if mine is None:
+        return True
+    for other in others:
+        theirs = shape_on_disk(folder, other)
+        if theirs is None or theirs == mine:
+            return True
+    return False
+
+
+def verify(folder, files, pages, aligned, held=None, trusted=(), chance=None):
     #every placement can be checked, not just the anchored ones: the file on disk should be as big as the
     #site says its image is. a size that differs is not proof of anything on its own - a comic that moved
     #host years ago serves re-encoded images that no longer match what was downloaded then. what does
@@ -195,9 +221,12 @@ def verify(folder, files, pages, aligned, held=None, trusted=()):
             continue
         if held.get(name) == page["bytes"]:
             agree += 1
-        elif page["bytes"] in held_sizes:
+        elif page["bytes"] in held_sizes and same_picture_could_be(folder, name, held_sizes[page["bytes"]][:4]):
             conflict.append((page["n"], name, held_sizes[page["bytes"]][:2]))
         else:
+            #chance, when given, learns the pages whose size is another file's by coincidence alone
+            if chance is not None and page["bytes"] in held_sizes:
+                chance.append((page["n"], name, held_sizes[page["bytes"]][:2]))
             changed += 1
     return agree, changed, conflict
 
@@ -277,7 +306,8 @@ def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), r
             if len(astray) > 6:
                 print("      ... and {0} more".format(len(astray) - 6))
             print("      chapters.py refetch {0} --page <n> --as-named puts one right.".format(folder))
-    agree, changed, conflict = verify(folder, files, pages, aligned, held, pinned)
+    chance = []
+    agree, changed, conflict = verify(folder, files, pages, aligned, held, pinned, chance)
     #a size says where a page is only where sizes say anything at all. a site that re-exported its whole
     #archive - every image re-encoded at four fifths the size - leaves every one of them different, and then
     #a size that happens to match some other file among thousands is a coincidence rather than a page in
@@ -290,6 +320,11 @@ def describe(folder, pages, files, aligned, how, anchors, trouble, rescued=(), r
         print("      page {0:<5} placed at {1:<26} but its size belongs to {2}".format(n, name[:26], others))
     if len(conflict) > 8:
         print("      ... and {0} more".format(len(conflict) - 8))
+    if chance:
+        print("  {0} page(s) the site gives the size of another file here, which is a different shape of "
+              "picture, so the size is chance: {1}".format(
+                  len(chance), ", ".join("page {0} ({1}, like {2})".format(n, name, others[0])
+                                         for n, name, others in chance[:4])))
     if conflict and not sizes_tell:
         print("      only {0} of {1} sizes match the site at all, so these are coincidences among "
               "thousands of files rather than pages out of place.".format(agree, agree + changed))
