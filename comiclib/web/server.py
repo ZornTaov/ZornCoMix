@@ -23,7 +23,7 @@ from comiclib.web.elementpaths import element_settings, save_elements
 from comiclib.web.jobs import LogTee, Runner
 from comiclib.web.uploads import KINDS as upload_kinds, discard, pending, plan, receive
 from comiclib.web.views import chapters_label, comic_detail, config_view, find_comic, is_running, job_view
-from comiclib.web.views import is_moving, is_rewinding, walk_needed
+from comiclib.web.views import is_moving, is_rewinding, is_walking, walk_needed
 from comiclib.web.views import library_view, walked_pages
 
 #the page, read afresh on every request so editing it needs no restart. it stays beside the scripts, where
@@ -398,9 +398,33 @@ def make_handler(runner, args, uc, tee):
                 elif is_rewinding(runner, name):
                     self.reply({"error": "that comic is going back to an earlier page; reopen it once that "
                                          "has finished"}, 409)
+                elif is_walking(runner, name):
+                    self.reply({"error": "that comic is waiting to be walked again; say this once the walk has "
+                                         "finished"}, 409)
                 else:
                     status, result = fix_page(uc.with_config(args), comic, body)
                     self.reply(result, status)
+            elif path == "/api/walkagain":
+                name = str(body.get("name") or "")
+                comic = find_comic(args, uc, name)
+                if comic is None:
+                    self.reply({"error": "no comic named {0}".format(name)}, 404)
+                elif (comic.metadata.get("settings") or {}).get("scraper"):
+                    self.reply({"error": "another program scrapes this comic, through its plugin, and it cannot "
+                                         "be walked; its pages are numbered as the plugin's runs took them in"}, 400)
+                elif is_running(runner, name):
+                    self.reply({"error": "that comic is being scraped right now"}, 409)
+                elif is_moving(runner, name):
+                    self.reply({"error": "that comic is being moved; reopen it once the move has finished"}, 409)
+                elif is_rewinding(runner, name):
+                    self.reply({"error": "that comic is going back to an earlier page; walk it once that has "
+                                         "finished"}, 409)
+                elif is_walking(runner, name) or (runner.current is not None
+                                                  and runner.current.label == chapters_label(name)):
+                    self.reply({"error": "that comic is already being walked"}, 409)
+                else:
+                    job = runner.submit_walk(name)
+                    self.reply({"queued": job.id, "label": job.label})
             elif path == "/api/discardwalk":
                 name = str(body.get("name") or "")
                 comic = find_comic(args, uc, name)

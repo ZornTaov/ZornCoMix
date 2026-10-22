@@ -144,6 +144,19 @@ def is_rewinding(runner, name):
                for job in [runner.current] + list(runner.waiting))
 
 
+def walk_label(name):
+    #what a job walking a comic again from its first page is called, which is also how one queued is found again
+    return "Walk again: {0}".format(name)
+
+
+def is_walking(runner, name):
+    #a walk from the start queued or under way. it sets the comic's record aside when its turn comes, so a page
+    #fix said in between would be lined up against a record about to go
+    label = walk_label(name)
+    return any(job is not None and job.kind == "walk" and job.label == label
+               for job in [runner.current] + list(runner.waiting))
+
+
 def read_metadata(path):
     metadata = sidecar.load(path)
     #an old sidecar is brought up to date first, so the edit lands in the one place a run reads it

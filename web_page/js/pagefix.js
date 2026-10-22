@@ -290,4 +290,45 @@ $("pf-reset").addEventListener("click", () => {
   if (fixing.fixes.length && confirm("Undo every page fix said for this comic? The comic is lined up again without them.")) pfSend({ clear: true });
 });
 $("pf-align").addEventListener("click", () => pfSend({ align: true }, "Lining the comic up again…"));
+
+//a walk from the start is a queued job of minutes, not an answer to wait on: the dialog follows it while it is
+//open, saying what the walk is doing, and reads the pages again once it is done
+let pfWalking = null;
+async function pfFollowWalk(id) {
+  pfWalking = id;
+  const msg = $("pf-msg");
+  while (pfWalking === id && $("pagefix").open) {
+    let state;
+    try {
+      state = await (await fetch(api("/api/state"))).json();
+    } catch (error) {
+      await new Promise((done) => setTimeout(done, 3000));
+      continue;
+    }
+    const live = [state.current].concat(state.waiting || []).find((job) => job && job.id === id);
+    if (live) {
+      msg.className = "msg";
+      msg.textContent = live.started ? `Walking: ${live.doing || "starting…"}` : "Waiting its turn behind what is running…";
+      await new Promise((done) => setTimeout(done, 2000));
+      continue;
+    }
+    const done = (state.history || []).find((job) => job.id === id) || {};
+    pfWalking = null;
+    try { await pfLoad(); } catch (error) { /* said below either way */ }
+    msg.className = done.error ? "msg bad" : fixing.settled ? "msg good" : "msg";
+    msg.textContent = done.error ? `The walk stopped: ${done.error}` : `Walked again: ${done.outcome || "done"}.`;
+    return;
+  }
+}
+$("pf-walk").addEventListener("click", async () => {
+  if (!confirm("Set this comic's record of which page is which aside, and walk the comic again from its first page? "
+    + "Nothing is downloaded, but every page is visited, which takes a while on a long comic. Page fixes said by hand are kept.")) return;
+  try {
+    const queued = await post("/api/walkagain", { name: fixing.name });
+    pfFollowWalk(queued.queued);
+  } catch (error) {
+    $("pf-msg").className = "msg bad";
+    $("pf-msg").textContent = error.message;
+  }
+});
 $("pf-close").addEventListener("click", () => $("pagefix").close());

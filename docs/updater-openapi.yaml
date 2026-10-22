@@ -890,11 +890,58 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          $ref: "#/components/responses/Conflict"
+          description: The comic is being scraped, moved, taken back or walked again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "413":
           description: The picture is too big to send this way
         "500":
           $ref: "#/components/responses/ServerError"
+
+  /api/walkagain:
+    post:
+      tags: [Chapters]
+      summary: Walk a comic again from its first page
+      description: >-
+        Queues a job that sets the comic's record of which page is which (and its alignment) aside as
+        .replaced-<time>, walks the comic from its first page saving nothing, and lines it up: chapters.py index
+        --restart. For a record nothing else can put right, such as one a scrape folded several pictures of an
+        address into one line of. Page fixes are kept. Its outcome under Recent says how many pages were walked and
+        whether the comic settled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: integer
+                  label:
+                    type: string
+        "400":
+          description: The comic is scraped by a plugin and cannot be walked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/insert:
     post:
