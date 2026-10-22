@@ -8,8 +8,11 @@ dialog[open] { display: flex; overflow: hidden; }
   page picked by number and name, and one height whichever tab is shown, so moving between them does not jump.
   the settings keep the width a form reads at*/
 dialog#editor { width: min(1100px, calc(100vw - 32px)); height: min(860px, calc(100vh - 32px)); }
-#editor .tab-panel[data-panel="settings"], #editor .tab-panel[data-panel="comicinfo"] { max-width: 760px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+#editor .tab-panel[data-panel="settings"], #editor .tab-panel[data-panel="comicinfo"] { max-width: 760px; margin: 0 auto; }
+#editor .tab-panel[data-panel="history"] { max-width: 900px; margin: 0 auto; }
+/*a tab with nothing to press and nothing said, History most often, has no foot at all rather than an empty bar*/
+#editor .edit-foot:not(:has(> :not([hidden]):not(.msg:empty))) { display: none; }
+.tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); }
 .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted);
   padding: 8px 12px 7px; }
 .tabs button:hover { color: var(--ink); }
