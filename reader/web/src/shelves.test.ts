@@ -87,6 +87,23 @@ describe("recently updated", () => {
     expect(recentlyUpdated([grown], now, [grown])).toEqual([]);
   });
 
+  it("keeps comics for as many days as the library is set to, and leaves the shelf out at 0", () => {
+    const list = [comic({ id: "a", title: "a", grew: now - 20 * day, added: 1 }), comic({ id: "b", title: "b", grew: now - 2 * day, added: 1 })];
+    expect(titles(recentlyUpdated(list, now, [], { recentDays: 30, clearRead: false }))).toEqual(["b", "a"]);
+    expect(titles(recentlyUpdated(list, now, [], { recentDays: 1, clearRead: false }))).toEqual([]);
+    expect(recentlyUpdated(list, now, [], { recentDays: 0, clearRead: false })).toEqual([]);
+  });
+
+  it("takes off a comic whose new pages were read, when the library says to", () => {
+    const list = [
+      comic({ id: "read", title: "read", grew: now - day, added: 2, position: 9, unread: 0 }),
+      comic({ id: "part", title: "part", grew: now - day, added: 2, position: 8, unread: 1 }),
+      comic({ id: "never", title: "never", grew: now - day, added: 2 }),
+    ];
+    expect(titles(recentlyUpdated(list, now, [], { recentDays: 14, clearRead: true }))).toEqual(["part", "never"]);
+    expect(titles(recentlyUpdated(list, now, [], { recentDays: 14, clearRead: false }))).toEqual(["read", "part", "never"]);
+  });
+
   it("says what it gained short enough for a cover's corner, and in full for its tooltip", () => {
     expect(grewBy(1, now - 60, now)).toEqual({ short: "+1 today", long: "+1 page today" });
     expect(grewBy(2, now - day - 60, now)).toEqual({ short: "+2 yesterday", long: "+2 pages yesterday" });

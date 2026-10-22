@@ -144,6 +144,17 @@ def test_settings_are_kept_for_every_comic_and_for_one(library, client):
     assert api.get("/api/comics/{0}".format(comic_id)).json()["settings"] == {"direction": "rtl"}
 
 
+def test_the_librarys_settings_are_kept_apart_and_come_with_the_library(library, client):
+    single(library)
+    api, _ = client()
+    assert api.get("/api/library").json()["settings"] == {}
+    api.put("/api/library/settings", json={"recentDays": 30, "clearRead": True})
+    assert api.get("/api/library/settings").json() == {"recentDays": 30, "clearRead": True}
+    assert api.get("/api/library").json()["settings"] == {"recentDays": 30, "clearRead": True}
+    assert api.get("/api/settings").json() == {}
+    assert api.put("/api/library/settings", json=[1, 2]).status_code == 400
+
+
 def test_a_comic_in_no_series_has_no_series_settings(library, client):
     comic_folder(library, "MyComic", 2, settings={"cbz": False})
     api, _ = client()

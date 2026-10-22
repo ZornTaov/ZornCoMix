@@ -724,6 +724,42 @@
         }
       }
     },
+    "/api/library/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "How the library's shelves are drawn",
+        "operationId": "library_settings_api_library_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Keep how the library's shelves are drawn",
+        "operationId": "save_library_settings_api_library_settings_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/comics/{comic_id}/settings": {
       "put": {
         "summary": "Save Comic Settings",

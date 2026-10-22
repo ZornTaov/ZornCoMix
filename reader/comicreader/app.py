@@ -87,6 +87,7 @@ def create_app(config=None, scan_in_background=True):
         progress = store.every_progress()
         growth = store.growth()
         return {"scanned": library.scanned, "covers": covers.group_covers(library),
+                "settings": store.settings("library"),
                 "comics": sorted((library.summary(comic, progress.get(comic["id"]), growth.get(comic["id"]))
                                   for comic in library.comics.values()), key=lambda each: each["title"].lower())}
 
@@ -369,6 +370,20 @@ def create_app(config=None, scan_in_background=True):
     async def save_global_settings(request: Request):
         store.save_settings("global", await request.json())
         return store.settings("global")
+
+    #how the library's shelves are drawn, apart from how a comic is read: the page checks what it is given
+    #and keeps only what it knows, as it does with the reading settings
+    @app.get("/api/library/settings", summary="How the library's shelves are drawn", tags=["settings"])
+    def library_settings():
+        return store.settings("library")
+
+    @app.put("/api/library/settings", summary="Keep how the library's shelves are drawn", tags=["settings"])
+    async def save_library_settings(request: Request):
+        given = await request.json()
+        if not isinstance(given, dict):
+            raise HTTPException(400, "Send the library's settings as one JSON object.")
+        store.save_settings("library", given)
+        return store.settings("library")
 
     @app.put("/api/comics/{comic_id}/settings")
     async def save_comic_settings(comic_id: str, request: Request):
