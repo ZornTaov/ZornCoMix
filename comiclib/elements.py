@@ -179,11 +179,23 @@ def test_ele_get(driver,element): #this runs through all of the possible next el
         return False
 
 
+def source_of(one):
+    #the address of the picture an element stands for. a site that shows each page small, linked to the
+    #page at full size, is scraped by an image path that picks out the link itself (//a[img]), so a link's
+    #href is the picture. only a link the path chose: the link an <img> merely sits in is, on most comic
+    #themes, the way to the next page, and is never asked about. src is asked first, since nearly every
+    #match is an <img> and the tag would be one more round trip to the browser for each
+    src = one.get_attribute('src')
+    if not src and (one.tag_name or "").lower() == "a":
+        return one.get_attribute('href')
+    return src
+
+
 def ele_get(driver,element):
     try: #tries the path to see if it is valid
         element2 = driver.find_element(By.XPATH, element)
         #gets the source url of the image
-        src = element2.get_attribute('src')
+        src = source_of(element2)
         return src
     except se.NoSuchElementException: #if path is not valid with this error, false is returned, making the for loop try again
         if verbose: print("\nThe element {0} src could not be found.".format(element))
@@ -201,7 +213,7 @@ def ele_get_all(driver,element):
     srcs = []
     for one in found:
         try:
-            src = one.get_attribute('src')
+            src = source_of(one)
         except (se.StaleElementReferenceException, AttributeError):
             continue
         #the same image twice on one page is one page of the comic, however the markup repeats it
