@@ -252,6 +252,22 @@ def leaves_the_site(driver, one):
     return not (there == ours or there.endswith("." + ours) or ours.endswith("." + there))
 
 
+def points_here(driver, one):
+    #whether pressing this would only load the page the browser is on again
+    try:
+        href = href_of(one)
+        here = driver.current_url
+    except (se.WebDriverException, AttributeError):
+        return False
+    if not href or not here:
+        return False
+
+    def plain(url):
+        url = re.sub(r'^https?://(www\.)?', '', urldefrag(url)[0].strip(), flags=re.I)
+        return url.rstrip('/').lower()
+    return plain(href) == plain(here)
+
+
 def next_element(driver,element):
     #the element a next path points at: the first one that can be seen, rather than simply the first. a
     #page can hold a hidden copy of its own navigation - a next button at no size at all, beside the one
@@ -268,6 +284,18 @@ def next_element(driver,element):
     if len(staying) < len(found) and verbose:
         print("\nThe next button {0} leads to another site, so it is not this comic's.".format(element))
     found = staying
+    #a page whose navigation is drawn twice, above the comic and below it, can have one copy written wrong:
+    #the top next button pointing back at the page it is on while the bottom one goes on. pressed first, the
+    #wrong one stays here, which is how the newest page looks, and the run calls the comic caught up there
+    #every day. so a match leading back here gives way to one that leads on - only to one: where every match
+    #leads here, a button run by a script behind href="#", or the newest page, nothing changes
+    if len(found) > 1:
+        onward = [one for one in found if not points_here(driver, one)]
+        if onward and len(onward) < len(found):
+            if verbose:
+                print("\nThe next button {0} also matches a link back to this page, which is passed over.".format(
+                    element))
+            found = onward
     for one in found:
         try:
             if one.is_displayed():
@@ -330,7 +358,9 @@ def next_ele_get(driver,element):
             if way.startswith("a plain"):
                 found.click()
             elif way.startswith("a click after"):
-                ready = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, element)))
+                #the element chosen above, not the path's first match again, which can be the hidden copy
+                #or the one leading back to this page that next_element passed over
+                ready = WebDriverWait(driver, 10).until(EC.element_to_be_clickable(found))
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", ready)
                 sleep(0.2)
                 ready.click()
