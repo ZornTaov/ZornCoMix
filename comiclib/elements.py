@@ -15,6 +15,10 @@ from comiclib.pages import address_name
 
 #set by the scrape from its --verbose, for saying each path that did not match
 verbose = False
+#set by the scrape: passed(here, there), whether the page at address there is one it has already been past -
+#saved this run, or put before here by the comic's record of which page is which. None asks only whether a
+#link leads back to the page it is on
+passed = None
 
 #the paths the scripts ship with: one for each of the ways comic sites most often mark up a page, and
 #examples to write a library's own from, more than a list to rely on. laid out as element_paths.json is,
@@ -252,8 +256,9 @@ def leaves_the_site(driver, one):
     return not (there == ours or there.endswith("." + ours) or ours.endswith("." + there))
 
 
-def points_here(driver, one):
-    #whether pressing this would only load the page the browser is on again
+def leads_back(driver, one):
+    #whether pressing this would only load the page the browser is on again, or one the scrape has already
+    #been past
     try:
         href = href_of(one)
         here = driver.current_url
@@ -265,7 +270,9 @@ def points_here(driver, one):
     def plain(url):
         url = re.sub(r'^https?://(www\.)?', '', urldefrag(url)[0].strip(), flags=re.I)
         return url.rstrip('/').lower()
-    return plain(href) == plain(here)
+    if plain(href) == plain(here):
+        return True
+    return bool(passed and passed(here, href))
 
 
 def next_element(driver,element):
@@ -285,16 +292,18 @@ def next_element(driver,element):
         print("\nThe next button {0} leads to another site, so it is not this comic's.".format(element))
     found = staying
     #a page whose navigation is drawn twice, above the comic and below it, can have one copy written wrong:
-    #the top next button pointing back at the page it is on while the bottom one goes on. pressed first, the
-    #wrong one stays here, which is how the newest page looks, and the run calls the comic caught up there
-    #every day. so a match leading back here gives way to one that leads on - only to one: where every match
-    #leads here, a button run by a script behind href="#", or the newest page, nothing changes
+    #the top next button pointing back at the page it is on, or at the page before, while the bottom one goes
+    #on. pressed first, the wrong one stays here, which is how the newest page looks, or reaches a page
+    #already saved, which is how a comic that wraps round looks - and either way the run called the comic
+    #caught up there every day. so a match leading back gives way to one that leads on - only to one: where
+    #every match leads back, a button run by a script behind href="#", the newest page, or a comic that
+    #really does wrap to its start, nothing changes
     if len(found) > 1:
-        onward = [one for one in found if not points_here(driver, one)]
+        onward = [one for one in found if not leads_back(driver, one)]
         if onward and len(onward) < len(found):
             if verbose:
-                print("\nThe next button {0} also matches a link back to this page, which is passed over.".format(
-                    element))
+                print("\nThe next button {0} also matches a link back to a page already passed, which is "
+                      "passed over.".format(element))
             found = onward
     for one in found:
         try:
