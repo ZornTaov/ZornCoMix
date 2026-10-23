@@ -38,7 +38,7 @@ def adopt(root, name, *more, library=None):
 
 def named(path):
     #what the archive holds of the comic's folder. every archive also has a ComicInfo written for it, which
-    #tests/test_comicinfo.py looks at
+    #tests/archives/test_comicinfo.py looks at
     with zipfile.ZipFile(str(path)) as zf:
         assert "ComicInfo.xml" in zf.namelist(), zf.namelist()
         return sorted(name for name in zf.namelist() if name != "ComicInfo.xml")
