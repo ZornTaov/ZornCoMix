@@ -267,6 +267,7 @@ def setup():
     verbose = args.verbose
     #the parts that find elements and fetch images say what they tried only when asked
     elements.verbose = download.verbose = verbose
+    elements.passed = passed_already
 
     #what the comic already holds, read before anything is saved, so a backwards next link is caught
     #against the pages of earlier runs rather than only the ones this run has written
@@ -308,6 +309,14 @@ def setup():
         next_xpath = args.next_path
 
     return driver, increment, args
+
+
+def passed_already(here, there):
+    #what the scrape knows of a page a next button points at, for choosing between two that disagree: one
+    #this run has saved, or one the record of which page is which puts before this page, is behind it
+    if same_page(there) in {same_page(url) for url in visited_urls}:
+        return True
+    return kept_index.went_back(here, there) is True
 
 
 def came_round(left, reached):
