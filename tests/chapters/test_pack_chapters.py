@@ -285,6 +285,16 @@ def test_replacing_gives_up_the_single_archive_once_everything_checks_out(tiny, 
     assert inside == pages, sorted(pages - inside)
 
 
+def test_replacing_by_hand_without_a_root_finds_the_single_archive(tiny):
+    #run by hand from anywhere, with no --root: the archive's path in the settings is from the folder holding
+    #Uncompressed, not from the folder above the comic - where it was looked for, not found, and kept quietly
+    done = run("chapters.py", "pack", tiny.comic, "--replace", cwd=tiny.comic)
+    assert done.returncode == 0, done.stdout[-300:]
+    assert "Removed" in done.stdout and not tiny.single.exists(), done.stdout[-300:]
+    assert read_meta(tiny.comic)["chapters"]["folder"] == "CBZs/Group/Tiny", \
+        "the shelf kept relative to the library, as it is with --root"
+
+
 def test_what_the_single_archive_holds_besides_the_pages_is_kept(tiny):
     #another scraper packed a copy of itself in with the pages, and the folder never had it
     with zipfile.ZipFile(str(tiny.single), "a") as zf:

@@ -9,6 +9,7 @@ import os
 import shutil
 from datetime import datetime
 
+from comiclib import cbz
 from comiclib.chapters.index import (aside_target, alignment_path, counted_from_nought, index_path,
                                      numbered_files, read_index, write_lines)
 from comiclib.chapters.links import same_page
@@ -140,9 +141,7 @@ def plan(folder, args):
                          and (name.endswith(".cbz") or os.path.splitext(name)[1].lower() in COVER_ENDINGS)]
     single = None
     if not chapters and settings.get("cbz") is not False and settings.get("cbz_path"):
-        single = settings["cbz_path"]
-        if args.root and not os.path.isabs(single):
-            single = os.path.join(args.root, single.replace("/", os.sep))
+        single = cbz.resolved(settings["cbz_path"], folder, args.root)
         if not os.path.exists(single):
             single = None
 

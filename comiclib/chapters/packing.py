@@ -36,12 +36,12 @@ def chapter_folder(folder, metadata, root=None, given=None):
     #anywhere else would write every chapter a second time beside the first
     recorded = (metadata.get("chapters") or {}).get("folder")
     if recorded:
-        full = recorded if os.path.isabs(recorded) or not root else os.path.join(root, recorded.replace('/', os.sep))
-        if os.path.isabs(full) and os.path.isdir(full):
+        full = cbz.resolved(recorded, folder, root)
+        if os.path.isdir(full):
             return full
-    cbz = (metadata.get("settings") or {}).get("cbz_path")
-    if cbz:
-        full = cbz if os.path.isabs(cbz) or not root else os.path.join(root, cbz.replace('/', os.sep))
+    single = (metadata.get("settings") or {}).get("cbz_path")
+    if single:
+        full = cbz.resolved(single, folder, root)
     else:
         #a comic adopted or uploaded with no archive named is filed by the same rule a scrape files its single
         #archive by: under Uncompressed, so on the CBZs shelf beside it. going straight to a folder beside the
@@ -354,7 +354,12 @@ def pack(folder, args):
         return 1
     metadata = read_metadata(folder)
     block = metadata.setdefault("chapters", {})
-    block["folder"] = os.path.relpath(shelf, args.root).replace(os.sep, '/') if args.root else shelf
+    #kept relative to the library, as every path in the settings is, so the library can move - but whole for a
+    #shelf on another drive, which no relative path reaches
+    try:
+        block["folder"] = os.path.relpath(shelf, cbz.library_root(folder, args.root)).replace(os.sep, '/')
+    except ValueError:
+        block["folder"] = shelf
     block["packed"] = time_stamp()
     if drawn.used:
         block["standins"] = drawn.used
@@ -479,12 +484,8 @@ def keep_extras(full, folder, keep_in):
 
 
 def drop_single(folder, metadata, args, shelf=None):
-    cbz = (metadata.get("settings") or {}).get("cbz_path")
-    if not cbz:
-        return 0
-    full = cbz if os.path.isabs(cbz) else os.path.join(args.root or os.path.dirname(folder),
-                                                       cbz.replace('/', os.sep))
-    if not os.path.exists(full):
+    full = cbz.resolved((metadata.get("settings") or {}).get("cbz_path"), folder, args.root)
+    if not full or not os.path.exists(full):
         return 0
     if not keep_extras(full, folder, shelf or os.path.dirname(full)):
         return 1
@@ -551,10 +552,7 @@ def retell_one(folder, args):
         return 0
     if (metadata.get("chapters") or {}).get("folder"):
         return retell_chapters(folder, metadata, args)
-    archive = settings.get("cbz_path")
-    if archive and not os.path.isabs(archive):
-        archive = os.path.join(args.root or os.path.dirname(folder), archive.replace('/', os.sep))
-    archive = archive or cbz.default_path(folder)
+    archive = cbz.resolved(settings.get("cbz_path"), folder, args.root) or cbz.default_path(folder)
     if not os.path.exists(archive):
         return 0
     names = sorted(name for name in file_sizes(folder) if name != metadata_file)

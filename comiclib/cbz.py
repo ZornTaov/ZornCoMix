@@ -41,6 +41,26 @@ def shelf(folder):
     return None, None
 
 
+def library_root(folder, root=None):
+    #the folder a comic's settings name its archives from, when no one has said: the one holding its
+    #Uncompressed tree, since output and cbz_path are kept relative to the library. the folder above the
+    #comic was guessed before, which for Uncompressed/<comic> is Uncompressed itself - its archive looked for
+    #at Uncompressed/CBZs/..., not found, and taken for one that was never there
+    if root:
+        return root
+    tree, found = shelf(folder)
+    if tree:
+        return os.path.dirname(tree)
+    return os.path.dirname(os.path.abspath(folder))
+
+
+def resolved(path, folder, root=None):
+    #a path out of a comic's settings, as a place on disk
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.join(library_root(folder, root), path.replace('/', os.sep))
+
+
 def default_path(folder):
     #where a comic's archive goes when nothing says. a library that keeps its pages under an Uncompressed
     #folder and its archives in a matching CBZs tree gets them filed there, so the plain command puts a new
