@@ -15,6 +15,10 @@ from comiclib.pages import address_name
 
 #set by the scrape from its --verbose, for saying each path that did not match
 verbose = False
+#set by the scrape: passed(here, there), whether the page at address there is one it has already been past -
+#saved this run, or put before here by the comic's record of which page is which. None asks only whether a
+#link leads back to the page it is on
+passed = None
 
 #the paths the scripts ship with: one for each of the ways comic sites most often mark up a page, and
 #examples to write a library's own from, more than a list to rely on. laid out as element_paths.json is,
@@ -179,11 +183,23 @@ def test_ele_get(driver,element): #this runs through all of the possible next el
         return False
 
 
+def source_of(one):
+    #the address of the picture an element stands for. a site that shows each page small, linked to the
+    #page at full size, is scraped by an image path that picks out the link itself (//a[img]), so a link's
+    #href is the picture. only a link the path chose: the link an <img> merely sits in is, on most comic
+    #themes, the way to the next page, and is never asked about. src is asked first, since nearly every
+    #match is an <img> and the tag would be one more round trip to the browser for each
+    src = one.get_attribute('src')
+    if not src and (one.tag_name or "").lower() == "a":
+        return one.get_attribute('href')
+    return src
+
+
 def ele_get(driver,element):
     try: #tries the path to see if it is valid
         element2 = driver.find_element(By.XPATH, element)
         #gets the source url of the image
-        src = element2.get_attribute('src')
+        src = source_of(element2)
         return src
     except se.NoSuchElementException: #if path is not valid with this error, false is returned, making the for loop try again
         if verbose: print("\nThe element {0} src could not be found.".format(element))
@@ -201,7 +217,7 @@ def ele_get_all(driver,element):
     srcs = []
     for one in found:
         try:
-            src = one.get_attribute('src')
+            src = source_of(one)
         except (se.StaleElementReferenceException, AttributeError):
             continue
         #the same image twice on one page is one page of the comic, however the markup repeats it
@@ -240,6 +256,25 @@ def leaves_the_site(driver, one):
     return not (there == ours or there.endswith("." + ours) or ours.endswith("." + there))
 
 
+def leads_back(driver, one):
+    #whether pressing this would only load the page the browser is on again, or one the scrape has already
+    #been past
+    try:
+        href = href_of(one)
+        here = driver.current_url
+    except (se.WebDriverException, AttributeError):
+        return False
+    if not href or not here:
+        return False
+
+    def plain(url):
+        url = re.sub(r'^https?://(www\.)?', '', urldefrag(url)[0].strip(), flags=re.I)
+        return url.rstrip('/').lower()
+    if plain(href) == plain(here):
+        return True
+    return bool(passed and passed(here, href))
+
+
 def next_element(driver,element):
     #the element a next path points at: the first one that can be seen, rather than simply the first. a
     #page can hold a hidden copy of its own navigation - a next button at no size at all, beside the one
@@ -256,6 +291,20 @@ def next_element(driver,element):
     if len(staying) < len(found) and verbose:
         print("\nThe next button {0} leads to another site, so it is not this comic's.".format(element))
     found = staying
+    #a page whose navigation is drawn twice, above the comic and below it, can have one copy written wrong:
+    #the top next button pointing back at the page it is on, or at the page before, while the bottom one goes
+    #on. pressed first, the wrong one stays here, which is how the newest page looks, or reaches a page
+    #already saved, which is how a comic that wraps round looks - and either way the run called the comic
+    #caught up there every day. so a match leading back gives way to one that leads on - only to one: where
+    #every match leads back, a button run by a script behind href="#", the newest page, or a comic that
+    #really does wrap to its start, nothing changes
+    if len(found) > 1:
+        onward = [one for one in found if not leads_back(driver, one)]
+        if onward and len(onward) < len(found):
+            if verbose:
+                print("\nThe next button {0} also matches a link back to a page already passed, which is "
+                      "passed over.".format(element))
+            found = onward
     for one in found:
         try:
             if one.is_displayed():
@@ -318,7 +367,9 @@ def next_ele_get(driver,element):
             if way.startswith("a plain"):
                 found.click()
             elif way.startswith("a click after"):
-                ready = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, element)))
+                #the element chosen above, not the path's first match again, which can be the hidden copy
+                #or the one leading back to this page that next_element passed over
+                ready = WebDriverWait(driver, 10).until(EC.element_to_be_clickable(found))
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", ready)
                 sleep(0.2)
                 ready.click()
