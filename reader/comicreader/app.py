@@ -108,6 +108,8 @@ def create_app(config=None, scan_in_background=True):
                 "position": library.position(stream, progress), "seen": progress["seen"] if progress else 0,
                 "part": progress["part"] if progress else 0,
                 "chapters": stream["chapters"],
+                #the pages marked in it, beside the bookmarks its archives carry
+                "bookmarks": library.bookmarks(comic_id, stream),
                 #kept short: a comic of thousands of pages is one request, opened every time it is read
                 #the fifth is what a page held inside the archive as something other than a picture is
                 "pages": [[page["v"], page["w"], page["h"], 1 if page["standin"] else 0, page.get("media")]
@@ -340,6 +342,30 @@ def create_app(config=None, scan_in_background=True):
         comic_or_404(comic_id)
         store.forget_progress(comic_id)
         return {"ok": True}
+
+    def marked_page(comic, position):
+        stream = library.stream(comic)
+        if not stream["pages"]:
+            raise HTTPException(409, "the comic has no pages to mark")
+        return stream, max(0, min(position, len(stream["pages"]) - 1))
+
+    @app.put("/api/comics/{comic_id}/bookmarks", summary="Mark a page of a comic", tags=["bookmarks"],
+             description="Kept by the page itself, so the mark stays on it when the comic is renumbered. "
+                         "Answers every page marked in the comic now.")
+    async def add_bookmark(comic_id: str, request: Request):
+        comic = comic_or_404(comic_id)
+        body = await request.json()
+        stream, at = marked_page(comic, int(body.get("position", 0)))
+        store.save_bookmark(comic_id, stream["pages"][at]["key"], at)
+        return {"bookmarks": library.bookmarks(comic_id, stream)}
+
+    @app.delete("/api/comics/{comic_id}/bookmarks", summary="Take the mark off a page of a comic", tags=["bookmarks"],
+                description="Answers every page still marked in the comic.")
+    def remove_bookmark(comic_id: str, position: int):
+        comic = comic_or_404(comic_id)
+        stream, at = marked_page(comic, position)
+        store.forget_bookmarks(comic_id, library.bookmarks_on(comic_id, stream, at))
+        return {"bookmarks": library.bookmarks(comic_id, stream)}
 
     @app.put("/api/progress")
     async def save_many(request: Request):

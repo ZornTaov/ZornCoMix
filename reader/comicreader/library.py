@@ -145,6 +145,16 @@ def leading(here, records):
     return None
 
 
+def found_again(pages, key, position):
+    #where a page kept by what it is stands now: the same page nearest where it was, or, gone altogether,
+    #the number it had, as near as the comic still reaches
+    if key:
+        same = [at for at, page in enumerate(pages) if page["key"] == key]
+        if same:
+            return min(same, key=lambda at: abs(at - position))
+    return min(position, len(pages) - 1)
+
+
 def chapter_order(path):
     found = CHAPTER.match(os.path.basename(path))
     return (Decimal(found.group("number")) if found else Decimal(0), sort_key(os.path.basename(path)))
@@ -545,15 +555,24 @@ class Library:
         #where the reader is up to in a comic as it stands now. the page itself is what was remembered, not
         #its number: a comic renumbered, re-cut into chapters or with a page put in before it still opens on
         #the same page. the number is only for a page that is no longer there at all
-        pages = stream["pages"]
-        if not progress or not pages:
+        if not progress or not stream["pages"]:
             return 0
-        remembered = min(progress["position"], len(pages) - 1)
-        if progress.get("key"):
-            same = [at for at, page in enumerate(pages) if page["key"] == progress["key"]]
-            if same:
-                return min(same, key=lambda at: abs(at - progress["position"]))
-        return remembered
+        return found_again(stream["pages"], progress.get("key"), progress["position"])
+
+    def bookmarks(self, comic_id, stream):
+        #the pages marked in a comic where they are now, each once, in reading order. found again as a place
+        #is, so a mark stays on its page through a renumbering; two marks that come to one page are one
+        pages = stream["pages"]
+        if not pages:
+            return []
+        return sorted({found_again(pages, mark["key"], mark["position"])
+                       for mark in self.store.bookmarks(comic_id)})
+
+    def bookmarks_on(self, comic_id, stream, at):
+        #the marks that are on this page now, by what they were kept under
+        pages = stream["pages"]
+        return [mark["key"] for mark in self.store.bookmarks(comic_id)
+                if found_again(pages, mark["key"], mark["position"]) == at]
 
     def summary(self, comic, progress, growth=None):
         stream = self.stream(comic)

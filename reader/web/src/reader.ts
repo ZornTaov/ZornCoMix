@@ -3,7 +3,7 @@
 // changes, by page rather than by number, so it survives the comic growing or being renumbered.
 import { api, type StandIn } from "./api";
 import { attachGestures } from "./gestures";
-import { chapterOf, chapterTarget, keyAction, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, keyAction, type Bookmark, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted } from "./layout";
 import { Strip } from "./strip";
 import { clean, merged, scopeOf, type Scope, type Settings } from "./settings";
 import { coverMessage, el, esc, refusal } from "./dom";
@@ -25,6 +25,9 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   // a comic or series with settings of its own keeps changing those; otherwise a change is for every comic
   let scope: Scope = scopeOf(own, seriesOwn, inSeries);
   const starts = comic.chapters.map((chapter) => chapter.start);
+  // what the bookmarks menu lists, drawn by drawBookmarks. apart from starts: a page marked by the reader
+  // breaks no spread and is no chapter to jump to
+  let bookmarks: Bookmark[] = [];
   let shown = views(comic.pages, settings, starts);
   let view = viewOf(shown, clamp(startAt ?? comic.position, 0, comic.pages.length - 1));
   const images = new Map<number, HTMLImageElement>();
@@ -344,15 +347,47 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     player.classList.remove("hidden");
   }
 
-  // the menu: where you are, the chapters, and how the comic is shown
+  // the bookmarks menu, drawn again whenever a page is marked or unmarked: what the archives bookmark and the
+  // pages marked here. a comic with neither has none to show, only the button that marks one
+  function drawBookmarks() {
+    const select = menu.querySelector<HTMLSelectElement>('[data-act="bookmarks"]');
+    if (!select) return;
+    bookmarks = bookmarkList(comic.chapters, comic.bookmarks);
+    select.innerHTML = `<option value="" disabled>Bookmarks</option>` + bookmarks.map((mark, at) =>
+      `<option value="${at}">${mark.mine ? "★ " : ""}${esc(mark.title)}</option>`).join("");
+    select.hidden = !bookmarks.length;
+  }
+
+  // the pages on screen that are marked, which the button takes the mark off; none, and it marks the first
+  const markedHere = () => shown[view].filter((n) => comic.bookmarks.includes(n));
+
+  async function toggleBookmark() {
+    const button = menu.querySelector<HTMLButtonElement>('[data-act="mark"]')!;
+    button.disabled = true;
+    try {
+      const marked = markedHere();
+      let answer = { bookmarks: comic.bookmarks };
+      if (!marked.length) answer = await api.addBookmark(comic.id, shown[view][0]);
+      for (const n of marked) answer = await api.removeBookmark(comic.id, n);
+      comic.bookmarks = answer.bookmarks;
+      notify(marked.length ? "Bookmark taken off" : "Page bookmarked");
+    } catch (error) {
+      notify(refusal(error));
+    } finally {
+      button.disabled = false;
+    }
+    drawBookmarks();
+    updateMenu();
+  }
+
+  // the menu: where you are, the bookmarks, and how the comic is shown
   function buildMenu() {
-    const chapterOptions = comic.chapters.map((chapter, at) =>
-      `<option value="${at}">${esc(chapter.title)}</option>`).join("");
     menu.innerHTML = `
       <header>
         <button data-act="back" aria-label="Library">‹ Library</button>
         <div class="title">${esc(comic.title)}</div>
-        ${comic.chapters.length ? `<select data-act="chapter">${chapterOptions}</select>` : ""}
+        <select data-act="bookmarks" aria-label="Bookmarks" title="Bookmarks"></select>
+        <button data-act="mark"></button>
         <button data-act="info" aria-label="About this comic" title="About this comic">Info</button>
       </header>
       <footer>
@@ -381,8 +416,10 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       save(true);
       location.hash = `#/info/${comic.id}`;
     };
-    const chapterSelect = menu.querySelector<HTMLSelectElement>('[data-act="chapter"]');
-    if (chapterSelect) chapterSelect.onchange = () => { go(comic.chapters[Number(chapterSelect.value)].start); };
+    const bookmarkSelect = menu.querySelector<HTMLSelectElement>('[data-act="bookmarks"]')!;
+    bookmarkSelect.onchange = () => { go(bookmarks[Number(bookmarkSelect.value)].start); };
+    menu.querySelector<HTMLButtonElement>('[data-act="mark"]')!.onclick = toggleBookmark;
+    drawBookmarks();
     const slider = menu.querySelector<HTMLInputElement>('[data-act="slider"]')!;
     const pageBox = menu.querySelector<HTMLInputElement>('[data-act="page"]')!;
     slider.oninput = () => { pageBox.value = String(Number(slider.value) + 1); };
@@ -443,8 +480,20 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     disable("ahead", at === comic.pages.length - 1);
     disable("previousChapter", chapterTarget(starts, first, false) === null && !comic.previous);
     disable("nextChapter", chapterTarget(starts, first, true) === null && !comic.next);
-    const chapterSelect = menu.querySelector<HTMLSelectElement>('[data-act="chapter"]');
-    if (chapterSelect) chapterSelect.value = String(Math.max(0, chapterOf(starts, at)));
+    // the bookmark the reader is past, or the menu's own name before the first
+    const bookmarkSelect = menu.querySelector<HTMLSelectElement>('[data-act="bookmarks"]');
+    if (bookmarkSelect) {
+      const past = chapterOf(bookmarks.map((mark) => mark.start), first);
+      bookmarkSelect.value = past < 0 ? "" : String(past);
+    }
+    const marked = markedHere().length > 0;
+    const markButton = menu.querySelector<HTMLButtonElement>('[data-act="mark"]');
+    if (markButton) {
+      markButton.textContent = marked ? "★" : "☆";
+      markButton.title = marked ? "Take the bookmark off this page" : "Bookmark this page";
+      markButton.setAttribute("aria-label", markButton.title);
+      markButton.classList.toggle("on", marked);
+    }
     const label = (act: string, text: string) => {
       const button = menu.querySelector<HTMLButtonElement>(`[data-act="${act}"]`);
       if (button) button.textContent = text;

@@ -179,6 +179,8 @@ button {
 .menu .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .menu select { max-width: 45vw; background: #2a2724; border: 1px solid #444; border-radius: 8px; padding: 6px; }
 .menu button { background: #2a2724; border-color: #444; color: #eee; }
+/* the page on screen is bookmarked */
+.menu button.on { color: var(--accent); }
 /* the jumps either side of the slider, back on its left and on on its right, as its pages run */
 .slider-row { display: flex; gap: 6px; align-items: center; }
 .slider-row input { flex: 1; min-width: 60px; accent-color: var(--accent); }

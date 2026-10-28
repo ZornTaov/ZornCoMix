@@ -93,6 +93,8 @@ export interface Comic {
   part: number;
   seen: number;
   chapters: Chapter[];
+  // the pages marked in the reader, where they are now
+  bookmarks: number[];
   pages: Page[];
   settings: Partial<Settings>;
   // what was kept for the whole series it is a part of: every chapter, where each chapter is its own archive
@@ -215,6 +217,10 @@ export const api = {
   saveProgress: (id: string, position: number, part = 0, closing = false) =>
     put(`/api/comics/${id}/progress`, { position, part }, closing),
   forgetProgress: (id: string) => call(`/api/comics/${id}/progress`, { method: "DELETE" }),
+  // each answers every page marked in the comic now
+  addBookmark: (id: string, position: number) => put<{ bookmarks: number[] }>(`/api/comics/${id}/bookmarks`, { position }),
+  removeBookmark: (id: string, position: number) =>
+    call<{ bookmarks: number[] }>(`/api/comics/${id}/bookmarks?position=${position}`, { method: "DELETE" }),
   // many comics at once - a folder, a series, everything up to one - read to their ends or forgotten
   markMany: (ids: string[], read: boolean) => put<{ marked: number }>("/api/progress", { comics: ids, read }),
   settings: () => call<Partial<Settings>>("/api/settings"),

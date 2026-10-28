@@ -150,6 +150,23 @@ export function chapterOf(starts: number[], page: number): number {
   return found;
 }
 
+export interface Bookmark {
+  title: string;
+  start: number;
+  mine: boolean;
+}
+
+// what the bookmarks menu offers: what the comic's archives bookmark - a chapter's name on its first page - and
+// the pages marked in the reader, in page order. a page both is one entry, under the archive's name and marked
+// as yours, so taking your mark off it leaves the archive's
+export function bookmarkList(carried: { title: string; start: number }[], marked: number[]): Bookmark[] {
+  const mine = new Set(marked);
+  const list: Bookmark[] = carried.map((each) => ({ title: each.title, start: each.start, mine: mine.has(each.start) }));
+  const named = new Set(carried.map((each) => each.start));
+  for (const start of marked) if (!named.has(start)) list.push({ title: `Page ${start + 1}`, start, mine: true });
+  return list.sort((a, b) => a.start - b.start);
+}
+
 // the page a jump to the next or the previous chapter lands on, or null where that chapter is not in this
 // comic at all - past its last, or before its first - and is the comic either side, as a comic packed one
 // archive per chapter has it: a comic with no chapters inside it is one chapter from its first page. back
