@@ -523,6 +523,10 @@ def make_handler(runner, args, tee):
 
 
 class PageServer(ThreadingHTTPServer):
+    #how many connections may wait to be taken in. socketserver's own is 5, and the page opens a dozen scripts at
+    #once beside its state polls: with the server slow to take them - a busy nas - the rest were refused, a script
+    #went missing, and the page came up broken with "tabOpeners is not defined"
+    request_queue_size = 64
     #http.server asks for SO_REUSEADDR, which elsewhere only lets a restarted page have its port straight back.
     #on windows it lets a second server bind a port one is already listening on, and the two then share its
     #connections: two updaters started on one port each answered some of the page's requests with the other's
