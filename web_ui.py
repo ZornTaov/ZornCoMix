@@ -11,7 +11,7 @@ from comiclib.web.elementpaths import (element_file, element_paths_path, element
 from comiclib.web.jobs import Job, LogTee, Runner, remember_listing, split_into_chapters  # noqa: F401
 from comiclib.web.server import make_handler, page_folder, page_part, start  # noqa: F401
 from comiclib.web.views import (comic_detail, comic_view, config_view, find_comic, index_pages,  # noqa: F401
-                                is_running, job_view, library_view, read_metadata, walked_pages)
+                                is_running, job_view, library_view, walked_pages)
 
 
 

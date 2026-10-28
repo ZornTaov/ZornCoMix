@@ -2,7 +2,6 @@
 #block is the only thing anyone edits; the scrape command is rebuilt from it every run.
 import json
 import os
-import shlex
 import time
 from datetime import datetime, timezone
 
@@ -104,60 +103,6 @@ def settings_to_argv(settings):
     return argv
 
 
-def argv_to_settings(argv):
-    #the inverse of settings_to_argv, for reading a schema 1 sidecar that saved the command itself rather
-    #than what it was made of. flags that describe the machine rather than the comic - chrome, headless,
-    #verbose - are deliberately dropped rather than pinned into a comic's settings.
-    settings = {"url": None, "output": None, "cbz_path": None, "increment": None, "prefix": False,
-                "javascript": False, "firefox": False, "waittime": 0, "cbz": True, "ended": False}
-    valued = {"--increment": "increment", "-i": "increment", "--output": "output", "-o": "output",
-              "--cbz-path": "cbz_path", "--waittime": "waittime", "-w": "waittime",
-              "--user-agent": "user_agent"}
-    flagged = {"--prefix": "prefix", "-p": "prefix", "--enable_javascript": "javascript",
-               "-ej": "javascript", "--firefox": "firefox", "-f": "firefox"}
-    at = 0
-    argv = list(argv or [])
-    while at < len(argv):
-        token = argv[at]
-        if token in valued and at + 1 < len(argv):
-            settings[valued[token]] = argv[at + 1]
-            at += 2
-            continue
-        if token == "--placeholder" and at + 1 < len(argv):
-            try:
-                settings["placeholders"] = placeholders.parse((settings.get("placeholders") or []) + [argv[at + 1]])
-            except ValueError:
-                pass
-            at += 2
-            continue
-        if token == "--cookie" and at + 1 < len(argv):
-            try:
-                settings.setdefault("cookies", {}).update(cookies.parse([argv[at + 1]]))
-            except ValueError:
-                pass
-            at += 2
-            continue
-        if token in flagged:
-            settings[flagged[token]] = True
-        elif token == "--no-cbz":
-            settings["cbz"] = False
-        elif token == "--no-multi-page":
-            settings["multi_page"] = False
-        elif not token.startswith('-'):
-            #the only bare word in a mirror_base command is the url it starts from
-            settings["url"] = token
-        at += 1
-    try:
-        settings["increment"] = int(settings["increment"])
-    except (TypeError, ValueError):
-        settings["increment"] = None
-    try:
-        settings["waittime"] = int(settings["waittime"])
-    except (TypeError, ValueError):
-        settings["waittime"] = 0
-    return settings
-
-
 #how many moves a comic remembers, the same as the edits the editor keeps, since a move is shown among them
 KEPT_MOVES = 50
 
@@ -202,86 +147,3 @@ def after_moves(path, records):
                 path = went + path[len(came):]
                 break
     return path
-
-
-def saved_command(old):
-    #the scrape command a schema 1 file kept, as the arguments after the script's own name
-    argv = old.get("resume_argv")
-    if argv:
-        return list(argv)
-    command = old.get("resume_command_line")
-    if not command:
-        return None
-    argv = shlex.split(command)
-    #drop the leading "python mirror_base.py"
-    while argv and (argv[0].startswith('python') or argv[0].endswith('.py')):
-        argv.pop(0)
-    return argv
-
-
-def migrate(old):
-    #schema 1 wrote the resume command three times over - as a list, as a string, and again inside every
-    #run entry - with no plain value anywhere for things like prefix. this pulls the command apart into
-    #the settings block that replaced it, so the facts have one home and editing one is enough. none when
-    #the file is already current.
-    if old.get("schema", 1) >= SCHEMA:
-        return None
-    settings = argv_to_settings(saved_command(old))
-
-    #a comic marked ended has no resume command at all, so everything has to come from the flat keys
-    if not settings["url"]:
-        settings["url"] = old.get("source_url") or old.get("last_page_url")
-    if not settings["output"]:
-        settings["output"] = old.get("output_folder")
-    if not settings["cbz_path"]:
-        settings["cbz_path"] = old.get("archive_path")
-    if settings["increment"] is None:
-        for key in ("resume_page_number", "last_page_number", "page_count"):
-            if old.get(key) is not None:
-                settings["increment"] = old[key]
-                break
-    settings["ended"] = bool(old.get("ended", False))
-
-    #run history keeps the argv that is the actual record of what ran, and loses the rendered command and
-    #the option dump that said the same thing twice more
-    runs = [{k: v for k, v in run.items() if k not in ("command_line", "options")}
-            for run in old.get("runs", [])]
-
-    fresh = {
-        "schema": SCHEMA,
-        "generator": old.get("generator", "adopt_comic.py"),
-        "generator_version": old.get("generator_version"),
-        "created": old.get("created", now_stamp()),
-        "updated": now_stamp(),
-        "settings": settings,
-        "state": {
-            "site": old.get("site"),
-            "page_count": old.get("page_count"),
-            "completed": bool(old.get("completed", False)),
-            "image_xpath": old.get("image_xpath"),
-            "next_xpath": old.get("next_xpath"),
-            "last_image_url": old.get("last_image_url"),
-            "last_image_file": old.get("last_image_file"),
-        },
-        "history": {
-            "first_page_url": old.get("first_page_url"),
-            "first_page_number": old.get("first_page_number"),
-            "adopted": bool(old.get("adopted", False)),
-            "runs": runs,
-        },
-    }
-    if old.get("adopted_from"):
-        fresh["history"]["adopted_from"] = old["adopted_from"]
-    #where the chapters are: written by chapters.py into whatever schema the file was in, so a schema 1 file
-    #can hold them. they describe the comic, not how its metadata was once written, and are carried across
-    #as a scrape carries them - dropped, the comic's chapter archives would be read as a comic of their own
-    if old.get("chapters"):
-        fresh["chapters"] = old["chapters"]
-    #what was said about the comic by hand, carried the same way: it is no part of how the file was written
-    if old.get("info"):
-        fresh["info"] = old["info"]
-    if old.get("notes"):
-        fresh["notes"] = old["notes"]
-    if old.get("page_fixes"):
-        fresh["page_fixes"] = old["page_fixes"]
-    return fresh

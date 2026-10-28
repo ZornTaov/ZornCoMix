@@ -140,14 +140,13 @@ def test_a_comic_shares_the_folder_of_its_name_with_another_comic_shelved_in_it(
 
 
 def test_a_comic_whose_archive_was_moved_since_its_metadata_was_written_is_still_one_comic(library, make_app):
-    #metadata in the first way it was ever written - archive_path, not settings - naming where the archive
-    #was before the shelf was sorted into a folder per author
+    #metadata naming where the archive was before the shelf was sorted into a folder per author
     folder = library / "Uncompressed" / "TheirComic"
     folder.mkdir(parents=True)
     for n in range(1, 4):
         (folder / "{0:04d}.png".format(n)).write_bytes(png(4, 4))
-    (folder / "mirror_metadata.json").write_text(json.dumps({"archive_path": "CBZs/TheirComic.cbz",
-                                                             "resume_argv": ["https://example.com/3"]}))
+    (folder / "mirror_metadata.json").write_text(json.dumps({"schema": 2, "settings": {
+        "url": "https://example.com/3", "cbz_path": "CBZs/TheirComic.cbz"}}))
     moved = library / "CBZs" / "SomeAuthor" / "TheirComic.cbz"
     moved.parent.mkdir(parents=True)
     with zipfile.ZipFile(str(moved), "w") as zf:

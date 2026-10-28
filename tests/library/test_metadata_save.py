@@ -1,5 +1,5 @@
 #what a run writes into mirror_metadata.json: schema 2, with the settings block the only thing anyone edits,
-#and an older schema 1 file read and upgraded without losing what only it knew.
+#and what an earlier run or a person wrote into it carried through.
 import argparse
 import json
 
@@ -70,16 +70,14 @@ def test_a_fresh_comic_gets_a_schema_2_file(saving, mirror):
     assert meta["state"]["image_xpath"] == '//*[@id="comic"]/img'
 
 
-def test_a_schema_1_file_is_upgraded_keeping_what_only_it_knows(saving, mirror):
+def test_what_an_earlier_run_knew_outlives_a_run(saving, mirror):
     old = {
-        "generator": "adopt_comic.py", "created": "2020-01-01T00:00:00Z",
-        "source_url": "https://example.com/comic/1/",
-        "first_page_url": "https://example.com/comic/1/", "first_page_number": 1,
-        "image_xpath": "//old/xpath", "next_xpath": "//old/next",
-        "ended": True, "adopted": True,
-        "adopted_from": {"path": "somewhere", "numbering": "prefixed"},
-        "runs": [{"run_id": "older", "argv": ["-o", "x"], "command_line": "python ...",
-                  "options": {"prefix": True}}],
+        "schema": 2, "generator": "adopt_comic.py", "created": "2020-01-01T00:00:00Z",
+        "settings": {"url": "https://example.com/comic/1/", "ended": True},
+        "state": {"image_xpath": "//old/xpath", "next_xpath": "//old/next"},
+        "history": {"first_page_url": "https://example.com/comic/1/", "first_page_number": 1, "adopted": True,
+                    "adopted_from": {"path": "somewhere", "numbering": "prefixed"},
+                    "runs": [{"run_id": "older", "argv": ["-o", "x"]}]},
     }
     with open(saving / "mirror_metadata.json", "w", encoding="utf-8") as f:
         json.dump(old, f)
@@ -87,7 +85,6 @@ def test_a_schema_1_file_is_upgraded_keeping_what_only_it_knows(saving, mirror):
     mirror.image_xpath = None
     mirror.next_xpath = None
     meta = load(mirror.metadata_save(StubDriver(), fresh_args(), completed=False, exit_code=0))
-    assert meta.get("schema") == 2
     assert meta["created"] == "2020-01-01T00:00:00Z", meta["created"]
     assert meta["history"]["first_page_url"] == "https://example.com/comic/1/"
     assert meta["history"]["first_page_number"] == 1

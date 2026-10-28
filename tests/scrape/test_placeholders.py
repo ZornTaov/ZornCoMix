@@ -7,7 +7,7 @@ import argparse
 import pytest
 
 from comiclib import placeholders
-from comiclib.metadata import argv_to_settings, settings_to_argv
+from comiclib.metadata import settings_to_argv
 from comiclib.runrecord import settings_from_args
 from conftest import PNG_240, Site, pages_in, read_meta, run, write_meta
 
@@ -76,12 +76,11 @@ def test_which_pictures_are_placeholders(src, listed, said):
     assert placeholders.matches(src, listed) is said
 
 
-def test_the_settings_carry_placeholders_to_the_command_and_back():
+def test_the_settings_carry_placeholders_to_the_command():
     settings = {"url": "https://example.com/w/1", "placeholders": ["/img/soon.png", "/img/later.png"]}
     argv = settings_to_argv(settings)
     assert argv[-5:] == ["--placeholder", "/img/soon.png", "--placeholder", "/img/later.png",
                          "https://example.com/w/1"]
-    assert argv_to_settings(argv)["placeholders"] == ["/img/soon.png", "/img/later.png"]
     assert "--placeholder" not in settings_to_argv({"url": "https://example.com/w/1"})
     args = argparse.Namespace(cbz_path=None, prefix=True, enable_javascript=False, firefox=False, waittime=0,
                               cbz=True, direction_check=True, multi_page=True)

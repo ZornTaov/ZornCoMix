@@ -1,5 +1,5 @@
 #writing the metadata that makes a folder of pages a comic update_comics can carry on, building its archive
-#where one is named and missing, and bringing old metadata up to the current shape.
+#where one is named and missing.
 import json
 import os
 import zipfile
@@ -7,8 +7,7 @@ import zipfile
 from comiclib import cbz
 from comiclib.adopt.scan import comic_folder, inside, inspect, list_pages, loose_pages, pages_in_archives
 from comiclib.adopt.scan import relative_output
-from comiclib.metadata import METADATA_FILE as metadata_file, migrate as migrate_metadata, now_stamp
-from comiclib.metadata import settings_to_argv
+from comiclib.metadata import METADATA_FILE as metadata_file, SCHEMA, now_stamp, settings_to_argv
 
 
 def build_metadata(args, folder, details, existing=None):
@@ -32,7 +31,7 @@ def build_metadata(args, folder, details, existing=None):
     old_history = kept.get("history") or {}
     created = kept.get("created", now_stamp())
     metadata = {
-        "schema": 2,
+        "schema": SCHEMA,
         "generator": "adopt_comic.py",
         "generator_version": "1.2",
         "created": created,
@@ -230,48 +229,3 @@ def adopt_one(args, quiet=False):
         if not quiet:
             print("  archive built : {0} from {1} page(s)".format(archive, made))
     return True, summary
-
-
-def migrate_library(root, dry_run=False):
-    #rewrites every sidecar under root in the current shape. safe to run twice: a file already in the
-    #new shape is left exactly as it is rather than being rewritten with a new timestamp.
-    done, already, failed = 0, 0, []
-    for current, dirs, files in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if not d.startswith('.'))
-        if metadata_file not in files:
-            continue
-        dirs[:] = []
-        path = os.path.join(current, metadata_file)
-        name = os.path.relpath(current, root).replace(os.sep, '/')
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                old = json.load(f)
-            fresh = migrate_metadata(old)
-        except (ValueError, OSError, AttributeError) as error:
-            failed.append((name, str(error)))
-            print("  PROBLEM  {0:<42} {1}".format(name[:42], error))
-            continue
-        if fresh is None:
-            already += 1
-            continue
-        settings = fresh["settings"]
-        note = "page {0}{1}{2}".format(settings["increment"],
-                                       ", prefix" if settings["prefix"] else "",
-                                       ", ended" if settings["ended"] else "")
-        if dry_run:
-            print("  would    {0:<42} {1}".format(name[:42], note))
-        else:
-            try:
-                with open(path, 'w', encoding='utf-8') as f:
-                    json.dump(fresh, f, indent=2)
-                    f.write('\n')
-            except OSError as error:
-                failed.append((name, str(error)))
-                print("  PROBLEM  {0:<42} {1}".format(name[:42], error))
-                continue
-            print("  migrated {0:<42} {1}".format(name[:42], note))
-        done += 1
-    print()
-    print("{0} {1}, {2} already current, {3} with problems.".format(
-        done, "would be migrated" if dry_run else "migrated", already, len(failed)))
-    return 2 if failed else 0

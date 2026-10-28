@@ -8,7 +8,7 @@ import json
 import pytest
 
 from comiclib import cookies, download, useragent
-from comiclib.metadata import argv_to_settings, settings_to_argv
+from comiclib.metadata import settings_to_argv
 from comiclib.runrecord import settings_from_args
 from conftest import (PNG_240, Comic, console_errors, open_page, pages_in, read_meta, run, wait_until,
                       write_meta)
@@ -96,11 +96,11 @@ def test_a_name_is_one_line(library_agent):
     assert useragent.pick() == useragent.default
 
 
-def test_a_comic_name_goes_to_the_command_and_back():
+def test_a_comic_name_goes_to_the_command():
+    #and back from it, with every other setting, in test_roundtrip
     settings = {"url": "https://example.com/1", "user_agent": OURS}
     argv = settings_to_argv(settings)
     assert argv[-3:] == ["--user-agent", OURS, "https://example.com/1"]
-    assert argv_to_settings(argv)["user_agent"] == OURS
     assert "--user-agent" not in settings_to_argv({"url": "https://example.com/1"})
 
 

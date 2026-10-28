@@ -10,7 +10,7 @@ import re
 import sys
 
 from comiclib import pluginenv, pluginsetup
-from comiclib.metadata import METADATA_FILE, now_stamp, write as write_metadata
+from comiclib.metadata import METADATA_FILE, SCHEMA, now_stamp, write as write_metadata
 from comiclib.paths import config_folder
 
 MANIFEST = "plugin.json"
@@ -353,7 +353,7 @@ def start_comic(folder, plugin, values, output, cbz_path=None, cbz=True):
         raise PluginError("{0} already holds a comic".format(folder))
     stamp = now_stamp()
     metadata = {
-        "schema": 2,
+        "schema": SCHEMA,
         "generator": "plugin:" + plugin.name,
         "generator_version": plugin.version,
         "created": stamp,

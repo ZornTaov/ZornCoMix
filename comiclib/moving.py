@@ -164,7 +164,6 @@ def plan(folder, root, into, max_depth=5):
                           "one".format(relative(step, root)))
 
     metadata = sidecar.load(os.path.join(folder, METADATA_FILE))
-    metadata = sidecar.migrate(metadata) or metadata
     settings = metadata.get("settings") or {}
     moves, stays = [], []
 

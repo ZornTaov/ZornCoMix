@@ -12,10 +12,10 @@ import time
 
 from comiclib import comicinfo, cookies, moving, placeholders, plugins, useragent
 from comiclib.chapters.index import index_path, set_aside
-from comiclib.metadata import write_json
+from comiclib.metadata import load as read_metadata, write_json
 from comiclib.plugins import field_value
 from comiclib.web.adding import clean_folder
-from comiclib.web.views import find_comic, is_moving, is_rewinding, is_running, read_metadata, walk_needed
+from comiclib.web.views import find_comic, is_moving, is_rewinding, is_running, walk_needed
 
 #the settings a person may change from the page, and what each one has to be. output is left out on
 #purpose: a comic's folder is what says where it lives, and update_comics ignores a stored output anyway

@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from comiclib import cbz
 from comiclib.chapters.numbering import written
-from comiclib.metadata import METADATA_FILE, after_moves, before_moves, migrate, moves, read as read_metadata
+from comiclib.metadata import METADATA_FILE, after_moves, before_moves, moves, read as read_metadata
 from comiclib.pages import sort_key
 from comiclib.standin import held_otherwise
 
@@ -170,9 +170,6 @@ def gather(library, skip, pictures=None):
     claimed, found, unmatched = set(), [], []
     for folder in comics:
         metadata = read_metadata(folder)
-        #a comic adopted long ago keeps the first way the metadata was written, its archive as archive_path;
-        #read the way the scraper reads it, so the reader finds the same archive the scraper adds to
-        metadata = migrate(metadata) or metadata
         settings = metadata.get("settings") or {}
         name = os.path.basename(folder)
         shelf = inside(library, (metadata.get("chapters") or {}).get("folder"))

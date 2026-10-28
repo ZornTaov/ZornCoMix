@@ -167,14 +167,9 @@ scrape_state = {
     "repeat_files": [],
 }
 
-def setup():
-    global current_url
-    global browser_images
-    global verbose
-    global arg_parser
-    global run_start
-    global run_id
-    #argparse arguements
+def make_parser():
+    #every argument a run takes, apart from the run, so what a comic's settings make of a command can be
+    #read back the way a run reads it
     params = argparse.ArgumentParser(description="Downloads a webcomic page by page: opens it in a browser, saves each page's image and follows the next link until there is none. The comic's image and next link are found by trying a list of element paths, which a library extends in config/element_paths.json.")
     params.add_argument("URL",help="The address of the comic page to start from.")
     params.add_argument("-i","--increment",type=int,help="The number the first page saved counts as; each page after it counts up from there. Defaults to 1.",default=1)
@@ -205,7 +200,17 @@ def setup():
     params.add_argument("--placeholder",action='append',default=[],metavar="ADDRESS",help="A picture the site shows where a page will be once it is out - a week's address filled a day at a time, say, the rest showing \"coming soon\". Never saved: the run stops at the first one, as caught up, and the next carries on from that address. Its whole address, or from its first /; can be given more than once.")
     params.add_argument("--check",action='store_true',default=False,help="Load the page, report which of the known image and next element paths match it, and stop. Suggests paths for a site that matches none, which is the first step in adding a comic the script does not know yet.")
     params.add_argument("--prime",action='store_true',default=False,help="Save only the first page, check the next link works, write the metadata and archive, then stop. The comic is then ready for update_comics to download the rest, which is far quicker run on the machine holding the library than over a network share.")
-    
+    return params
+
+
+def setup():
+    global current_url
+    global browser_images
+    global verbose
+    global arg_parser
+    global run_start
+    global run_id
+    params = make_parser()
     args = params.parse_args(len(sys.argv) == 1 and custom_args or None)
     arg_parser = params
     run_start = now_stamp()

@@ -18,7 +18,7 @@ from comiclib.batch import (describe, ended_reason, exit_reasons, kill_tree, loc
                             with_config)
 from comiclib.config import config_defaults, config_file, config_path, load_config, warned_about  # noqa: F401
 from comiclib.library import Comic, find_comics, page_count, resume_argv  # noqa: F401
-from comiclib.metadata import METADATA_FILE, argv_to_settings, saved_command, settings_to_argv  # noqa: F401
+from comiclib.metadata import METADATA_FILE, settings_to_argv  # noqa: F401
 from comiclib.pages import count as folder_pages  # noqa: F401
 from comiclib.paths import config_folder
 from comiclib.schedule import (RESTART, ignored_triggers, local_zone, next_run, parse_schedule,  # noqa: F401

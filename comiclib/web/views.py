@@ -157,19 +157,6 @@ def is_walking(runner, name):
                for job in [runner.current] + list(runner.waiting))
 
 
-def read_metadata(path):
-    metadata = sidecar.load(path)
-    #an old sidecar is brought up to date first, so the edit lands in the one place a run reads it
-    fresh = sidecar.migrate(metadata)
-    if not fresh:
-        return metadata
-    #but only read, it has not been rewritten, so it keeps the file's own stamp. the migration stamps the
-    #time it ran, and an editor that opened it one second and saved it the next was told it had changed
-    #under them when nothing had
-    fresh["updated"] = metadata.get("updated")
-    return fresh
-
-
 def index_pages(args, uc, comic):
     #how many pages this comic's record of which-page-is-which holds. counted rather than trusted, since
     #the file is written a line at a time as a walk goes and can stop anywhere
@@ -232,7 +219,7 @@ def comic_detail(args, uc, runner, name):
         return None, "no comic named {0}".format(name)
     path = os.path.join(comic.folder, uc.metadata_file)
     try:
-        metadata = read_metadata(path)
+        metadata = sidecar.load(path)
     except (OSError, ValueError) as error:
         return None, "could not read {0}: {1}".format(path, error)
     history = metadata.get("history") or {}

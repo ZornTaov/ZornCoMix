@@ -9,7 +9,7 @@ import pytest
 import requests
 
 from comiclib import cookies
-from comiclib.metadata import argv_to_settings, settings_to_argv
+from comiclib.metadata import settings_to_argv
 from comiclib.runrecord import settings_from_args
 from conftest import PNG_240, Comic, pages_in, read_meta, run, write_index, write_meta
 
@@ -64,11 +64,11 @@ def test_a_cookie_is_given_as_name_equals_value():
         cookies.parse(["AGE_OK"])
 
 
-def test_the_settings_carry_cookies_to_the_command_and_back():
+def test_the_settings_carry_cookies_to_the_command():
+    #and back from it, with every other setting, in test_roundtrip
     settings = {"url": "https://example.com/1", "cookies": {"AGE_OK": "yes"}}
     argv = settings_to_argv(settings)
     assert argv[-3:] == ["--cookie", "AGE_OK=yes", "https://example.com/1"]
-    assert argv_to_settings(argv)["cookies"] == {"AGE_OK": "yes"}
     assert "--cookie" not in settings_to_argv({"url": "https://example.com/1"})
 
 

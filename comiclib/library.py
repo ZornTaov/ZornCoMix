@@ -3,7 +3,7 @@
 import json
 import os
 
-from comiclib.metadata import METADATA_FILE as metadata_file, saved_command, settings_to_argv
+from comiclib.metadata import METADATA_FILE as metadata_file, settings_to_argv
 from comiclib.pages import count as folder_pages
 
 
@@ -18,9 +18,9 @@ class Comic:
         self.code = None
         self.output = ""
         self.elapsed = 0.0
-        #metadata written before page_count existed has no baseline, so count the folder instead of
-        #treating it as empty and reporting the whole comic as newly gained
-        count = (metadata.get("state") or {}).get("page_count", metadata.get("page_count"))
+        #metadata with no page_count yet has no baseline, so count the folder instead of treating it as
+        #empty and reporting the whole comic as newly gained
+        count = (metadata.get("state") or {}).get("page_count")
         if count is None:
             count = folder_pages(folder)
         self.before = count or 0
@@ -82,12 +82,7 @@ def resume_argv(comic):
         #a comic another program scrapes, through its plugin: run_plugin needs only which comic, and works
         #out the program's command itself from the settings, each time
         return [comic.name]
-    if settings:
-        argv = settings_to_argv(settings)
-    else:
-        #schema 1 kept the command itself rather than what it was made of. read it so an un-migrated
-        #comic still runs, and it gets rewritten in the current shape the next time it is scraped
-        argv = saved_command(comic.metadata)
+    argv = settings_to_argv(settings) if settings else None
     if not argv:
         return None
 
