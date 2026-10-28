@@ -120,13 +120,19 @@ def page(size, shape, standin):
 #what someone may say about a comic themselves, kept in its metadata as "info" and written into every
 #archive it has, by the names this works them out under
 INFO = ("title", "series", "summary", "year", "writer", "penciller", "genre", "tags", "web")
+#what is worked out here but may be said by hand over it: which part of its series an archive is, and how
+#many parts there are. a shelf of volumes from elsewhere is put in order by nothing else, and an epilogue
+#named by its year rather than its place sorts last only once it is said to. a chapter's own number stays
+#the chapter's, so said of a comic in chapters it is said of none of them
+OVERRIDDEN = {"Number": "number", "Count": "count"}
 #the rest of the schema that may be said by hand as well, kept in the same block by its ComicInfo name, as
-#a publisher or a reading direction is. what tells one archive of a comic from the next - its number, how
-#many there are, its notes - and what describes its pages is worked out, never said
-EXTRA = tuple(tag for tag, key in SCHEMA if key is None and tag not in ("Pages", "PageCount"))
+#a publisher or a reading direction is. its notes and what describes its pages are worked out, never said
+EXTRA = tuple(tag for tag, key in SCHEMA
+              if (key is None or tag in OVERRIDDEN) and tag not in ("Pages", "PageCount"))
 #what each is called on a form; a tag left out is its own name split into words
 LABELS = {"title": "Title", "series": "Series", "summary": "Summary", "year": "Year", "writer": "Writer",
           "penciller": "Artist", "genre": "Genre", "tags": "Tags", "web": "Web address",
+          "Number": "Number (in its series)", "Count": "Count (of its series)",
           "LanguageISO": "Language (ISO code)", "Manga": "Manga (reading direction)", "GTIN": "GTIN (ISBN)",
           "MainCharacterOrTeam": "Main character or team"}
 #the order a form shows the nine in: who and when beside what, and the summary, the long one, last
@@ -134,7 +140,7 @@ SHOWN = ("title", "series", "writer", "penciller", "year", "genre", "tags", "web
 #given a box of their own rather than a line
 LONG = ("summary", "Review")
 #a whole number in the schema: a strict reader refuses an archive saying anything else
-NUMBERS = ("year", "Volume", "AlternateCount", "Month", "Day")
+NUMBERS = ("year", "Count", "Volume", "AlternateCount", "Month", "Day")
 #the schema's lists of what may be said, offered as they are spelled there
 CHOICES = {"BlackAndWhite": ["Unknown", "No", "Yes"],
            "Manga": ["Unknown", "No", "Yes", "YesAndRightToLeft"],
@@ -206,9 +212,10 @@ def with_said(about, info, own=()):
     about = dict(about)
     kept = dict(about.get("kept") or {})
     for key, value in clean_info(info).items():
+        key = OVERRIDDEN.get(key, key)
         if key in own:
             continue
-        if key in INFO:
+        if key in INFO or key in OVERRIDDEN.values():
             about[key] = value
         else:
             kept[key] = value
@@ -288,7 +295,7 @@ def about_chapter(folder, metadata, chapter, count):
     #what one chapter's archive says it is. how many chapters there are is said only once the reader has
     #said the comic has ended: a reader takes Count as the series being complete, and a comic still running
     #has no last chapter yet. what was said about the comic by hand is said of each chapter, but for the
-    #chapter's own title and address: those are the chapter's, not the comic's
+    #chapter's own title, address and number: those are the chapter's, not the comic's
     series = os.path.basename(os.path.abspath(folder))
     ended = bool((metadata.get("settings") or {}).get("ended"))
     #the chapter's own number where its label says one (numbering.numbered), else its place in the comic
@@ -303,7 +310,7 @@ def about_chapter(folder, metadata, chapter, count):
                   if tag not in ("Title", "Number", "Web")}
     about = with_kept(about, dict(comic_wide, **(chapter.get("comicinfo") or {})))
     info = clean_info(metadata.get("info"))
-    about = with_said(about, info, own=("title", "web"))
+    about = with_said(about, info, own=("title", "web", "number"))
     if not about.get("web"):
         about["web"] = info.get("web")
     return about
