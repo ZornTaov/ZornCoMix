@@ -1,5 +1,6 @@
 #what the reader keeps of its own, in one sqlite file in its data folder: where each comic was read up to,
-#and what the last scan learned of each archive, so a restart does not read the whole library again
+#the pages marked in it, and what the last scan learned of each archive, so a restart does not read the
+#whole library again
 import json
 import os
 import sqlite3
@@ -36,6 +37,12 @@ class Store:
             CREATE TABLE IF NOT EXISTS covers (
                 target TEXT PRIMARY KEY,
                 data TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS bookmarks (
+                series TEXT NOT NULL,
+                key TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                made REAL NOT NULL,
+                PRIMARY KEY (series, key));
         """)
         #how far down its page the reader was, for a comic read by scrolling: added after the table was
         #first made, so a data folder from before gains it here
@@ -107,7 +114,8 @@ class Store:
             self.db.execute("DELETE FROM growth WHERE series = ? AND grew IS NULL AND "
                             "EXISTS (SELECT 1 FROM growth WHERE series = ?)", (new, old))
             for table, column, prefix in (("progress", "series", ""), ("growth", "series", ""),
-                                          ("settings", "scope", "comic:"), ("covers", "target", "comic:")):
+                                          ("settings", "scope", "comic:"), ("covers", "target", "comic:"),
+                                          ("bookmarks", "series", "")):
                 moved += self.db.execute("UPDATE OR IGNORE {0} SET {1} = ? WHERE {1} = ?".format(table, column),
                                          (prefix + new, prefix + old)).rowcount
             self.db.commit()
@@ -123,6 +131,26 @@ class Store:
     def forget_progress(self, series):
         with self.lock:
             self.db.execute("DELETE FROM progress WHERE series = ?", (series,))
+            self.db.commit()
+
+    def bookmarks(self, series):
+        #the pages marked in a comic, by the page itself as a place is kept, and the number it had when marked,
+        #for a page no longer there at all
+        with self.lock:
+            rows = self.db.execute("SELECT key, position FROM bookmarks WHERE series = ? ORDER BY position",
+                                   (series,)).fetchall()
+        return [{"key": row[0], "position": row[1]} for row in rows]
+
+    def save_bookmark(self, series, key, position):
+        with self.lock:
+            self.db.execute("INSERT INTO bookmarks (series, key, position, made) VALUES (?, ?, ?, ?) "
+                            "ON CONFLICT(series, key) DO UPDATE SET position = excluded.position",
+                            (series, key, position, time.time()))
+            self.db.commit()
+
+    def forget_bookmarks(self, series, keys):
+        with self.lock:
+            self.db.executemany("DELETE FROM bookmarks WHERE series = ? AND key = ?", [(series, key) for key in keys])
             self.db.commit()
 
     def sources(self):

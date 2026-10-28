@@ -367,6 +367,31 @@ def test_the_place_follows_its_page_when_a_page_is_put_in_before_it(library, mak
     assert at == 5 and stream["pages"][at]["entry"] == "0006_page5.png"
 
 
+def test_a_bookmark_stays_on_its_page_when_the_comic_is_renumbered(library, client):
+    folder = comic_folder(library, "MyComic", 6)
+    archive = library / "CBZs" / "MyComic.cbz"
+    cbz.write(str(archive), str(folder), page_names(folder))
+    api, app = client()
+    comic_id = only(app)["id"]
+    marks = "/api/comics/{0}/bookmarks".format(comic_id)
+    assert api.put(marks, json={"position": 3}).json()["marked"] == [3]
+    #marked twice, still one mark; and past the end, the last page
+    api.put(marks, json={"position": 3})
+    assert api.put(marks, json={"position": 99}).json()["marked"] == [3, 5]
+    #a page the site's links skipped, put in as page 3: the marks move on with their pages
+    for n in range(6, 2, -1):
+        os.rename(str(folder / "{0:04d}_page{0}.png".format(n)), str(folder / "{0:04d}_page{1}.png".format(n + 1, n)))
+    (folder / "0003_inserted.png").write_bytes(png(40, 60, 99))
+    cbz.write(str(archive), str(folder), page_names(folder))
+    assert api.get("/api/comics/{0}".format(comic_id)).json()["marked"] == [4, 6]
+    #taken off by where it is now; a page with none has none to take off
+    assert api.delete(marks, params={"position": 4}).json()["marked"] == [6]
+    assert api.delete(marks, params={"position": 0}).json()["marked"] == [6]
+    #and a comic moved to another id takes its marks with it
+    store = app.state.library.store
+    assert store.carry(comic_id, "elsewhere") and [mark["position"] for mark in store.bookmarks("elsewhere")] == [5]
+
+
 def test_the_place_moves_into_the_chapter_it_was_cut_into_and_the_chapters_before_count_as_read(library, make_app):
     #read part way as one archive, then cut into chapters and the single archive given up
     folder = comic_folder(library, "MyComic", 8)

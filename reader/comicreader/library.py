@@ -145,6 +145,16 @@ def leading(here, records):
     return None
 
 
+def found_again(pages, key, position):
+    #where a page kept by what it is stands now: the same page nearest where it was, or, gone altogether,
+    #the number it had, as near as the comic still reaches
+    if key:
+        same = [at for at, page in enumerate(pages) if page["key"] == key]
+        if same:
+            return min(same, key=lambda at: abs(at - position))
+    return min(position, len(pages) - 1)
+
+
 def chapter_order(path):
     found = CHAPTER.match(os.path.basename(path))
     return (Decimal(found.group("number")) if found else Decimal(0), sort_key(os.path.basename(path)))
@@ -376,11 +386,11 @@ class Library:
             self.scanning.release()
 
     def stream(self, comic, fresh=False):
-        #the comic's pages from end to end, each knowing where it comes from, and where its chapters start.
-        #fresh looks at each source's file first, so a comic opened while the scraper adds to it shows the
-        #new pages without waiting for a scan
+        #the comic's pages from end to end, each knowing where it comes from, and the bookmarks its archives
+        #carry. fresh looks at each source's file first, so a comic opened while the scraper adds to it shows
+        #the new pages without waiting for a scan
         kind = "folder" if comic["kind"] == "folder" else "archive"
-        pages, chapters, versions, metadata, first = [], [], [], None, None
+        pages, bookmarks, versions, metadata, first = [], [], [], None, None
         #an archive the scraper packed before ComicInfo said which pages are stand-ins: the comic's folder
         #still holds what each stands for, under the same name
         originals = self.originals(comic["folder"]) if comic.get("folder") and kind == "archive" else set()
@@ -396,16 +406,11 @@ class Library:
             start = len(pages)
             about = source.get("about") or {}
             first = about if first is None else first
-            if comic["kind"] == "chapters":
-                label = about.get("title")
-                if not label:
-                    found = CHAPTER.match(os.path.basename(path))
-                    label = (found.group("label") if found and found.group("label") else
-                             "Chapter {0}".format(written(found.group("number")) if found else at + 1))
-                chapters.append({"title": label, "start": start})
-            else:
-                for page, label in sorted(((int(n), label) for n, label in (about.get("bookmarks") or {}).items())):
-                    chapters.append({"title": label, "start": start + page})
+            #a chapter's name on its first page, as the scraper writes one, or whatever another program marked.
+            #a comic packed one archive per chapter never gets here as one comic: split_chapters made each
+            #chapter its own
+            for page, label in sorted(((int(n), label) for n, label in (about.get("bookmarks") or {}).items())):
+                bookmarks.append({"title": label, "start": start + page})
             version = "{0:x}{1:x}".format(*source["stamp"])[-12:]
             versions.append(version)
             for page in source["pages"]:
@@ -422,7 +427,7 @@ class Library:
         ended = comic["ended"]
         if ended is None:
             ended = bool(((metadata or {}).get("settings") or {}).get("ended"))
-        return {"pages": pages, "chapters": chapters, "ended": ended, "versions": versions, "about": first or {},
+        return {"pages": pages, "bookmarks": bookmarks, "ended": ended, "versions": versions, "about": first or {},
                 "metadata": metadata}
 
     def carry_moves(self, found):
@@ -555,15 +560,24 @@ class Library:
         #where the reader is up to in a comic as it stands now. the page itself is what was remembered, not
         #its number: a comic renumbered, re-cut into chapters or with a page put in before it still opens on
         #the same page. the number is only for a page that is no longer there at all
-        pages = stream["pages"]
-        if not progress or not pages:
+        if not progress or not stream["pages"]:
             return 0
-        remembered = min(progress["position"], len(pages) - 1)
-        if progress.get("key"):
-            same = [at for at, page in enumerate(pages) if page["key"] == progress["key"]]
-            if same:
-                return min(same, key=lambda at: abs(at - progress["position"]))
-        return remembered
+        return found_again(stream["pages"], progress.get("key"), progress["position"])
+
+    def marked(self, comic_id, stream):
+        #the pages marked in the reader where they are now, each once, in reading order. found again as a place
+        #is, so a mark stays on its page through a renumbering; two marks that come to one page are one
+        pages = stream["pages"]
+        if not pages:
+            return []
+        return sorted({found_again(pages, mark["key"], mark["position"])
+                       for mark in self.store.bookmarks(comic_id)})
+
+    def marked_on(self, comic_id, stream, at):
+        #the marks that are on this page now, by what they were kept under
+        pages = stream["pages"]
+        return [mark["key"] for mark in self.store.bookmarks(comic_id)
+                if found_again(pages, mark["key"], mark["position"]) == at]
 
     def summary(self, comic, progress, growth=None):
         stream = self.stream(comic)
@@ -593,7 +607,7 @@ class Library:
                 "read": progress["updated"] if progress else None,
                 #the cover named by what it is - a chosen page's version, a picture's stamp - so the same
                 #picture keeps the same address, and a new one gets a new address
-                "chapters": len(stream["chapters"]), "cover": covers.token(self, "comic:" + comic["id"], comic, stream),
+                "bookmarks": len(stream["bookmarks"]), "cover": covers.token(self, "comic:" + comic["id"], comic, stream),
                 "coverChosen": covers.is_chosen(self.chosen.get("comic:" + comic["id"])),
                 #how the cover sits in its card: filling it, or the whole of its width or height showing
                 "coverFit": (self.chosen.get("comic:" + comic["id"]) or {}).get("fit") or "fill",

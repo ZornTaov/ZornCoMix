@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { chapterOf, chapterTarget, keyAction, pageAt, placeStrip, tapAction, trialKept, typedPage, viewOf, views, wanted } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, placeStrip, tapAction, trialKept, typedPage, viewOf, views, wanted } from "./layout";
 import { clean, merged, scopeOf } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -158,6 +158,17 @@ describe("pages made ready", () => {
   it("know which chapter a page is in", () => {
     expect(chapterOf([0, 10, 20], 15)).toBe(1);
     expect(chapterOf([5, 10], 2)).toBe(-1);
+  });
+
+  it("list the archive's bookmarks and the pages marked, in page order, a page both only once", () => {
+    const list = bookmarkList([{ title: "Chapter 1", start: 0 }, { title: "Chapter 2", start: 10 }], [14, 0, 3]);
+    expect(list).toEqual([
+      { title: "Chapter 1", start: 0, mine: true },
+      { title: "Page 4", start: 3, mine: true },
+      { title: "Chapter 2", start: 10, mine: false },
+      { title: "Page 15", start: 14, mine: true },
+    ]);
+    expect(bookmarkList([], [])).toEqual([]);
   });
 });
 

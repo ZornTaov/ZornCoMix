@@ -678,6 +678,95 @@
         }
       }
     },
+    "/api/comics/{comic_id}/bookmarks": {
+      "put": {
+        "tags": [
+          "bookmarks"
+        ],
+        "summary": "Mark a page of a comic",
+        "description": "Kept by the page itself, so the mark stays on it when the comic is renumbered. Answers every page marked in the comic now.",
+        "operationId": "add_bookmark_api_comics__comic_id__bookmarks_put",
+        "parameters": [
+          {
+            "name": "comic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Comic Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "bookmarks"
+        ],
+        "summary": "Take the mark off a page of a comic",
+        "description": "Answers every page still marked in the comic.",
+        "operationId": "remove_bookmark_api_comics__comic_id__bookmarks_delete",
+        "parameters": [
+          {
+            "name": "comic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Comic Id"
+            }
+          },
+          {
+            "name": "position",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Position"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/progress": {
       "put": {
         "summary": "Save Many",
@@ -889,13 +978,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",

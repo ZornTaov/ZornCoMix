@@ -28,7 +28,7 @@ export interface ComicSummary {
   // when a scan last saw it gain pages (seconds), and how many it gained then
   grew: number | null;
   added: number;
-  chapters: number;
+  bookmarks: number;
   // what the cover is a picture of now, so a new one has a new address; and whether one was chosen
   cover: string | null;
   coverChosen: boolean;
@@ -74,7 +74,8 @@ export interface Page {
   media: "video" | "flash" | "link" | null;
 }
 
-export interface Chapter {
+// a bookmark an archive carries in its ComicInfo: a chapter's name on its first page, as the scraper writes one
+export interface Carried {
   title: string;
   start: number;
 }
@@ -92,7 +93,9 @@ export interface Comic {
   // how far down that page the reader was, as a share of it, for a comic read by scrolling
   part: number;
   seen: number;
-  chapters: Chapter[];
+  bookmarks: Carried[];
+  // the pages marked in the reader, where they are now
+  marked: number[];
   pages: Page[];
   settings: Partial<Settings>;
   // what was kept for the whole series it is a part of: every chapter, where each chapter is its own archive
@@ -215,6 +218,10 @@ export const api = {
   saveProgress: (id: string, position: number, part = 0, closing = false) =>
     put(`/api/comics/${id}/progress`, { position, part }, closing),
   forgetProgress: (id: string) => call(`/api/comics/${id}/progress`, { method: "DELETE" }),
+  // each answers every page marked in the comic now
+  addBookmark: (id: string, position: number) => put<{ marked: number[] }>(`/api/comics/${id}/bookmarks`, { position }),
+  removeBookmark: (id: string, position: number) =>
+    call<{ marked: number[] }>(`/api/comics/${id}/bookmarks?position=${position}`, { method: "DELETE" }),
   // many comics at once - a folder, a series, everything up to one - read to their ends or forgotten
   markMany: (ids: string[], read: boolean) => put<{ marked: number }>("/api/progress", { comics: ids, read }),
   settings: () => call<Partial<Settings>>("/api/settings"),
