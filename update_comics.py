@@ -119,6 +119,9 @@ def main():
     #python gets no default signal handling as pid 1, so without this a docker stop would sit through its
     #whole kill timeout instead of shutting down and releasing the lock
     signal.signal(signal.SIGTERM, lambda *ignored: sys.exit(0))
+    #and windows has no sigterm to send, only ctrl+break, which otherwise ends the process on the spot
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, lambda *ignored: sys.exit(0))
 
     web = None
     if args.web is not None:

@@ -277,6 +277,14 @@ names unique across the folders.
 updater's suite as an offline job and a browser job on Ubuntu, the reader's pytest, and its Vitest. The
 suite was written on Windows; a test that passes there and not on the runner is a bug in one or the other.
 
+Coverage is measured by hand, never by default: `python -m pytest --cov --cov-report=html` for the updater
+(`.coveragerc` - the scripts a test starts as processes are measured too, by coverage's `patch = subprocess`),
+`python -m pytest --cov=comicreader --cov=comiclib` in `reader/`, `npm run coverage` in `reader/web`, and for
+the web page's own scripts `MIRROR_JS_COVERAGE=FOLDER python -m pytest tests/web` then
+`python tests/jscoverage.py FOLDER`, which lists the functions no browser test ran. A process ended without being
+asked loses what it measured: the web page's server is stopped with ctrl+break on Windows for that reason
+(`WebUI.stop`), and code reached only by a test killing something on purpose reads as untested.
+
 Browser tests wait for what they are waiting for - `wait_until`, `open_page`, `checked` in the harness -
 never a fixed sleep: a pause long enough for the slowest machine was most of what the suite used to spend.
 

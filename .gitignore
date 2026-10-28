@@ -6,6 +6,7 @@
 !.gitignore
 !.gitattributes
 !.dockerignore
+!.coveragerc
 !README.md
 !CLAUDE.md
 !NOTICE

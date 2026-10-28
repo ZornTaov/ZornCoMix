@@ -46,10 +46,11 @@ EVERYTHING = [
     "tests/conftest.py", "tests/areas.py", "pytest.ini", "requirements.txt", "requirements-dev.txt",
 ]
 
-#what no test of this suite runs. the reader has a suite of its own, and the images are built, not tested here
+#what no test of this suite runs. the reader has a suite of its own, the images are built, not tested here, and
+#coverage is measured by hand
 NOTHING = [
     "*.md", "docs/*", ".github/*", "reader/*", "Dockerfile", "docker-compose.yml", ".dockerignore",
-    ".gitignore", ".gitattributes", "LICENSE", "NOTICE", "comics.example.csv",
+    ".gitignore", ".gitattributes", "LICENSE", "NOTICE", "comics.example.csv", ".coveragerc", "tests/jscoverage.py",
 ]
 
 

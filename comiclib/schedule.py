@@ -83,6 +83,17 @@ def restart_file(root):
     return None
 
 
+def doze(seconds):
+    #a long sleep as a run of short ones. on windows ctrl+break - the only way to ask a process there to stop -
+    #is not acted on until the sleep it lands in ends, which left a stopped updater running half a minute on
+    end = time.monotonic() + seconds
+    while True:
+        left = end - time.monotonic()
+        if left <= 0:
+            return
+        time.sleep(min(left, 1))
+
+
 def wait_until(target, root):
     #sleeps towards the scheduled time in short steps, returning early with the comics a trigger file names,
     #or RESTART for a restart file. that is looked for first, so an update-now dropped beside it is left
@@ -94,7 +105,7 @@ def wait_until(target, root):
         left = (target - datetime.now()).total_seconds()
         if left <= 0:
             return None
-        time.sleep(min(left, trigger_poll))
+        doze(min(left, trigger_poll))
         if restart_file(root):
             return RESTART
         wanted = take_trigger(root)

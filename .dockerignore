@@ -20,3 +20,5 @@ comiclib/**/__pycache__
 reader/**/__pycache__
 reader/web/node_modules
 reader/web/dist
+# what npm run coverage leaves behind
+reader/web/coverage
