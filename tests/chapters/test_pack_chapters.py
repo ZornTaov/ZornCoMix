@@ -11,6 +11,8 @@ import zipfile
 import pytest
 
 from conftest import read_meta, run, write_index, write_meta
+from comiclib.chapters.packing import chapter_contents, chapter_folder, verify_chapters
+from comiclib.pages import listing as folder_pages
 
 PAGES = 12
 FIRST = "Tiny - c001 - Chapter 1.cbz"
@@ -250,21 +252,21 @@ def test_a_damaged_chapter_archive_is_written_again(tiny):
     assert tiny.single.exists()
 
 
-def test_the_check_before_the_single_archive_is_given_up(tiny, chapters):
+def test_the_check_before_the_single_archive_is_given_up(tiny):
     add_a_new_page(tiny)
     pages = [{"n": n, "file": None if n == 5 else "{0:04d}.png".format(n)} for n in range(1, 14)]
-    parcels = chapters.chapter_contents(str(tiny.comic), CHAPTERS, pages)
-    assert chapters.verify_chapters(str(tiny.comic), str(tiny.out), parcels) is True, "a shelf that is right"
+    parcels = chapter_contents(str(tiny.comic), CHAPTERS, pages)
+    assert verify_chapters(str(tiny.comic), str(tiny.out), parcels) is True, "a shelf that is right"
     kept = (tiny.out / THIRD).read_bytes()
     with zipfile.ZipFile(str(tiny.out / THIRD), "w", zipfile.ZIP_STORED) as zf:
         zf.writestr("0010.png", b"x" * 5)
-    assert chapters.verify_chapters(str(tiny.comic), str(tiny.out), parcels) is False, \
+    assert verify_chapters(str(tiny.comic), str(tiny.out), parcels) is False, \
         "a chapter holding the wrong thing passed"
     (tiny.out / THIRD).write_bytes(kept)
-    assert chapters.verify_chapters(str(tiny.comic), str(tiny.out), parcels) is True, "put back, it still fails"
+    assert verify_chapters(str(tiny.comic), str(tiny.out), parcels) is True, "put back, it still fails"
 
 
-def test_replacing_gives_up_the_single_archive_once_everything_checks_out(tiny, chapters):
+def test_replacing_gives_up_the_single_archive_once_everything_checks_out(tiny):
     done = tiny.pack("--replace")
     assert done.returncode == 0, done.stdout[-300:]
     assert not tiny.single.exists()
@@ -281,7 +283,7 @@ def test_replacing_gives_up_the_single_archive_once_everything_checks_out(tiny, 
     for name in tiny.made():
         with zipfile.ZipFile(str(tiny.out / name)) as zf:
             inside |= {n for n in zf.namelist() if n != "ComicInfo.xml"}
-    pages = set(chapters.folder_pages(str(tiny.comic)))
+    pages = set(folder_pages(str(tiny.comic)))
     assert inside == pages, sorted(pages - inside)
 
 
@@ -377,16 +379,16 @@ def test_a_single_archive_whose_extra_would_overwrite_a_file_is_kept(tiny):
     assert (tiny.out / "mirror_tiny.py").read_text() == "one already on the shelf", "and nothing overwritten"
 
 
-def test_a_comic_with_no_archive_named_keeps_its_chapters_on_the_shelf(tmp_path, chapters):
+def test_a_comic_with_no_archive_named_keeps_its_chapters_on_the_shelf(tmp_path):
     #adopted or uploaded, with no cbz_path: its chapters go where a scrape would have filed its one
     #archive, in the CBZs tree beside Uncompressed - not in a folder beside its loose pages
     root = tmp_path / "lib"
     comic = root / "Uncompressed" / "Group" / "Adopted"
     comic.mkdir(parents=True)
     (root / "CBZs").mkdir()
-    shelf = chapters.chapter_folder(str(comic), {"settings": {}}, str(root))
+    shelf = chapter_folder(str(comic), {"settings": {}}, str(root))
     assert shelf == str(root / "CBZs" / "Group" / "Adopted")
     #a library not laid out that way still keeps them beside the pages, as before
     loose = tmp_path / "loose" / "Adopted"
     loose.mkdir(parents=True)
-    assert chapters.chapter_folder(str(loose), {"settings": {}}) == str(loose) + "_chapters"
+    assert chapter_folder(str(loose), {"settings": {}}) == str(loose) + "_chapters"

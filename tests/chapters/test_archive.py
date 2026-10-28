@@ -1,29 +1,34 @@
 #chapters read off a comic's archive page: which heading names a chapter, which links are pages of the
 #comic, and the page counts some archives write into their headings.
+from comiclib.chapters.addresses import chapters_from_list
+from comiclib.chapters.archive_page import (ArchiveReader, chapters_from_events, first_of_each, heading_says,
+                                            names_a_chapter, pages_linked)
+from comiclib.chapters.chapterlist import settle_chapters
+from comiclib.chapters.links import looks_like_pages
 
 
-def read(chapters, html, base, known):
+def read(html, base, known):
     #exactly what try_archive does: read the page, take the comic's own pages in the order it lists
     #them, and let the archive's order stand in for the comic's
-    reader = chapters.ArchiveReader()
+    reader = ArchiveReader()
     reader.feed(html)
-    links, order = chapters.pages_linked(reader.events, base, known)
+    links, order = pages_linked(reader.events, base, known)
     pretend = [{"n": n, "url": u} for n, u in enumerate(links, 1)]
-    found, listed = chapters.chapters_from_events(reader.events, order, base)
-    return (chapters.settle_chapters(found, pretend) if found and pretend else []), links
+    found, listed = chapters_from_events(reader.events, order, base)
+    return (settle_chapters(found, pretend) if found and pretend else []), links
 
 
 def labels(found):
     return [c["label"] for c in found]
 
 
-def read_walked(chapters, html, base, walk):
+def read_walked(html, base, walk):
     #what a real run does: the archive read against the pages a walk recorded, in the walk's order
-    reader = chapters.ArchiveReader()
+    reader = ArchiveReader()
     reader.feed(html)
     pages = [{"n": n, "url": url} for n, url in enumerate(walk, 1)]
-    found, listed = chapters.chapters_from_events(reader.events, chapters.first_of_each(pages), base)
-    return chapters.settle_chapters(found, pages)
+    found, listed = chapters_from_events(reader.events, first_of_each(pages), base)
+    return settle_chapters(found, pages)
 
 
 #a site that names each chapter only as a link to a page listing that chapter, with the chapter's first and
@@ -37,17 +42,17 @@ LISTED = ("".join('<p><a href="Comics/List_{0:03d}.php">Chapter {0}: Title {0}</
           + '<p><a href="Comics/List_Bonus.php">Bonus Comics</a><br>Guest art and the like.</p>')
 
 
-def test_a_chapter_named_only_by_its_link_to_a_list_of_its_pages(chapters):
+def test_a_chapter_named_only_by_its_link_to_a_list_of_its_pages():
     walk = ["https://x.test/Comics/Page_{0:03d}.php".format(n) for n in range(1, 31)]
-    found = read_walked(chapters, LISTED, "https://x.test/arch.php", walk)
+    found = read_walked(LISTED, "https://x.test/arch.php", walk)
     assert labels(found) == ["Chapter {0}: Title {0}".format(n) for n in range(1, 5)], \
         "each chapter is named by its link, though the link is not a page of the comic"
     assert [c["start_page"] for c in found] == [1, 7, 18, 19]
     assert [c["pages"] for c in found] == [6, 11, 1, 12], "the walk fills in the pages between"
 
 
-def test_a_preview_leaves_out_the_pages_that_list_chapters(chapters):
-    found, links = read(chapters, LISTED, "https://x.test/arch.php", "https://x.test/Comics/Page_001.php")
+def test_a_preview_leaves_out_the_pages_that_list_chapters():
+    found, links = read(LISTED, "https://x.test/arch.php", "https://x.test/Comics/Page_001.php")
     assert not any("List_" in one for one in links), \
         "a chapter's list, or the bonus section's, sits beside the pages but is not one: {0}".format(links)
     assert len(found) == 4, labels(found)
@@ -70,16 +75,16 @@ BOXED = ('<h1>Latest Page</h1><p>Read it <a href="https://x.test/strip">here!</a
          + "".join(storyline(name, pages) for name, pages in BOOKS.items()) + storyline("Fillers", FILLERS))
 
 
-def test_a_storyline_box_makes_one_chapter_named_by_its_header(chapters):
-    found, links = read(chapters, BOXED, "https://x.test/strip/archive", "https://x.test/strip/1")
+def test_a_storyline_box_makes_one_chapter_named_by_its_header():
+    found, links = read(BOXED, "https://x.test/strip/archive", "https://x.test/strip/1")
     assert labels(found)[:3] == ["Book #1", "Book #2", "Book #3"], \
         "no chapter one page long named for its first page's row, and none named for the page banner"
     assert "https://x.test/strip" not in links, "the comic's front page shows the newest page, not a page"
 
 
-def test_fillers_listed_apart_stay_where_they_were_published(chapters):
+def test_fillers_listed_apart_stay_where_they_were_published():
     walk = ["https://x.test/strip/{0}".format(n) for n in range(1, 17)]
-    found = read_walked(chapters, BOXED, "https://x.test/strip/archive", walk)
+    found = read_walked(BOXED, "https://x.test/strip/archive", walk)
     assert labels(found) == ["Book #1", "Book #2", "Book #3"], "the fillers are not a chapter"
     assert [(c["start_page"], c["end_page"]) for c in found] == [(1, 6), (7, 11), (12, 16)], \
         "each filler stays inside the book it was published in, so the archives read as the site does"
@@ -141,11 +146,11 @@ def chapter_page(url):
             + '<div class="sidebar"><a href="/comic/e20/">The newest page</a></div>')
 
 
-def test_a_heading_leading_to_a_page_of_its_chapter_has_that_page_read(chapters):
+def test_a_heading_leading_to_a_page_of_its_chapter_has_that_page_read():
     #the walk ended by stepping onto the site's front page, which every "home" link and "#" leads to
     walk = [{"n": n, "url": "{0}/comic/e{1}/".format(SITE, n)} for n in range(1, 21)] + [
         {"n": 21, "url": SITE + "/"}]
-    reader = chapters.ArchiveReader()
+    reader = ArchiveReader()
     reader.feed(CHAPTER_LIST)
     fetched = []
 
@@ -153,9 +158,9 @@ def test_a_heading_leading_to_a_page_of_its_chapter_has_that_page_read(chapters)
         fetched.append(url)
         return chapter_page(url)
 
-    found, _ = chapters.chapters_from_events(reader.events, chapters.first_of_each(walk), SITE + "/archives/",
+    found, _ = chapters_from_events(reader.events, first_of_each(walk), SITE + "/archives/",
                                              fetch=fetch)
-    found = chapters.settle_chapters(found, walk)
+    found = settle_chapters(found, walk)
     assert [(c["label"], c["start_page"]) for c in found] == [("A", 1), ("B", 6), ("C", 11), ("D", 16)], \
         "each named by its own heading - not the archive's title above the first - and started where its " \
         "own page says, not at the newest page in the sidebar"
@@ -164,17 +169,17 @@ def test_a_heading_leading_to_a_page_of_its_chapter_has_that_page_read(chapters)
         "and not a page of the comic the walk never reached"
 
 
-def test_an_archive_that_lists_its_pages_never_fetches_anything(chapters):
+def test_an_archive_that_lists_its_pages_never_fetches_anything():
     walk = [{"n": n, "url": "https://x.test/strip/{0}".format(n)} for n in range(1, 17)]
-    reader = chapters.ArchiveReader()
+    reader = ArchiveReader()
     reader.feed(BOXED)
 
     def fetch(url):
         raise AssertionError("fetched {0} for an archive that lists every page".format(url))
 
-    found, _ = chapters.chapters_from_events(reader.events, chapters.first_of_each(walk),
+    found, _ = chapters_from_events(reader.events, first_of_each(walk),
                                              "https://x.test/strip/archive", fetch=fetch)
-    assert [c["label"] for c in chapters.settle_chapters(found, walk)] == ["Book #1", "Book #2", "Book #3"]
+    assert [c["label"] for c in settle_chapters(found, walk)] == ["Book #1", "Book #2", "Book #3"]
 
 
 #an archive that nests its storylines inside books: a book is a heading of its own, with no link, straight
@@ -187,15 +192,15 @@ NESTED = ('<h1>Archive</h1><select>' + "".join('<option value="strip/{0}">Page {
           + storyline("01 - Return", [6, 7, 8]) + storyline("02 - Ending", [9, 10, 11, 12]))
 
 
-def test_a_nested_archive_is_cut_by_its_books_when_asked(chapters):
+def test_a_nested_archive_is_cut_by_its_books_when_asked():
     walk = [{"n": n, "url": "https://x.test/strip/{0}".format(n)} for n in range(1, 13)]
 
     def cut(outer):
-        reader = chapters.ArchiveReader()
+        reader = ArchiveReader()
         reader.feed(NESTED)
-        found, _ = chapters.chapters_from_events(reader.events, chapters.first_of_each(walk),
+        found, _ = chapters_from_events(reader.events, first_of_each(walk),
                                                  "https://x.test/strip/archive", outer=outer)
-        return [(c["label"], c["start_page"], c["pages"]) for c in chapters.settle_chapters(found, walk)]
+        return [(c["label"], c["start_page"], c["pages"]) for c in settle_chapters(found, walk)]
 
     assert cut(False) == [("01 - Opening", 1, 3), ("02 - Trouble", 4, 2), ("01 - Return", 6, 3),
                           ("02 - Ending", 9, 4)], "every storyline, as before"
@@ -203,37 +208,37 @@ def test_a_nested_archive_is_cut_by_its_books_when_asked(chapters):
         "one per book, named by the book, holding every storyline in it"
 
 
-def test_a_link_names_a_chapter_only_when_its_words_are_a_chapter_and_a_number(chapters):
+def test_a_link_names_a_chapter_only_when_its_words_are_a_chapter_and_a_number():
     for named in ("Chapter 2: The Long Way Round", "Book #3", "Vol. 4", "Episode 12", "Arc 1 - Beginnings",
                   "Story 2"):
-        assert chapters.names_a_chapter(named), named
+        assert names_a_chapter(named), named
     for not_named in ("Chapters", "Chapter 3 Page 4", "Bonus Comics", "#12", "Partners", "Fillers",
                       "Storyboards", "#4: Filler - A Bedtime Story"):
-        assert not chapters.names_a_chapter(not_named), not_named
+        assert not names_a_chapter(not_named), not_named
 
 
-def test_a_list_of_chapter_starts_starts_each_at_the_first_image_of_its_page(chapters, tmp_path):
+def test_a_list_of_chapter_starts_starts_each_at_the_first_image_of_its_page(tmp_path):
     pages = [{"n": 1, "url": "https://x.test/p1"}, {"n": 2, "url": "https://x.test/p2"},
              {"n": 3, "url": "https://x.test/p2"}, {"n": 4, "url": "https://x.test/p3"}]
     listed = tmp_path / "starts.txt"
     listed.write_text("# comments are skipped\nhttps://x.test/p1 | One\nhttps://x.test/p2 | Two\n", encoding="utf-8")
-    found = chapters.chapters_from_list(str(listed), pages)
+    found = chapters_from_list(str(listed), pages)
     assert [(c["label"], c["start_page"]) for c in found] == [("One", 1), ("Two", 2)], \
         "a page of two images starts its chapter at the first of them"
 
 
-def test_a_chapter_starting_on_a_page_of_several_images_starts_at_the_first(chapters):
+def test_a_chapter_starting_on_a_page_of_several_images_starts_at_the_first():
     pages = [{"n": 1, "url": "https://x.test/p1"}, {"n": 2, "url": "https://x.test/p2"},
              {"n": 3, "url": "https://x.test/p2"}, {"n": 4, "url": "https://x.test/p3"}]
-    assert chapters.first_of_each(pages)["x.test/p2"] == 2, "not the page's last image"
+    assert first_of_each(pages)["x.test/p2"] == 2, "not the page's last image"
 
 
-def test_a_chapter_is_named_by_the_link_inside_its_heading(chapters):
+def test_a_chapter_is_named_by_the_link_inside_its_heading():
     archive = "".join('<div class="chapter c{0}"><h4>{0}. <a href="c{0}/p1">Title {0}</a> '
                       '<span class="chapterdetails">({0}&nbsp;pages<span class="date">,&nbsp;5/5/06</span>)'
                       '</span></h4><img src="i.png"><p>A description that is not a title.</p></div>'.format(n)
                       for n in range(1, 6))
-    found, links = read(chapters, archive, "https://x.test/archive.html", "https://x.test/c1/p1")
+    found, links = read(archive, "https://x.test/archive.html", "https://x.test/c1/p1")
     assert len(found) == 5, labels(found)
     assert labels(found) == ["{0}. Title {0}".format(n) for n in range(1, 6)], \
         "named by its heading, not its description"
@@ -242,52 +247,52 @@ def test_a_chapter_is_named_by_the_link_inside_its_heading(chapters):
     assert [c["start_url"] for c in found] == ["https://x.test/c{0}/p1".format(n) for n in range(1, 6)]
 
 
-def test_a_chapter_in_the_first_step_of_the_path_is_still_the_same_comic(chapters):
+def test_a_chapter_in_the_first_step_of_the_path_is_still_the_same_comic():
     first = "https://x.test/c1/p1"
-    assert chapters.looks_like_pages("https://x.test/c7/p3", first), "another chapter's page"
-    assert chapters.looks_like_pages("https://x.test/c12.1/p1", first), "a sub-numbered chapter"
-    assert not chapters.looks_like_pages("https://x.test/archive.html", first), "the archive page itself"
-    assert not chapters.looks_like_pages("https://x.test/store/2volumes", first), "another part of the site"
-    assert not chapters.looks_like_pages("https://example.com/c2/p1", first), "another site entirely"
+    assert looks_like_pages("https://x.test/c7/p3", first), "another chapter's page"
+    assert looks_like_pages("https://x.test/c12.1/p1", first), "a sub-numbered chapter"
+    assert not looks_like_pages("https://x.test/archive.html", first), "the archive page itself"
+    assert not looks_like_pages("https://x.test/store/2volumes", first), "another part of the site"
+    assert not looks_like_pages("https://example.com/c2/p1", first), "another site entirely"
     #a comic with one fixed first step still works the old way
-    assert chapters.looks_like_pages("https://x.test/comic/issue-4-page-7/", "https://x.test/comic/issue-1-cover/")
+    assert looks_like_pages("https://x.test/comic/issue-4-page-7/", "https://x.test/comic/issue-1-cover/")
 
 
-def test_a_heading_tag_beats_a_container_whose_class_says_chapter(chapters):
+def test_a_heading_tag_beats_a_container_whose_class_says_chapter():
     archive = ('<div class="chapter"><h2><a href="p1">Real Title</a></h2>'
                '<p>Words that are not the title at all.</p></div>'
                '<div class="chapter"><h2><a href="p2">Second</a></h2><p>More words.</p></div>'
                '<div class="chapter"><h2><a href="p3">Third</a></h2></div>'
                '<div class="chapter"><h2><a href="p4">Fourth</a></h2></div>')
-    found, links = read(chapters, archive, "https://x.test/a.html", "https://x.test/p1")
+    found, links = read(archive, "https://x.test/a.html", "https://x.test/p1")
     assert labels(found) == ["Real Title", "Second", "Third", "Fourth"]
 
 
-def test_a_container_with_no_heading_inside_still_names_its_chapter(chapters):
+def test_a_container_with_no_heading_inside_still_names_its_chapter():
     archive = ('<div class="chapter">Arc One <a href="p1">go</a></div>'
                '<div class="chapter">Arc Two <a href="p2">go</a></div>'
                '<div class="chapter">Arc Three <a href="p3">go</a></div>'
                '<div class="chapter">Arc Four <a href="p4">go</a></div>')
-    found, links = read(chapters, archive, "https://x.test/a.html", "https://x.test/p1")
+    found, links = read(archive, "https://x.test/a.html", "https://x.test/p1")
     assert labels(found) == ["Arc One go", "Arc Two go", "Arc Three go", "Arc Four go"]
 
 
-def test_a_heading_followed_by_its_links_reads_as_before(chapters):
+def test_a_heading_followed_by_its_links_reads_as_before():
     archive = ("<h2>Chapter One</h2><a href='p1'>1</a><a href='p2'>2</a>"
                "<h2>Chapter Two</h2><a href='p3'>3</a><a href='p4'>4</a>")
-    found, links = read(chapters, archive, "https://x.test/a.html", "https://x.test/p1")
+    found, links = read(archive, "https://x.test/a.html", "https://x.test/p1")
     assert [(c["label"], c["pages"]) for c in found] == [("Chapter One", 2), ("Chapter Two", 2)]
 
 
-def test_a_page_count_is_only_stripped_when_it_is_a_page_count(chapters):
-    assert chapters.heading_says("3. A Snowy Day (4 pages, 5/8/06)") == ("3. A Snowy Day", 4)
-    assert chapters.heading_says("Intermission: A Letter (1 page, 4/1/14)") == ("Intermission: A Letter", 1)
+def test_a_page_count_is_only_stripped_when_it_is_a_page_count():
+    assert heading_says("3. A Snowy Day (4 pages, 5/8/06)") == ("3. A Snowy Day", 4)
+    assert heading_says("Intermission: A Letter (1 page, 4/1/14)") == ("Intermission: A Letter", 1)
     #a title that merely has brackets, or ends in a year, is left alone
-    assert chapters.heading_says("The Toy Box (tm)") == ("The Toy Box (tm)", None)
-    assert chapters.heading_says("Halloween (2023)") == ("Halloween (2023)", None)
+    assert heading_says("The Toy Box (tm)") == ("The Toy Box (tm)", None)
+    assert heading_says("Halloween (2023)") == ("Halloween (2023)", None)
 
 
-def test_an_archive_that_is_a_dropdown_with_values_from_the_site_root(chapters):
+def test_an_archive_that_is_a_dropdown_with_values_from_the_site_root():
     #every page is an <option> whose value the site's script navigates to, and the chapter starts are
     #links inside a div whose class says "storyline"
     archive = ('<h1>Archive</h1><select>'
@@ -296,7 +301,7 @@ def test_an_archive_that_is_a_dropdown_with_values_from_the_site_root(chapters):
                + '</select>'
                + "".join('<div class="cc-storyline-header"><a href="https://x.test/comic/page-{0}">'
                          'Book {1}</a></div>'.format(n, at + 1) for at, n in enumerate((1, 5, 9))))
-    found, links = read(chapters, archive, "https://x.test/comic/archive", "https://x.test/comic/page-1")
+    found, links = read(archive, "https://x.test/comic/archive", "https://x.test/comic/page-1")
     assert len(links) == 12, "the dropdown's pages are found"
     assert not any("comic/comic" in one for one in links), \
         "and not doubled up by the join: {0}".format([one for one in links if "comic/comic" in one][:3])

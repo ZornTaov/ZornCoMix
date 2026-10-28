@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from conftest import Site, read_meta, run, write_meta
+from comiclib.chapters.align import align
 
 POSTS = 150
 #every seventh post is a weekly extra the folder keeps elsewhere
@@ -219,7 +220,7 @@ def test_one_image_posted_twice_is_one_page(library, chapters, serve):
     assert done.returncode == 0 and "settled" in done.stdout
 
 
-def test_a_size_two_pages_share_still_anchors_between_its_neighbours(tmp_path, chapters):
+def test_a_size_two_pages_share_still_anchors_between_its_neighbours(tmp_path):
     #pages 3 and 9 happen to be exactly the same size, so neither is unique across the comic; each sits next
     #to a page this folder does not have, so counting alone cannot place them either
     sizes = {1: 100, 2: 200, 3: 777, 4: 400, 5: 500, 6: 600, 7: 700, 8: 800, 9: 777, 10: 1000, 11: 1100}
@@ -231,7 +232,7 @@ def test_a_size_two_pages_share_still_anchors_between_its_neighbours(tmp_path, c
             name = "{0:04d}.png".format(len(files))
             (tmp_path / name).write_bytes(b"x" * size)
             files.append(name)
-    aligned, how, anchors, trouble = chapters.align(pages, files, str(tmp_path))
+    aligned, how, anchors, trouble = align(pages, files, str(tmp_path))
     assert not trouble
     assert aligned[2] == "0002.png" and aligned[8] == "0007.png"
     assert aligned[3] is None and aligned[9] is None

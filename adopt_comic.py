@@ -2,23 +2,17 @@
 #update_comics.py can carry it on without re-downloading everything that is already there. #V 1.2
 #
 #this is the command; the work is in comiclib.adopt - scanning a library, the report, and adopting one
-#comic. everything this held is still reachable here under its old name.
+#comic.
 import argparse
 import csv
 import os
 import sys
 
-from comiclib.adopt.adopting import adopt_one, build_archive, build_metadata, nearest_archive  # noqa: F401
-from comiclib.adopt.report import (editable_columns, read_report, report_columns, row_to_args,  # noqa: F401
-                                   truthy, write_report)
+from comiclib.adopt.adopting import adopt_one
+from comiclib.adopt.report import read_report, row_to_args, write_report
+from comiclib.adopt.scan import comic_folder, relative_output, survey
 from comiclib.adopt.unpacking import unpack_and_adopt
-from comiclib.adopt.scan import (comic_folder, comic_names, every_archive, inside, inspect,  # noqa: F401
-                                 is_page, list_pages, loose_pages, matching_archive, numbered,
-                                 one_comic_split_up, page_types, pages_in_archives, prefixed,
-                                 relative_output, survey)
 from comiclib.metadata import METADATA_FILE
-
-metadata_file = METADATA_FILE
 
 
 def setup():
@@ -134,7 +128,7 @@ def main():
 
     ok, message = unpack_and_adopt(args) if args.unpack_to else adopt_one(args)
     if ok:
-        print("  wrote         : {0}".format(os.path.join(comic_folder(args.path), metadata_file)))
+        print("  wrote         : {0}".format(os.path.join(comic_folder(args.path), METADATA_FILE)))
         return 0
     if message.startswith("would adopt: "):
         print("  (dry run, nothing written)")

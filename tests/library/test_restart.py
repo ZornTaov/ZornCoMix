@@ -23,7 +23,7 @@ def schedule(config):
 
 @pytest.fixture
 def runner(config):
-    return fresh("comiclib.web.jobs").Runner(None, None)
+    return fresh("comiclib.web.jobs").Runner(None)
 
 
 def held_job(runner):
@@ -130,7 +130,7 @@ def wait_for(job):
 
 def test_recent_outlasts_a_restart_and_numbers_jobs_on_from_it(config):
     jobs = fresh("comiclib.web.jobs")
-    before = jobs.Runner(None, None)
+    before = jobs.Runner(None)
     first = before.submit(Job("update", "Before the restart", lambda job: 0))
     wait_for(first)
     #written a moment after the job finishes, and after the page is shown it
@@ -138,7 +138,7 @@ def test_recent_outlasts_a_restart_and_numbers_jobs_on_from_it(config):
     while not (config / "recent.json").exists() and time.time() < end:
         time.sleep(0.05)
     #a fresh process, as the container starting again is
-    after = fresh("comiclib.web.jobs").Runner(None, None)
+    after = fresh("comiclib.web.jobs").Runner(None)
     assert [entry["label"] for entry in after.recent] == ["Before the restart"], after.recent
     second = after.submit(Job("update", "After the restart", lambda job: 0))
     assert second.id > first.id, "a job since the restart must not share a number with one before it"
@@ -150,12 +150,12 @@ def test_recent_forgets_what_finished_more_than_a_week_ago(config):
     held = [{"id": 2, "label": "Yesterday", "finished": now - 86400},
             {"id": 1, "label": "Last month", "finished": now - 30 * 86400}]
     (config / "recent.json").write_text(json.dumps(held), encoding="utf-8")
-    assert [entry["label"] for entry in jobs.Runner(None, None).recent] == ["Yesterday"]
+    assert [entry["label"] for entry in jobs.Runner(None).recent] == ["Yesterday"]
 
 
 def test_a_damaged_recent_file_starts_recent_empty(config, capsys):
     (config / "recent.json").write_text("{not json", encoding="utf-8")
-    assert fresh("comiclib.web.jobs").Runner(None, None).recent == []
+    assert fresh("comiclib.web.jobs").Runner(None).recent == []
     assert "could not read" in capsys.readouterr().out
 
 

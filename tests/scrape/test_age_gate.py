@@ -12,6 +12,7 @@ from comiclib import cookies
 from comiclib.metadata import settings_to_argv
 from comiclib.runrecord import settings_from_args
 from conftest import PNG_240, Comic, pages_in, read_meta, run, write_index, write_meta
+from comiclib.chapters.archive_page import read_archive
 
 PAGES = 4
 PASS = "AGE_OK=yes"
@@ -128,14 +129,14 @@ def test_a_refetch_carries_the_comic_cookie(library, chapters, serve, settings, 
         assert "403" in done.stdout, done.stdout[-800:]
 
 
-def test_an_archive_page_is_read_with_the_comic_cookie(serve, chapters):
+def test_an_archive_page_is_read_with_the_comic_cookie(serve):
     #a gate has no chapters, so an archive read without the cookie would find none
     base = serve(Gated)
     try:
         cookies.use({"url": base + "/p/1"})
-        assert "Are you old enough" in chapters.read_archive(base + "/p/2")
+        assert "Are you old enough" in read_archive(base + "/p/2")
         cookies.use({"url": base + "/p/1", "cookies": {"AGE_OK": "yes"}})
-        assert "cc-comic" in chapters.read_archive(base + "/p/2")
+        assert "cc-comic" in read_archive(base + "/p/2")
     finally:
         cookies.use({})
 

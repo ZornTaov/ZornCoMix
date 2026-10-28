@@ -23,11 +23,10 @@ from comiclib.standin import NotAPicture, note_body, note_name
 from comiclib.paths import element_paths_file
 from comiclib.guards import would_lose_a_page
 #the scrape's own loop is this file; finding elements, pressing next and fetching an image are not, and
-#are named here as they always were, so the loop reads the same and anything reaching in still finds them
+#are named here as they always were, so the loop reads the same
 from comiclib.browser import quit_quietly
 from comiclib.download import fetch
-from comiclib.elements import (comic_images, ele_get, ele_get_all, merge_paths, next_ele_get,  # noqa: F401
-                               next_element, test_ele_get, test_next_ele_get)
+from comiclib.elements import comic_images, ele_get_all, next_ele_get, next_element, test_next_ele_get
 from comiclib.exits import MirrorError
 
 #global vars

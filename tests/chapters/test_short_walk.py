@@ -123,14 +123,6 @@ def test_a_page_drawn_as_two_pictures_keeps_both_on_an_address_of_several(librar
     assert [one["n"] for one in held] == list(range(1, 8))
 
 
-class Setup:
-    #the little of update_comics that walk_needed asks of it
-    @staticmethod
-    def config_folder():
-        from comiclib.paths import config_folder
-        return config_folder()
-
-
 class Held:
     def __init__(self, folder):
         with open(str(folder / "mirror_metadata.json"), encoding="utf-8") as f:
@@ -139,17 +131,17 @@ class Held:
 
 def test_working_out_chapters_carries_on_a_walk_that_stopped_short(library, chapters):
     folder, _ = comic_with(library, chapters, 40, 400)
-    assert walk_needed(None, Setup, Held(folder)) == "carry on"
+    assert walk_needed(None, Held(folder)) == "carry on"
 
 
 def test_working_out_chapters_leaves_a_finished_walk_alone(library, chapters):
     folder, _ = comic_with(library, chapters, 400, 400)
-    assert walk_needed(None, Setup, Held(folder)) is None
+    assert walk_needed(None, Held(folder)) is None
 
 
 def test_a_record_of_one_page_is_a_walk_that_never_happened(library, chapters):
     folder, _ = comic_with(library, chapters, 1, 1)
-    assert walk_needed(None, Setup, Held(folder)) == "start"
+    assert walk_needed(None, Held(folder)) == "start"
 
 
 def primed_as(folder, first_url, first_number=1):
@@ -163,14 +155,14 @@ def test_a_primed_comics_one_page_record_needs_no_walk(library, chapters):
     #primed: page 1 saved, its line recorded, and the update that fetches the rest adds to it
     folder, _ = comic_with(library, chapters, 1, 1)
     primed_as(folder, "{0}/comic/1".format(SITE))
-    assert walk_needed(None, Setup, Held(folder)) is None
+    assert walk_needed(None, Held(folder)) is None
 
 
 def test_a_one_page_record_of_some_other_page_still_needs_a_walk(library, chapters):
     #a walk begun on the newest page writes that page down as its only line: not the comic's first page
     folder, _ = comic_with(library, chapters, 1, 1)
     primed_as(folder, "{0}/comic/0".format(SITE))
-    assert walk_needed(None, Setup, Held(folder)) == "start"
+    assert walk_needed(None, Held(folder)) == "start"
     #nor is a comic recorded as begun part way in, whatever its one line says
     primed_as(folder, "{0}/comic/1".format(SITE), first_number=40)
-    assert walk_needed(None, Setup, Held(folder)) == "start"
+    assert walk_needed(None, Held(folder)) == "start"

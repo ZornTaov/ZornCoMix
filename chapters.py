@@ -2,45 +2,24 @@
 #anything and lining that walk up against what is already on disk. the walk is the slow part and its
 #result is cached; the alignment is what everything about chapters is later built on. #V 1.0
 #
-#this is the command; the work is in comiclib.chapters, one module for each part of it. everything the
-#command used to hold is still reachable here under its old name, for anything that reaches in for it.
+#this is the command; the work is in comiclib.chapters, one module for each part of it, and anything else
+#wanting a part imports it from there.
 import argparse
 import json
 import os
 import sys
 
-from comiclib.chapters.addresses import (agreement, chapter_word, chapters_from_list,  # noqa: F401
-                                         chapters_from_urls, group_by_url, guess_by_url, numbers_in,
-                                         read_in_order)
-from comiclib.chapters.align import (align, anchor_kinds, by_written_order, describe, do_align,  # noqa: F401
-                                     gap_notes, longest_run, place_recovered, recovered_files, save_gaps,
-                                     unique_pairs, verify)
-from comiclib.chapters.archive_page import (ArchiveReader, chapters_from_archive,  # noqa: F401
-                                            chapters_from_events, drawn_heading, first_of_each,
-                                            heading_says, names_a_chapter, pages_linked, read_archive)
-from comiclib.chapters.banners import covers, save_banners  # noqa: F401
-from comiclib.chapters.chapterlist import (apply_fixes, chapter_record, chapters_every, compare_chapters,  # noqa: F401
-                                           edit_fixes, list_fixes, plan, save_chapters, say_fixes,
-                                           settle_chapters, show_chapters, try_archive)
-from comiclib.chapters.index import (alignment_path, fill_sizes, head_size, index_path,  # noqa: F401
-                                     joined_pages, one_page, read_index, remember_cache, save_alignment,
-                                     walk)
-from comiclib.chapters.links import (link_targets, looks_like_pages, page_at, page_shape,  # noqa: F401
-                                     same_page, says_it_twice)
-from comiclib.chapters.pagefixes import edit_page_fixes, fixes_in  # noqa: F401
-from comiclib.chapters.packing import (already_packed, chapter_contents, chapter_file,  # noqa: F401
-                                       chapter_folder, drop_single, pack, repack, retell, tidy_name,
-                                       verify_chapters)
-from comiclib.chapters.pageops import (fetch_missing, insert_page, mark_recovered, note_page,  # noqa: F401
-                                       refetch, renumber, shift_up)
+from comiclib.chapters.align import do_align
+from comiclib.chapters.banners import covers
+from comiclib.chapters.chapterlist import edit_fixes, plan, try_archive
+from comiclib.chapters.index import alignment_path, index_path, read_index, walk
+from comiclib.chapters.pagefixes import edit_page_fixes, fixes_in
+from comiclib.chapters.packing import pack, repack, retell
+from comiclib.chapters.pageops import insert_page, mark_recovered, note_page, refetch, renumber
 from comiclib.chapters.rewind import rewind
 from comiclib.chapters.wordpress import wordpress_index
 from comiclib import cookies, download, useragent
-from comiclib.metadata import METADATA_FILE as metadata_file, read as read_metadata  # noqa: F401
-from comiclib.pages import listing as folder_pages, page_key, page_number, plain_name  # noqa: F401
-from comiclib.paths import config_folder  # noqa: F401
-from comiclib.standin import (video_types, flash_types, link_types, a_web_address,  # noqa: F401
-                              held_otherwise, address_in, archive_entry, stand_in, wrapped)
+from comiclib.metadata import read as read_metadata
 
 
 def setup():

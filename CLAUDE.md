@@ -65,8 +65,9 @@ archives, and keep them up to date unattended.
 | `web/` | The web page's server: the one job queue (`jobs`), what the page is shown (`views`), the element paths as it edits them (`elementpaths`), the add form (`adding`), a comic uploaded as a zip and put in or adopted (`uploads`), the changes it can make (`edits`), and the http handler (`server`). The page itself is `web_page/`, at the top |
 | `chapters/` | Walking a comic to record which page is which, and `KeptIndex`, the index a scrape adds to as it goes (`index`), the same index read from a WordPress site's post list instead of walked (`wordpress`), lining that up against the files (`align`), which file is which page said by hand where that cannot settle it (`pagefixes`: a page pinned to its file, a line that is no page, a file the walk never saw placed after a page - kept in the metadata's `page_fixes`, which a scrape carries, and used by every alignment, so a correction is never written into the index or the alignment, where the next walk or align would lose it), reading an archive page (`archive_page`) or the addresses (`addresses`) for chapters, the chapter list and its corrections (`chapterlist`), a chapter's own number read from its label (`numbering`), packing per chapter (`packing`), renumbering, inserting and refetching pages (`pageops`), and going back to an earlier page (`rewind`: the pages from it on set aside, and the resume point, the index and alignment, the chapters and archives put back to before them - each go-back recorded in `history.rewinds`, which a scrape keeps as `runrecord` does) |
 
-The scripts import what they use by its old name (`chapters.page_key`, `mirror_base.metadata_file`), so
-code reaching into a script still finds it; new code should import from `comiclib`.
+The scripts import only what they use, and nothing reaches into a script for a part of `comiclib`: a test, the web
+page or another module imports it from `comiclib` itself. The web page's server is handed no script either; it
+imports what it needs from `comiclib` like everything else.
 
 ### The web page
 
