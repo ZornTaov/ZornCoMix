@@ -50,11 +50,22 @@ def run_politely():
     #driver, every script - inherits that. a run is dozens of browsers starting at once, and at normal
     #priority they took enough of the machine that a video playing beside them hitched. this way anything
     #else the machine is doing goes first, and the tests have what is left
+    #
+    #on windows it also runs in background mode, which lowers its disk and memory priority as well, and every
+    #process it starts inherits those: what a run was measured to load was the disk, not the processor, and a
+    #video beside it still slowed at below normal alone. background mode resets the priority class to normal,
+    #so below normal is asked for again after it, and children inherit all three
     try:
         if os.name == "nt":
             import ctypes
-            below_normal = 0x4000
-            ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), below_normal)
+            from ctypes import wintypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            kernel32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+            below_normal, background = 0x4000, 0x00100000
+            me = kernel32.GetCurrentProcess()
+            kernel32.SetPriorityClass(me, background)
+            kernel32.SetPriorityClass(me, below_normal)
         else:
             os.nice(10)
     except (OSError, AttributeError):
