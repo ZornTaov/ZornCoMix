@@ -21,8 +21,6 @@ STYLE = "dialog.css"
 SHAPES = ("pages", "chapter-folders", "chapter-cbz")
 #what a plugin's setting can be, the same few the web page already edits a comic's settings as
 KINDS = ("url", "text", "count", "flag")
-#the functions a plugin.py may define, each replacing the default of the same name
-HOOK_NAMES = ("build_command", "chapter_order", "remember", "ended")
 #a plugin is named by its folder, which ends up in a comic's settings and in an address the page asks for
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
 KEY = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -77,6 +75,8 @@ class Plugin:
         return os.path.isfile(os.path.join(self.folder, DIALOG))
 
     def hook(self, name):
+        #a function its plugin.py defines in place of the default of the same name: build_command,
+        #chapter_order, remember or ended
         return getattr(self.hooks, name, None) if self.hooks is not None else None
 
     def field(self, key):

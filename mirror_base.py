@@ -70,7 +70,6 @@ gate_passed = None
 
 #name of the sidecar written into the output folder, so it gets zipped into the cbz alongside the pages
 metadata_file = METADATA_FILE
-arg_parser = None
 run_start = None
 #identifies this run in the metadata; a timestamp alone collides when a comic is scraped twice in one second
 run_id = None
@@ -201,12 +200,9 @@ def setup():
     global current_url
     global browser_images
     global verbose
-    global arg_parser
     global run_start
     global run_id
-    params = make_parser()
-    args = params.parse_args()
-    arg_parser = params
+    args = make_parser().parse_args()
     run_start = now_stamp()
     run_id = uuid.uuid4().hex
     global given_cookies
