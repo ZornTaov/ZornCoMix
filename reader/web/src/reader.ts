@@ -24,7 +24,9 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   let settings = merged(globalSettings, own, seriesOwn);
   // a comic or series with settings of its own keeps changing those; otherwise a change is for every comic
   let scope: Scope = scopeOf(own, seriesOwn, inSeries);
-  const starts = comic.chapters.map((chapter) => chapter.start);
+  // where chapters start: what the archives bookmark, each a chapter's name on its first page as the scraper
+  // writes one, so a spread never runs over from one chapter into the next
+  const starts = comic.bookmarks.map((mark) => mark.start);
   // what the bookmarks menu lists, drawn by drawBookmarks. apart from starts: a page marked by the reader
   // breaks no spread and is no chapter to jump to
   let bookmarks: Bookmark[] = [];
@@ -352,24 +354,24 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   function drawBookmarks() {
     const select = menu.querySelector<HTMLSelectElement>('[data-act="bookmarks"]');
     if (!select) return;
-    bookmarks = bookmarkList(comic.chapters, comic.bookmarks);
+    bookmarks = bookmarkList(comic.bookmarks, comic.marked);
     select.innerHTML = `<option value="" disabled>Bookmarks</option>` + bookmarks.map((mark, at) =>
       `<option value="${at}">${mark.mine ? "★ " : ""}${esc(mark.title)}</option>`).join("");
     select.hidden = !bookmarks.length;
   }
 
   // the pages on screen that are marked, which the button takes the mark off; none, and it marks the first
-  const markedHere = () => shown[view].filter((n) => comic.bookmarks.includes(n));
+  const markedHere = () => shown[view].filter((n) => comic.marked.includes(n));
 
   async function toggleBookmark() {
     const button = menu.querySelector<HTMLButtonElement>('[data-act="mark"]')!;
     button.disabled = true;
     try {
       const marked = markedHere();
-      let answer = { bookmarks: comic.bookmarks };
+      let answer = { marked: comic.marked };
       if (!marked.length) answer = await api.addBookmark(comic.id, shown[view][0]);
       for (const n of marked) answer = await api.removeBookmark(comic.id, n);
-      comic.bookmarks = answer.bookmarks;
+      comic.marked = answer.marked;
       notify(marked.length ? "Bookmark taken off" : "Page bookmarked");
     } catch (error) {
       notify(refusal(error));

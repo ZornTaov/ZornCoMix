@@ -1,6 +1,6 @@
 // the parts of reading that are only arithmetic, kept apart from the page so they can be tested alone:
 // which pages are shown together, which way a tap turns, which pages to have ready
-import type { Page } from "./api";
+import type { Carried, Page } from "./api";
 import type { Fit, Settings } from "./settings";
 
 // what is on screen at once: one page, or two side by side. a page drawn as a spread, a stand-in, and the
@@ -159,7 +159,7 @@ export interface Bookmark {
 // what the bookmarks menu offers: what the comic's archives bookmark - a chapter's name on its first page - and
 // the pages marked in the reader, in page order. a page both is one entry, under the archive's name and marked
 // as yours, so taking your mark off it leaves the archive's
-export function bookmarkList(carried: { title: string; start: number }[], marked: number[]): Bookmark[] {
+export function bookmarkList(carried: Carried[], marked: number[]): Bookmark[] {
   const mine = new Set(marked);
   const list: Bookmark[] = carried.map((each) => ({ title: each.title, start: each.start, mine: mine.has(each.start) }));
   const named = new Set(carried.map((each) => each.start));
