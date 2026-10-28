@@ -26,8 +26,9 @@ from comicreader.library import CHAPTER
 QUIET = 300
 #what update_comics holds while it updates the library
 LOCK = ".update_comics.lock"
-#what may be said of a whole folder or series at once: everything but the title, which is each comic's own
-SHARED = tuple(key for key in comicinfo.INFO + comicinfo.EXTRA if key != "title")
+#what may be said of a whole folder or series at once: everything but the title and the number, which are
+#each comic's own
+SHARED = tuple(key for key in comicinfo.INFO + comicinfo.EXTRA if key not in ("title", "Number"))
 
 
 class Refused(Exception):
@@ -379,9 +380,12 @@ def describe_many(library, ids):
         if key in comicinfo.INFO or any(values):
             same = all(value == values[0] for value in values)
             fields[key] = {"value": values[0] if same else None, "mixed": not same}
+    #the form offers only what may be said of them all, so a number is never typed in to be refused
+    form = comicinfo.form()
+    form["extra"] = [field for field in form["extra"] if field[0] in SHARED]
     return {"comics": len(each), "scraped": sum(1 for one in each if one["scraped"]),
             "archives": sum(one["archives"] for one in each), "fields": fields,
-            "stamps": {one["id"]: one["stamp"] for one in each}, "form": comicinfo.form()}
+            "stamps": {one["id"]: one["stamp"] for one in each}, "form": form}
 
 
 def edit_many(library, body, work=None):

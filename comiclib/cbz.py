@@ -22,9 +22,16 @@ def archive_prefix(zf, folder):
     #the comic as two separate groups
     #the ComicInfo is at the top of every archive whatever its pages are under, since that is where a
     #reader looks for it, so it says nothing about where the pages are
+    #nor does a metadata file at the top, which an archive from elsewhere put in through the web page has
     prefix = os.path.basename(os.path.abspath(folder)) + '/'
-    names = [name for name in zf.namelist() if name != comicinfo.NAME and not mac_leftover(name)]
-    return prefix if names and all(name.startswith(prefix) for name in names) else ''
+    names = [name for name in zf.namelist()
+             if name not in (comicinfo.NAME, METADATA_FILE) and not mac_leftover(name)]
+    if names and all(name.startswith(prefix) for name in names):
+        return prefix
+    #an archive from elsewhere keeps its pages under a folder of its own name, not the comic's: one put in
+    #whole, its pages nowhere else, was read as holding none, and its ComicInfo rewritten saying so
+    first = names[0].split('/', 1)[0] + '/' if names and '/' in names[0] else ''
+    return first if first and all(name.startswith(first) for name in names) else ''
 
 
 def shelf(folder):
@@ -286,6 +293,10 @@ def apply(cbz, folder, change, metadata):
     prefix = change["prefix"]
     with zipfile.ZipFile(cbz, 'a', zipfile.ZIP_STORED) as zf:
         meta_name = prefix + METADATA_FILE
+        #a metadata file already at the top, beside pages under a folder, is written again where it is,
+        #rather than a second copy put under the folder
+        if prefix and meta_name not in zf.NameToInfo and METADATA_FILE in zf.NameToInfo:
+            meta_name = METADATA_FILE
         internals = all(hasattr(zf, attr) for attr in ('filelist', 'NameToInfo', 'start_dir'))
         if internals:
             for name in change["stale"]:

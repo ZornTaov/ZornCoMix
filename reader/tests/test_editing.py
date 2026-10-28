@@ -159,6 +159,22 @@ def test_the_rest_of_the_schema_is_shown_and_changed_where_it_is_named(library, 
     assert saved.json()["says"]["Publisher"] == "SomePublisher"
 
 
+def test_a_volume_is_put_in_its_place_by_the_number_said_of_it(library, client):
+    #an epilogue named by its year, in a series of volumes: said to be the seventh of seven, it sorts last
+    archive = their_archive(library, "Shelf/MyComic Extras (2017).cbz", "<Series>MyComic</Series>")
+    settle(library)
+    api, _ = client()
+    comic = find(api, "MyComic Extras (2017)")
+    info = api.get("/api/comics/{0}/info".format(comic["id"])).json()
+    assert [key for key, _, _ in info["form"]["extra"]][:2] == ["Number", "Count"]
+    saved = api.put("/api/comics/{0}/info".format(comic["id"]),
+                    json={"info": {"series": "MyComic", "Number": "7", "Count": "7"}, "version": info["version"]})
+    assert saved.status_code == 200, saved.text
+    _, root = comicinfo_of(archive)
+    assert [child.tag for child in root] == ["Series", "Number", "Count"]
+    assert (find(api, "MyComic Extras (2017)")["number"], saved.json()["says"]["Count"]) == ("7", "7")
+
+
 def test_what_cannot_be_written_is_said_rather_than_dropped(library, client):
     single_comic(library)
     api, _ = client()
@@ -244,6 +260,11 @@ def test_a_folder_is_changed_whole_or_not_at_all(library, client):
     said = api.post("/api/comicinfo", json={"ids": ids}).json()
     title = api.put("/api/comicinfo", json={"ids": ids, "changes": {"title": "All the same"}})
     assert title.status_code == 400 and "Title cannot be said" in title.json()["detail"]
+    #nor is a number, which is each comic's own as its title is, so the form never offers one; a count may be
+    number = api.put("/api/comicinfo", json={"ids": ids, "changes": {"Number": "1"}})
+    assert number.status_code == 400 and "Number (in its series) cannot be said" in number.json()["detail"]
+    extra = [key for key, _, _ in said["form"]["extra"]]
+    assert "Number" not in extra and "Count" in extra
     #one comic the scraper wrote moments ago refuses the lot, before any other is written
     os.utime(str(library / "CBZs" / "MyComic.cbz"), None)
     busy = api.put("/api/comicinfo", json={"ids": ids, "stamps": said["stamps"], "changes": {"Publisher": "P"}})
