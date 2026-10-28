@@ -18,7 +18,7 @@ def fresh_args():
         URL="https://example.com/comic/43/", output="Uncompressed/TestComic",
         cbz_path="CBZs/TestComic.cbz", prefix=True, enable_javascript=False, firefox=False,
         waittime=0, cbz=True, increment=43, headless=True, chrome=False, verbose=False,
-        element_find_manual=False, element_find_next_manual=False, direction_check=True,
+        element_find_manual=False, direction_check=True,
         multi_page=True)
 
 

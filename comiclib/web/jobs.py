@@ -707,11 +707,6 @@ def remember_chapters(comic, listing, every=None, make_folder=False):
     print("  {0}: {1}".format(comic.name, said), flush=True)
 
 
-def remember_listing(comic, listing, make_folder=False):
-    #its name before a comic could be cut by size as well, which code reaching in through web_ui still uses
-    return remember_chapters(comic, listing, make_folder=make_folder)
-
-
 def split_into_chapters(comic, listing, args, keeps_archives=True, every=None):
     #a new comic that was given a chapter list, or a size to cut it at: line up what was just saved, work
     #the chapters out, and write one archive per chapter. every step says what it did, and none of them

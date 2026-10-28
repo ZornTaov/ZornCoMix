@@ -378,7 +378,7 @@ def chapters(config):
 def scrape_args(folder, **over):
     #what setup() would hand back for a scrape into this folder, for calling mirror_base's parts directly
     args = argparse.Namespace(
-        URL="https://example.com/1", element_find_manual=False, element_find_next_manual=False,
+        URL="https://example.com/1", element_find_manual=False,
         prefix=True, output=str(folder), cbz=False, cbz_path=None, increment=1, waittime=0,
         enable_javascript=False, firefox=False, chrome=True, headless=True, verbose=False,
         direction_check=True, multi_page=True, keep_index=False, index=None, index_first=False,
@@ -402,7 +402,7 @@ def browser(mirror, request):
     #headless chrome with javascript on, the way the web page is looked at
     driver = mirror.build_driver(argparse.Namespace(
         firefox=False, chrome=False, headless=True, enable_javascript=True, waittime=0,
-        element_find_next_manual=False, verbose=False))
+        verbose=False))
     driver.set_window_size(1280, 900)
     if JS_COVERAGE:
         js_runs[driver] = None

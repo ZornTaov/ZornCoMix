@@ -29,10 +29,6 @@ from comiclib.download import fetch
 from comiclib.elements import comic_images, ele_get_all, next_ele_get, next_element, test_next_ele_get
 from comiclib.exits import MirrorError
 
-#global vars
-custom_args = [
-    ]
-
 #the paths shipped in comiclib.elements with the library's own element_paths.json laid over them, read
 #once, before anything is tried
 element_names, next_ele_names, first_ele_names, gate_ele_names = elements.with_saved_paths(element_paths_file())
@@ -177,7 +173,6 @@ def make_parser():
     params.add_argument("-c","--chrome",action='store_true',help="Uses Chrome as the webdriver browser. Exclusive with --firefox. This is the default.",default=False)
     params.add_argument("--headless",action=argparse.BooleanOptionalAction,help="Runs the browser without a window, which is the only way it will start on a machine with no display. On by default; pass --no-headless to watch it work.",default=True)
     params.add_argument("-m","--element_find_manual",action='store_true',help="Skip the element paths and take the first image on the page, for a page that holds nothing but the comic. Off by default.",default=False)
-    params.add_argument("-n","--element_find_next_manual",action='store_true',help="Press next with a path written by hand into next() in this script, instead of searching the element paths. Adding the path to element_paths.json does the same without editing anything. Off by default.",default=False)
     params.add_argument("-o","--output",type=str,help="Sets the output folder for the images to be saved in. Defaults to the current working directory/url.origin.")
     params.add_argument("-p","--prefix",action='store_true',help="Include the increment as a filename prefix. Useful if the comic changes filename format mid-way through.")
     params.add_argument("-v","--verbose",action='store_true',help="Output verbose logging for debugging.")
@@ -210,7 +205,7 @@ def setup():
     global run_start
     global run_id
     params = make_parser()
-    args = params.parse_args(len(sys.argv) == 1 and custom_args or None)
+    args = params.parse_args()
     arg_parser = params
     run_start = now_stamp()
     run_id = uuid.uuid4().hex
@@ -303,13 +298,13 @@ def setup():
     state = held.get("state") or {}
     if not args.element_find_manual and state.get("image_xpath"):
         image_xpath = state["image_xpath"]
-    if not args.element_find_next_manual and state.get("next_xpath"):
+    if state.get("next_xpath"):
         next_xpath = state["next_xpath"]
     #given outright, which a walk is: it has no folder of the comic's to read them from, and searching the lists
     #afresh found a next link on a page of several that led back, and the walk called the comic looped there
     if not args.element_find_manual and getattr(args, "image_path", None):
         image_xpath = args.image_path
-    if not args.element_find_next_manual and getattr(args, "next_path", None):
+    if getattr(args, "next_path", None):
         next_xpath = args.next_path
 
     return driver, increment, args
@@ -407,8 +402,8 @@ def page_images(driver, args):
     #whatever way this page was reached, the browser's own error page is never read as one of the comic's:
     #its picture would be saved or recorded as the page, and its missing next link taken for the comic's end
     browser.load_or_retry(driver)
-    if args.element_find_manual: #manual editing location
-        #element = d.find_element(By.XPATH, '//*[@id="comic"]')
+    if args.element_find_manual:
+        #a page holding nothing but the comic: its first picture is the page
         element = driver.find_elements(By.TAG_NAME, 'img')
         return [element[0].get_attribute('src')] if element else []
 
@@ -737,27 +732,21 @@ def next(driver,args):
     global next_xpath
     if args.waittime != 0:
         sleep(args.waittime)
-    if args.element_find_next_manual: #manual editing location
-        next_ele = driver.find_element(By.XPATH, '//*[@]')
-        next_ele.click()
-        return True
-
-    else: #automatic mode
-        #as with the image, the remembered path is tried first and the list is re-searched if it is gone.
-        #a path that matches but will not press is not the end of the comic either: another path may point
-        #at something that will, so the search carries on rather than taking the first failure as final
-        for element in ([next_xpath] if next_xpath else []) + next_ele_names: #sends a possible path to be tested
-            if not test_next_ele_get(driver,element):
-                continue
-            if next_ele_get(driver,element):
-                next_xpath = element #the path that actually worked is the one worth trying first next time
-                #a page that did not load has no next link of its own, and would end the run as though it
-                #were the comic's last; it is tried again first, and stops the run if it never loads
-                browser.load_or_retry(driver)
-                return True
-        #nothing in the list matched, or nothing that matched could be pressed, which on an ongoing comic
-        #usually just means the last page
-        return False
+    #as with the image, the remembered path is tried first and the list is re-searched if it is gone.
+    #a path that matches but will not press is not the end of the comic either: another path may point
+    #at something that will, so the search carries on rather than taking the first failure as final
+    for element in ([next_xpath] if next_xpath else []) + next_ele_names: #sends a possible path to be tested
+        if not test_next_ele_get(driver,element):
+            continue
+        if next_ele_get(driver,element):
+            next_xpath = element #the path that actually worked is the one worth trying first next time
+            #a page that did not load has no next link of its own, and would end the run as though it
+            #were the comic's last; it is tried again first, and stops the run if it never loads
+            browser.load_or_retry(driver)
+            return True
+    #nothing in the list matched, or nothing that matched could be pressed, which on an ongoing comic
+    #usually just means the last page
+    return False
 
 
 def next_instead(driver, args, left):
@@ -790,8 +779,6 @@ def next_elsewhere(driver, args, left, known):
     #on it that known(address, pictures) says is not already held is used from now on. False, back on the
     #page left, when none does - the comic really is caught up
     global next_xpath
-    if args.element_find_next_manual:
-        return False
     #asked of the page as it stands, before anything is pressed: most of the list matches the one next link
     #every theme has, and pressing it again from a fresh copy of the page would only stay here again
     pressed = elements.next_element(driver, next_xpath) if next_xpath else None

@@ -174,15 +174,6 @@ def comic_images(srcs, where=None):
     return srcs
 
 
-def test_ele_get(driver,element): #this runs through all of the possible next elements and tests them, but does not click them.
-    try: #tries the path to see if it is valid
-        driver.find_element(By.XPATH, element)
-        return True
-    except se.NoSuchElementException: #if path is not valid with this error, false is returned, making the for loop try again
-        if verbose: print("\nThe element {0} could not be found.".format(element))
-        return False
-
-
 def source_of(one):
     #the address of the picture an element stands for. a site that shows each page small, linked to the
     #page at full size, is scraped by an image path that picks out the link itself (//a[img]), so a link's
@@ -193,17 +184,6 @@ def source_of(one):
     if not src and (one.tag_name or "").lower() == "a":
         return one.get_attribute('href')
     return src
-
-
-def ele_get(driver,element):
-    try: #tries the path to see if it is valid
-        element2 = driver.find_element(By.XPATH, element)
-        #gets the source url of the image
-        src = source_of(element2)
-        return src
-    except se.NoSuchElementException: #if path is not valid with this error, false is returned, making the for loop try again
-        if verbose: print("\nThe element {0} src could not be found.".format(element))
-        return None
 
 
 def ele_get_all(driver,element):
