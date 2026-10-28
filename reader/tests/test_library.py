@@ -288,6 +288,26 @@ def test_a_folder_of_different_comics_is_not_a_series(library, make_app):
     assert all(s["series"] is None for s in summaries(make_app()).values())
 
 
+def test_a_kept_comics_archive_among_numbered_volumes_is_numbered_with_them(library, make_app):
+    #the first volume put in through the updater, the rest copied beside it on the shelf, each saying the same
+    #series, and an epilogue named by its year: volume one was numbered by nothing, and sorted after the last
+    shelf = library / "CBZs" / "MyComic"
+    folder = comic_folder(library, "MyComic", 2, settings={"cbz_path": "CBZs/MyComic/MyComic v01 (2016).cbz"})
+    cbz.write(str(shelf / "MyComic v01 (2016).cbz"), str(folder), page_names(folder))
+    for name in ("MyComic v02 (2016)", "MyComic v03 (2017)", "MyComic Extras (2017)"):
+        with zipfile.ZipFile(str(shelf / (name + ".cbz")), "w") as zf:
+            zf.writestr("01.png", png(4, 4))
+            zf.writestr("ComicInfo.xml", "<ComicInfo><Series>MyComic</Series></ComicInfo>")
+    app = make_app()
+    found = summaries(app)
+    assert (found["MyComic"]["series"], found["MyComic"]["number"]) == ("MyComic", "1")
+    ordered = sorted(found.values(), key=lambda s: (float(s["number"] or "inf"), s["title"]))
+    assert [s["name"] for s in ordered] == ["MyComic", "MyComic v02 (2016)", "MyComic v03 (2017)",
+                                            "MyComic Extras (2017)"]
+    #and reading on from the end of volume one opens volume two
+    assert app.state.library.neighbours[found["MyComic"]["id"]]["next"]["id"] == found["MyComic v02 (2016)"]["id"]
+
+
 def test_a_comicinfo_series_wins_over_a_numbered_run(library, make_app):
     where = library / "Shelf"
     where.mkdir()

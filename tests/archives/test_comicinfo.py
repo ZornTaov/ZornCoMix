@@ -183,13 +183,14 @@ def test_the_rest_of_the_schema_said_by_hand_beats_another_programs_and_goes_in_
 
 def test_what_cannot_be_written_is_not_kept_and_is_said():
     said = {"Volume": "two", "Manga": "yesandrighttoleft", "AgeRating": "Spicy", "CommunityRating": "4.5",
-            "Month": "3", "Count": "9", "Pages": "x", "Publisher": " SomePublisher "}
-    #a choice is spelled as the schema spells it; what is worked out is never taken from a form
+            "Month": "3", "Count": "9", "Number": "7.5", "Pages": "x", "Publisher": " SomePublisher "}
+    #a choice is spelled as the schema spells it; what describes the pages is never taken from a form
     assert comicinfo.clean_info(said) == {"Manga": "YesAndRightToLeft", "CommunityRating": "4.5", "Month": 3,
-                                          "Publisher": "SomePublisher"}
-    problems = comicinfo.unsayable(said)
-    assert len(problems) == 2 and "Volume has to be a whole number" in problems[0], problems
-    assert "Age rating has to be one of Unknown" in problems[1], problems
+                                          "Count": 9, "Number": "7.5", "Publisher": "SomePublisher"}
+    problems = comicinfo.unsayable(dict(said, Count="nine"))
+    assert len(problems) == 3, problems
+    assert {"Volume has to be a whole number", "Count (of its series) has to be a whole number"} <= set(problems)
+    assert any("Age rating has to be one of Unknown" in problem for problem in problems), problems
 
 
 def test_another_programs_comicinfo_changes_only_where_it_is_changed():
@@ -208,12 +209,51 @@ def test_what_a_comic_says_with_nothing_said_is_what_its_archive_would(tmp_path)
     assert said == {"title": "MyComic", "series": "MyComic", "web": "https://example.com/", "Format": "Web Comic"}
 
 
-def test_the_form_offers_the_nine_then_the_rest_of_the_schema_never_what_is_worked_out():
+def test_the_form_offers_the_nine_then_the_rest_of_the_schema_never_what_describes_the_pages():
     form = comicinfo.form()
     assert [key for key, _, _ in form["fields"]] == list(comicinfo.SHOWN)
     extra = [key for key, _, _ in form["extra"]]
-    assert extra[0] == "Volume" and "Publisher" in extra and ["CoverArtist", "Cover artist", False] in form["extra"]
-    assert not {"Number", "Count", "Notes", "PageCount", "Pages", "Title"} & set(extra)
+    #a number and a count are worked out, but may be said over: a shelf of volumes is ordered by nothing else
+    assert extra[:3] == ["Number", "Count", "Volume"] and "Publisher" in extra
+    assert ["CoverArtist", "Cover artist", False] in form["extra"]
+    assert not {"Notes", "PageCount", "Pages", "Title"} & set(extra)
+
+
+def test_a_number_and_count_said_by_hand_are_the_comics_but_never_its_chapters(tmp_path):
+    metadata = {"settings": {"url": "https://example.com/comic/9", "ended": True},
+                "info": {"Number": "7", "Count": "7", "Volume": "2"}}
+    root = parsed(comicinfo.build(comicinfo.about_comic(str(tmp_path / "MyComic"), metadata), []))
+    assert [root.findtext(tag) for tag in ("Number", "Count", "Volume")] == ["7", "7", "2"]
+    #what the editor reads back is what was said, by the names it was said under
+    said = comicinfo.said_by(comicinfo.about_comic(str(tmp_path / "MyComic"), metadata))
+    assert (said["Number"], said["Count"]) == ("7", "7")
+    #a chapter keeps its own number; the count said of the comic is said of each of its chapters
+    chapter = {"number": 3, "called": 3, "label": "Three", "start_page": 20, "end_page": 29}
+    about = comicinfo.about_chapter(str(tmp_path / "MyComic"), metadata, chapter, 5)
+    assert (about["number"], about["count"]) == (3, 7)
+
+
+def test_an_archive_keeping_its_pages_under_a_folder_of_its_own_name_is_described_whole(tmp_path):
+    #a volume from elsewhere put in whole through the web page: its pages under a folder named as the archive
+    #was, the comic's folder named otherwise and holding nothing but the metadata, put at the archive's top
+    folder = tmp_path / "Uncompressed" / "MyComic"
+    folder.mkdir(parents=True)
+    (folder / METADATA_FILE).write_text('{"schema": 2, "settings": {}}')
+    archive = tmp_path / "MyComic v01 (2016).cbz"
+    with zipfile.ZipFile(str(archive), "w") as zf:
+        for n in range(1, 4):
+            zf.writestr("MyComic v01 (2016)/p{0:03d}.png".format(n), png(800, 1000 + n))
+        zf.writestr("ComicInfo.xml", "<ComicInfo><Series>MyComic</Series></ComicInfo>")
+        zf.writestr(METADATA_FILE, '{"schema": 2, "settings": {}}')
+    assert cbz.retag(str(archive), str(folder), [], comicinfo.about_comic(str(folder), {}))
+    _, root = what_it_says(archive)
+    assert root.findtext("PageCount") == "3" and len(root.find("Pages")) == 3
+    #nothing put under the folder that was not there: the metadata stays the one at the top
+    change = cbz.planned(str(archive), str(folder), [], (), comicinfo.about_comic(str(folder), {}), adding=False)
+    cbz.apply(str(archive), str(folder), change, metadata=True)
+    names, _ = what_it_says(archive)
+    assert names.count(METADATA_FILE) == 1 and names.count("ComicInfo.xml") == 1, names
+    assert not any(name.startswith("MyComic v01 (2016)/") and name.endswith(".json") for name in names), names
 
 
 def test_said_by_hand_is_written_into_the_archive_at_its_next_append(comic, tmp_path):

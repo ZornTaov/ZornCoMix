@@ -244,11 +244,21 @@ def gather(library, skip, pictures=None):
         if not found_chapter:
             loose.setdefault(os.path.dirname(path), []).append(path)
     #archives of one folder numbered one after another are the parts of one series, named after the folder,
-    #where no ComicInfo says otherwise. not at the top of the library, whose name says nothing about them
+    #where no ComicInfo says otherwise. not at the top of the library, whose name says nothing about them. a
+    #comic the scraper keeps is one of the parts too where its archive sits among them: the first volume put
+    #in through the updater and the rest copied beside it on the shelf, which left volume one, numbered by
+    #nothing, sorted after the last
+    kept = {}
+    for comic in found:
+        if comic["kind"] == "archive":
+            kept.setdefault(os.path.dirname(comic["sources"][0]), []).append(comic)
     runs = {}
     for where, paths in loose.items():
         if os.path.normpath(where) != library:
-            runs.update(numbered_runs(paths))
+            runs.update(numbered_runs(paths + [comic["sources"][0] for comic in kept.get(where, [])]))
+            for comic in kept.get(where, []):
+                if comic["sources"][0] in runs:
+                    comic["number"] = str(runs[comic["sources"][0]][0])
     for (where, series), members in groups.items():
         if series:
             relative = os.path.join(os.path.relpath(where, library), series)
