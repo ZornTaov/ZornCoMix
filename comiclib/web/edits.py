@@ -12,10 +12,12 @@ import time
 
 from comiclib import comicinfo, cookies, moving, placeholders, plugins, useragent
 from comiclib.chapters.index import index_path, set_aside
-from comiclib.metadata import write_json
+from comiclib.config import config_defaults, config_path, load_config
+from comiclib.metadata import METADATA_FILE, load as read_metadata, write_json
 from comiclib.plugins import field_value
+from comiclib.schedule import parse_schedule
 from comiclib.web.adding import clean_folder
-from comiclib.web.views import find_comic, is_moving, is_rewinding, is_running, read_metadata, walk_needed
+from comiclib.web.views import find_comic, is_moving, is_rewinding, is_running, walk_needed
 
 #the settings a person may change from the page, and what each one has to be. output is left out on
 #purpose: a comic's folder is what says where it lives, and update_comics ignores a stored output anyway
@@ -341,8 +343,8 @@ def plugin_settings(settings, given):
     return cleaned, own, problems + wrong
 
 
-def save_settings(args, uc, runner, name, given, expected_updated):
-    comic = find_comic(args, uc, name)
+def save_settings(args, runner, name, given, expected_updated):
+    comic = find_comic(args, name)
     if comic is None:
         return 404, {"error": "no comic named {0}".format(name)}
     #a running scrape rewrites this file after every page, and would quietly put back whatever it started with
@@ -353,7 +355,7 @@ def save_settings(args, uc, runner, name, given, expected_updated):
     if is_rewinding(runner, comic.name):
         return 409, {"error": "{0} is waiting to go back to an earlier page; reopen it once that has "
                               "finished".format(name)}
-    path = os.path.join(comic.folder, uc.metadata_file)
+    path = os.path.join(comic.folder, METADATA_FILE)
     try:
         metadata = read_metadata(path)
     except (OSError, ValueError) as error:
@@ -460,14 +462,14 @@ def save_settings(args, uc, runner, name, given, expected_updated):
     return 200, {"saved": True, "changed": changed, "updated": stamp}
 
 
-def comicinfo_view(args, uc, runner, name):
+def comicinfo_view(args, runner, name):
     #what a comic's archives say it is: what was said by hand, kept in its metadata's info block, and what
     #each box means left empty - worked out from the comic, and from what its plugin's program said of it
-    comic = find_comic(args, uc, name)
+    comic = find_comic(args, name)
     if comic is None:
         return 404, {"error": "no comic named {0}".format(name)}
     try:
-        metadata = read_metadata(os.path.join(comic.folder, uc.metadata_file))
+        metadata = read_metadata(os.path.join(comic.folder, METADATA_FILE))
     except (OSError, ValueError) as error:
         return 500, {"error": "could not read {0}'s metadata: {1}".format(name, error)}
     chapters = metadata.get("chapters") or {}
@@ -479,10 +481,10 @@ def comicinfo_view(args, uc, runner, name):
                  "form": comicinfo.form()}
 
 
-def save_comicinfo(args, uc, runner, name, said, expected_updated):
+def save_comicinfo(args, runner, name, said, expected_updated):
     #the nine are always on the form, so one left out is one emptied; the rest of the schema changes only
     #where it is named, "" taking it out, as on the reader's info page
-    comic = find_comic(args, uc, name)
+    comic = find_comic(args, name)
     if comic is None:
         return 404, {"error": "no comic named {0}".format(name)}, None
     if is_running(runner, comic.name):
@@ -494,7 +496,7 @@ def save_comicinfo(args, uc, runner, name, said, expected_updated):
     problems = comicinfo.unsayable(said)
     if problems:
         return 400, {"error": "; ".join(problems)}, None
-    path = os.path.join(comic.folder, uc.metadata_file)
+    path = os.path.join(comic.folder, METADATA_FILE)
     try:
         metadata = read_metadata(path)
     except (OSError, ValueError) as error:
@@ -525,10 +527,10 @@ def save_comicinfo(args, uc, runner, name, said, expected_updated):
     return 200, {"saved": True, "changed": changed, "updated": stamp}, comic
 
 
-def save_config(args, uc, given):
+def save_config(args, given):
     #only the settings that are known, so the file cannot fill up with things nothing reads
     saved, problems = {}, []
-    for key, fallback in uc.config_defaults.items():
+    for key, fallback in config_defaults.items():
         if key not in given:
             continue
         value = given[key]
@@ -544,7 +546,7 @@ def save_config(args, uc, given):
             text = str(value or "").strip()
             if text:
                 try:
-                    uc.parse_schedule(text)
+                    parse_schedule(text)
                 except ValueError:
                     problems.append("the schedule wants a 24 hour time like 03:30")
             saved[key] = text or None
@@ -566,11 +568,11 @@ def save_config(args, uc, given):
     if problems:
         return 400, {"error": "; ".join(problems)}
     try:
-        write_json(uc.config_path(), saved)
+        write_json(config_path(), saved)
     except OSError as error:
-        return 500, {"error": "could not write {0}: {1}".format(uc.config_path(), error)}
-    print("Saved {0}".format(uc.config_path()), flush=True)
-    return 200, {"saved": True, "path": uc.config_path(), "settings": uc.load_config(quiet=True)}
+        return 500, {"error": "could not write {0}: {1}".format(config_path(), error)}
+    print("Saved {0}".format(config_path()), flush=True)
+    return 200, {"saved": True, "path": config_path(), "settings": load_config(quiet=True)}
 
 
 def preview_move(args, comic, into):
@@ -584,12 +586,12 @@ def preview_move(args, comic, into):
                  "lines": [{"text": text, "stays": stays} for text, stays in moving.describe(planned)]}
 
 
-def discard_walk(args, uc, comic):
+def discard_walk(args, comic):
     #a walk that never got past the comic's first page - begun on its newest, say, by a site whose
     #first-page link leads there - leaves a record of one page and an alignment made from it, which cutting
     #by size goes by ahead of the file numbers. renamed aside, not deleted, and only a record that says
     #nothing: one that covers the comic is an hour of walking, which no button should throw away
-    if walk_needed(args, uc, comic) != "start":
+    if walk_needed(args, comic) != "start":
         return 409, {"error": "that comic's record of which page is which is not a failed walk, so it is kept"}
     moved = set_aside(index_path(comic.folder, args.root))
     if not moved:

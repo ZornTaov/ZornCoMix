@@ -14,6 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from comiclib import moving, pluginfetch, plugins, pluginsetup, runlogs
+from comiclib.batch import with_config
+from comiclib.config import load_config
 from comiclib.paths import PROJECT
 from comiclib.web.adding import add_with_plugin, parse_entries
 from comiclib.web.edits import discard_walk, fix_chapter, fix_page, insert_page, preview_move, save_config
@@ -71,7 +73,7 @@ def plugin_part(address):
     return inside(os.path.join(plugins.plugins_folder(), found.group(1)), found.group(2), plugin_kinds)
 
 
-def make_handler(runner, args, uc, tee):
+def make_handler(runner, args, tee):
     password = os.environ.get("MIRROR_WEB_PASSWORD") or ""
 
     class Handler(BaseHTTPRequestHandler):
@@ -160,8 +162,8 @@ def make_handler(runner, args, uc, tee):
                     "root": args.root,
                     "jobs_at_once": args.jobs,
                     "next_run": runner.next_run.timestamp() if runner.next_run else None,
-                    "current": job_view(current, uc, live=True) if current else None,
-                    "waiting": [job_view(job, uc) for job in waiting],
+                    "current": job_view(current, live=True) if current else None,
+                    "waiting": [job_view(job) for job in waiting],
                     #summarised as each finished, so a job from before a restart reads the same as one since
                     "history": history,
                     "log": [{"seq": s, "at": at, "text": text} for s, at, text in lines],
@@ -177,24 +179,24 @@ def make_handler(runner, args, uc, tee):
                             "folder": plugins.plugins_folder(), "may_install": may, "why_not": why_not,
                             "git": shutil.which("git") is not None})
             elif where.path == "/api/config":
-                self.reply(config_view(args, uc))
+                self.reply(config_view(args))
             elif where.path == "/api/elements":
-                self.reply(element_settings(args, uc))
+                self.reply(element_settings(args))
             elif where.path == "/api/comics":
-                self.reply(library_view(args, uc))
+                self.reply(library_view(args))
             elif where.path == "/api/places":
                 #the folders a comic can be moved into, asked for when the move is opened rather than with
                 #every comic, since it is a look through the library's folders
-                chosen = uc.with_config(args)
+                chosen = with_config(args)
                 self.reply({"places": moving.places(args.root, chosen.pages_folder, chosen.max_depth,
                                                     chosen.cbz_folder)})
             elif where.path == "/api/comic":
                 name = (parse_qs(where.query).get("name") or [""])[0]
-                detail, problem = comic_detail(args, uc, runner, name)
+                detail, problem = comic_detail(args, runner, name)
                 self.reply(detail if detail else {"error": problem}, 200 if detail else 404)
             elif where.path == "/api/comicinfo":
                 name = (parse_qs(where.query).get("name") or [""])[0]
-                status, result = comicinfo_view(args, uc, runner, name)
+                status, result = comicinfo_view(args, runner, name)
                 self.reply(result, status)
             elif where.path == "/api/openapi.yaml":
                 if not os.path.isfile(spec_file):
@@ -247,14 +249,14 @@ def make_handler(runner, args, uc, tee):
                 job = runner.submit_update(names, "Started from the web page")
                 self.reply({"queued": job.id, "label": job.label})
             elif path == "/api/add" and body.get("scraper"):
-                status, result = add_with_plugin(body, runner, uc.with_config(args), uc)
+                status, result = add_with_plugin(body, runner, with_config(args))
                 self.reply(result, status)
             elif path == "/api/add":
                 entries, problems = parse_entries(body.get("rows") or body.get("entries") or [],
-                                                  uc.with_config(args))
+                                                  with_config(args))
                 #whatever the request did not say is taken from the settings file, so adding a comic
                 #through the page and adding one any other way start from the same options
-                fallback = uc.load_config().get("add_defaults", {})
+                fallback = load_config().get("add_defaults", {})
                 try:
                     options = {}
                     for key in ("prime", "prefix", "javascript", "cbz", "direction_check"):
@@ -279,7 +281,7 @@ def make_handler(runner, args, uc, tee):
                     self.reply({"queued": job.id, "label": job.label})
             elif path == "/api/settings":
                 name = str(body.get("name") or "")
-                status, result = save_settings(args, uc, runner, name, body.get("settings") or {},
+                status, result = save_settings(args, runner, name, body.get("settings") or {},
                                                body.get("updated"))
                 if status == 200 and body.get("update_after"):
                     job = runner.submit_update([name], "Edited on the web page")
@@ -287,7 +289,7 @@ def make_handler(runner, args, uc, tee):
                 self.reply(result, status)
             elif path == "/api/comicinfo":
                 name = str(body.get("name") or "")
-                status, result, comic = save_comicinfo(args, uc, runner, name, body.get("info"),
+                status, result, comic = save_comicinfo(args, runner, name, body.get("info"),
                                                        body.get("updated"))
                 #saved or not, its archives are brought up to what it says: writing an old comic's archives
                 #again is half of what the dialog is for
@@ -296,10 +298,10 @@ def make_handler(runner, args, uc, tee):
                     result["queued"] = runner.submit_comicinfo(comic.name).label
                 self.reply(result, status)
             elif path == "/api/config":
-                status, result = save_config(args, uc, body.get("settings") or {})
+                status, result = save_config(args, body.get("settings") or {})
                 self.reply(result, status)
             elif path == "/api/elements":
-                status, result = save_elements(args, uc, body)
+                status, result = save_elements(args, body)
                 self.reply(result, status)
             elif path == "/api/check":
                 url = str(body.get("url") or "").strip()
@@ -318,7 +320,7 @@ def make_handler(runner, args, uc, tee):
                     self.reply({"queued": job.id, "label": job.label})
             elif path == "/api/chapterize":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif is_running(runner, name):
@@ -337,7 +339,7 @@ def make_handler(runner, args, uc, tee):
                     #whether it reaches the comic's newest page. a comic cut by size may not need walking
                     #at all, which the job finds out from its filenames, since listing a folder of
                     #thousands on a network share is no thing to make a request wait for
-                    walk = walk_needed(args, uc, comic)
+                    walk = walk_needed(args, comic)
                     numbers_first = bool(every) and walk == "start"
                     #what the reader chose after this last stopped to ask. only names of files in the
                     #comic's own folder are passed on, and the job checks each again before moving it
@@ -351,20 +353,20 @@ def make_handler(runner, args, uc, tee):
                                 "from": "every" if every else "archive" if listing else "addresses"})
             elif path == "/api/trylist":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name) if name else None
-                status, result = try_chapter_list(uc.with_config(args), comic, body)
+                comic = find_comic(args, name) if name else None
+                status, result = try_chapter_list(with_config(args), comic, body)
                 self.reply(result, status)
             elif path == "/api/pages":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 else:
-                    status, result = walked_pages(uc.with_config(args), comic)
+                    status, result = walked_pages(with_config(args), comic)
                     self.reply(result, status)
             elif path == "/api/insert":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif is_running(runner, name):
@@ -372,11 +374,11 @@ def make_handler(runner, args, uc, tee):
                 elif is_moving(runner, name):
                     self.reply({"error": "that comic is being moved; reopen it once the move has finished"}, 409)
                 else:
-                    status, result = insert_page(uc.with_config(args), comic, body)
+                    status, result = insert_page(with_config(args), comic, body)
                     self.reply(result, status)
             elif path == "/api/chapterfix":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif is_running(runner, name):
@@ -384,11 +386,11 @@ def make_handler(runner, args, uc, tee):
                 elif is_moving(runner, name):
                     self.reply({"error": "that comic is being moved; reopen it once the move has finished"}, 409)
                 else:
-                    status, result = fix_chapter(uc.with_config(args), comic, body)
+                    status, result = fix_chapter(with_config(args), comic, body)
                     self.reply(result, status)
             elif path == "/api/pagefix":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif is_running(runner, name):
@@ -402,11 +404,11 @@ def make_handler(runner, args, uc, tee):
                     self.reply({"error": "that comic is waiting to be walked again; say this once the walk has "
                                          "finished"}, 409)
                 else:
-                    status, result = fix_page(uc.with_config(args), comic, body)
+                    status, result = fix_page(with_config(args), comic, body)
                     self.reply(result, status)
             elif path == "/api/walkagain":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif (comic.metadata.get("settings") or {}).get("scraper"):
@@ -427,7 +429,7 @@ def make_handler(runner, args, uc, tee):
                     self.reply({"queued": job.id, "label": job.label})
             elif path == "/api/discardwalk":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif runner.current is not None and runner.current.label == chapters_label(name):
@@ -435,11 +437,11 @@ def make_handler(runner, args, uc, tee):
                 elif is_moving(runner, name):
                     self.reply({"error": "that comic is being moved; reopen it once the move has finished"}, 409)
                 else:
-                    status, result = discard_walk(uc.with_config(args), uc, comic)
+                    status, result = discard_walk(with_config(args), comic)
                     self.reply(result, status)
             elif path == "/api/move":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif is_running(runner, name):
@@ -457,7 +459,7 @@ def make_handler(runner, args, uc, tee):
                     self.reply(result, status)
             elif path == "/api/rewind":
                 name = str(body.get("name") or "")
-                comic = find_comic(args, uc, name)
+                comic = find_comic(args, name)
                 if comic is None:
                     self.reply({"error": "no comic named {0}".format(name)}, 404)
                 elif is_running(runner, name):
@@ -469,7 +471,7 @@ def make_handler(runner, args, uc, tee):
                     self.reply({"error": "that comic is already waiting to go back"}, 409)
                 else:
                     #worked out now as well as when its turn comes, as a move is
-                    status, result = preview_rewind(uc.with_config(args), comic, body)
+                    status, result = preview_rewind(with_config(args), comic, body)
                     if status == 200 and not body.get("dry_run"):
                         job = runner.submit_rewind(name, body)
                         result.update(queued=job.id, label=job.label)
@@ -502,7 +504,7 @@ def make_handler(runner, args, uc, tee):
                     job = runner.submit_plugin(action, target, body.get("ref") if action == "install" else None)
                     self.reply({"queued": job.id, "label": job.label})
             elif path == "/api/upload/place":
-                status, result = plan(uc.with_config(args), body)
+                status, result = plan(with_config(args), body)
                 if status == 200:
                     job = runner.submit_place(result)
                     result = {"queued": job.id, "label": job.label}
@@ -521,6 +523,10 @@ def make_handler(runner, args, uc, tee):
 
 
 class PageServer(ThreadingHTTPServer):
+    #how many connections may wait to be taken in. socketserver's own is 5, and the page opens a dozen scripts at
+    #once beside its state polls: with the server slow to take them - a busy nas - the rest were refused, a script
+    #went missing, and the page came up broken with "tabOpeners is not defined"
+    request_queue_size = 64
     #http.server asks for SO_REUSEADDR, which elsewhere only lets a restarted page have its port straight back.
     #on windows it lets a second server bind a port one is already listening on, and the two then share its
     #connections: two updaters started on one port each answered some of the page's requests with the other's
@@ -533,11 +539,11 @@ class PageServer(ThreadingHTTPServer):
             super().server_bind()
 
 
-def start(args, uc):
+def start(args):
     tee = LogTee(sys.stdout)
     sys.stdout = tee
-    runner = Runner(args, uc)
-    server = PageServer((args.web_host, args.web), make_handler(runner, args, uc, tee))
+    runner = Runner(args)
+    server = PageServer((args.web_host, args.web), make_handler(runner, args, tee))
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True, name="web").start()
     shown = "localhost" if args.web_host in ("0.0.0.0", "", "::") else args.web_host

@@ -390,7 +390,7 @@ def select_comics(args):
     for comic in comics:
         if comic.skipped:
             continue
-        if (comic.metadata.get("settings") or {}).get("ended", comic.metadata.get("ended")):
+        if (comic.metadata.get("settings") or {}).get("ended"):
             comic.skipped = ended_reason
             continue
         comic.argv = resume_argv(comic)

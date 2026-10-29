@@ -3,8 +3,7 @@
 #with a summary of what moved. #V 1.4
 #
 #this is the command, and the long-running process the container starts; the work is in comiclib - config,
-#library, batch and schedule. everything this held is still reachable here under its old name, which is
-#how the web page, handed this module, reaches it.
+#library, batch and schedule, which the web page imports from there as well.
 import argparse
 import copy
 import os
@@ -12,20 +11,11 @@ import signal
 import sys
 from datetime import datetime, timedelta
 
-from comiclib.batch import (describe, ended_reason, exit_reasons, kill_tree, lock_file,  # noqa: F401
-                            pack_chapters, print_lock, read_chapters, report_skipped, run_batch, run_comic,
-                            run_once, say, select_comics, still_running, stopped_code, take_lock,
-                            with_config)
-from comiclib.config import config_defaults, config_file, config_path, load_config, warned_about  # noqa: F401
-from comiclib.library import Comic, find_comics, page_count, resume_argv  # noqa: F401
-from comiclib.metadata import METADATA_FILE, argv_to_settings, saved_command, settings_to_argv  # noqa: F401
-from comiclib.pages import count as folder_pages  # noqa: F401
+from comiclib.batch import run_once
+from comiclib.config import config_file, load_config
 from comiclib.paths import config_folder
-from comiclib.schedule import (RESTART, ignored_triggers, local_zone, next_run, parse_schedule,  # noqa: F401
-                               ready_to_restart, restart_files, take_trigger, trigger_files, trigger_poll,
-                               wait_until)
-
-metadata_file = METADATA_FILE
+from comiclib.schedule import (RESTART, local_zone, next_run, parse_schedule, ready_to_restart, restart_files,
+                               trigger_files, wait_until)
 
 
 def setup():
@@ -119,12 +109,15 @@ def main():
     #python gets no default signal handling as pid 1, so without this a docker stop would sit through its
     #whole kill timeout instead of shutting down and releasing the lock
     signal.signal(signal.SIGTERM, lambda *ignored: sys.exit(0))
+    #and windows has no sigterm to send, only ctrl+break, which otherwise ends the process on the spot
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, lambda *ignored: sys.exit(0))
 
     web = None
     if args.web is not None:
         import web_ui
         try:
-            web = web_ui.start(args, sys.modules[__name__])
+            web = web_ui.start(args)
         except OSError as error:
             print("ERROR: could not serve the web page on port {0}: {1}".format(args.web, error))
             return 2

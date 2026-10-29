@@ -8,11 +8,17 @@ import sys
 import time
 
 from comiclib import metadata as sidecar, plugins, runlogs, useragent
+from comiclib.batch import describe
 from comiclib.chapters.index import reaches_newest, read_index
 from comiclib.chapters.numbering import numbered
+from comiclib.config import config_defaults, config_path, load_config
+from comiclib.library import find_comics
+from comiclib.metadata import METADATA_FILE
+from comiclib.pages import count as folder_pages
+from comiclib.paths import config_folder
 
 
-def comic_view(comic, uc, live):
+def comic_view(comic, live):
     if comic.stopped:
         state = "stopped"
     elif comic.started_at is None:
@@ -22,13 +28,13 @@ def comic_view(comic, uc, live):
     else:
         state = "ok" if comic.ok else "failed"
     if state == "running" and live:
-        gained = max(uc.folder_pages(comic.folder) - comic.before, 0)
+        gained = max(folder_pages(comic.folder) - comic.before, 0)
         elapsed = time.time() - comic.started_at
     else:
         gained, elapsed = comic.gained, comic.elapsed
     view = {"name": comic.name, "state": state, "gained": gained, "elapsed": round(elapsed)}
     if state in ("ok", "failed", "stopped"):
-        view["detail"] = uc.describe(comic)
+        view["detail"] = describe(comic)
     if state == "running":
         view["last_line"] = comic.last_line
     #a scrape that has finished, with its chapters still being worked on
@@ -42,7 +48,7 @@ def comic_view(comic, uc, live):
     return view
 
 
-def job_view(job, uc, live=False):
+def job_view(job, live=False):
     view = {"id": job.id, "kind": job.kind, "label": job.label, "created": job.created,
             "started": job.started, "finished": job.finished, "error": job.error,
             "stopping": job.cancel.is_set(), "doing": job.doing if job.finished is None else None}
@@ -55,7 +61,7 @@ def job_view(job, uc, live=False):
         view["decide"] = job.decide
     if job.started is None:
         return view
-    comics = [comic_view(comic, uc, live) for comic in job.comics]
+    comics = [comic_view(comic, live) for comic in job.comics]
     counts = collections.Counter(c["state"] for c in comics)
     view["counts"] = dict(counts)
     view["gained"] = sum(c["gained"] for c in comics)
@@ -69,9 +75,9 @@ def job_view(job, uc, live=False):
     return view
 
 
-def library_view(args, uc):
+def library_view(args):
     rows = []
-    for comic in uc.find_comics(args.root, args.max_depth):
+    for comic in find_comics(args.root, args.max_depth):
         meta = comic.metadata
         settings = meta.get("settings") or {}
         runs = (meta.get("history") or {}).get("runs") or meta.get("runs") or []
@@ -106,8 +112,8 @@ def plugin_view(settings):
         return {"name": settings["scraper"], "error": str(error), "fields": []}
 
 
-def find_comic(args, uc, name):
-    for comic in uc.find_comics(args.root, args.max_depth):
+def find_comic(args, name):
+    for comic in find_comics(args.root, args.max_depth):
         if comic.name == name:
             return comic
     return None
@@ -157,26 +163,13 @@ def is_walking(runner, name):
                for job in [runner.current] + list(runner.waiting))
 
 
-def read_metadata(path):
-    metadata = sidecar.load(path)
-    #an old sidecar is brought up to date first, so the edit lands in the one place a run reads it
-    fresh = sidecar.migrate(metadata)
-    if not fresh:
-        return metadata
-    #but only read, it has not been rewritten, so it keeps the file's own stamp. the migration stamps the
-    #time it ran, and an editor that opened it one second and saved it the next was told it had changed
-    #under them when nothing had
-    fresh["updated"] = metadata.get("updated")
-    return fresh
-
-
-def index_pages(args, uc, comic):
+def index_pages(args, comic):
     #how many pages this comic's record of which-page-is-which holds. counted rather than trusted, since
     #the file is written a line at a time as a walk goes and can stop anywhere
     named = ((comic.metadata.get("history") or {}).get("index_cache"))
     if not named:
         return 0
-    path = os.path.join(uc.config_folder(), "index", named)
+    path = os.path.join(config_folder(), "index", named)
     try:
         with open(path, 'r', encoding='utf-8') as f:
             return sum(1 for line in f if line.strip())
@@ -193,7 +186,7 @@ def primed(lines, history, reaches):
             and bool(history.get("first_page_url")) and lines[0].get("url") == history["first_page_url"])
 
 
-def walk_needed(args, uc, comic):
+def walk_needed(args, comic):
     #whether working out chapters has to walk the comic first: "start" when nothing records which page is
     #which, "carry on" when the record stops short of the comic's newest page, None when it reaches it.
     #a record's being there says nothing about how far it got - a walk the site cut off part way leaves
@@ -202,7 +195,7 @@ def walk_needed(args, uc, comic):
     if not named:
         return "start"
     try:
-        lines = read_index(os.path.join(uc.config_folder(), "index", named))
+        lines = read_index(os.path.join(config_folder(), "index", named))
     except (OSError, ValueError):
         return "start"
     #a record of a single page is usually a walk that never happened: started on the comic's newest page,
@@ -226,19 +219,19 @@ def comicinfo_label(name):
     return "Write ComicInfo for {0}".format(name)
 
 
-def comic_detail(args, uc, runner, name):
-    comic = find_comic(args, uc, name)
+def comic_detail(args, runner, name):
+    comic = find_comic(args, name)
     if comic is None:
         return None, "no comic named {0}".format(name)
-    path = os.path.join(comic.folder, uc.metadata_file)
+    path = os.path.join(comic.folder, METADATA_FILE)
     try:
-        metadata = read_metadata(path)
+        metadata = sidecar.load(path)
     except (OSError, ValueError) as error:
         return None, "could not read {0}: {1}".format(path, error)
     history = metadata.get("history") or {}
     runs = history.get("runs") or []
     chapters = metadata.get("chapters") or {}
-    indexed_pages = index_pages(args, uc, comic)
+    indexed_pages = index_pages(args, comic)
     #the newest time working out its chapters stopped to ask, unless something about its chapters has run
     #since - answered, or worked out some other way - when the question no longer stands
     asked = None
@@ -263,7 +256,7 @@ def comic_detail(args, uc, runner, name):
         "indexed_pages": indexed_pages,
         #a record there is, but one that a walk never got past the first page of: it says nothing, and
         #stands in the way of cutting by the file numbers until it is discarded
-        "stale_walk": indexed_pages > 0 and walk_needed(args, uc, comic) == "start",
+        "stale_walk": indexed_pages > 0 and walk_needed(args, comic) == "start",
         "decide": asked,
         "state": metadata.get("state") or {},
         "first_page_url": history.get("first_page_url"),
@@ -274,7 +267,7 @@ def comic_detail(args, uc, runner, name):
         #the week's updates of it, each one's output in full - a run with nothing new writes no run record,
         #but still has a log
         "logs": runlogs.listing(comic.name),
-        "pages_in_folder": uc.folder_pages(comic.folder),
+        "pages_in_folder": folder_pages(comic.folder),
         "running": is_running(runner, comic.name),
         "moving": is_moving(runner, comic.name),
         "rewinding": is_rewinding(runner, comic.name),
@@ -319,10 +312,10 @@ def walked_pages(args, comic):
                  "report": held.get("report"), "fixes": held.get("fixes") or []}
 
 
-def config_view(args, uc):
-    saved = uc.load_config(quiet=True)
-    return {"path": uc.config_path(), "saved": os.path.exists(uc.config_path()),
-            "settings": saved, "defaults": uc.config_defaults,
+def config_view(args):
+    saved = load_config(quiet=True)
+    return {"path": config_path(), "saved": os.path.exists(config_path()),
+            "settings": saved, "defaults": config_defaults,
             "restart_needed": ["schedule"], "root": args.root,
             "from_command_line": sorted(getattr(args, "from_command_line", [])),
             #what a blank User-Agent box means, for the box to say so

@@ -4,6 +4,7 @@ import os
 import re
 
 from comiclib import plugins
+from comiclib.config import load_config
 from comiclib.metadata import METADATA_FILE
 
 
@@ -75,7 +76,7 @@ def parse_entries(rows, args, url_needed=True):
     return entries, problems
 
 
-def add_with_plugin(body, runner, args, uc):
+def add_with_plugin(body, runner, args):
     #comics another program scrapes, through the plugin named: the same rows as any comic, but for a chapter
     #list, which the program's chapters stand in for, and the plugin's own settings, shared by every row but
     #the address each row has. (status, answer)
@@ -101,6 +102,6 @@ def add_with_plugin(body, runner, args, uc):
         return 400, {"error": "; ".join(problems)}
     if not entries:
         return 400, {"error": "no comics given"}
-    keep = body["cbz"] if "cbz" in body else uc.load_config().get("add_defaults", {}).get("cbz", True)
+    keep = body["cbz"] if "cbz" in body else load_config().get("add_defaults", {}).get("cbz", True)
     job = runner.submit_plugin_add(plugin, entries, bool(keep))
     return 200, {"queued": job.id, "label": job.label}

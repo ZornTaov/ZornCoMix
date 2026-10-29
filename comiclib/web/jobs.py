@@ -13,12 +13,14 @@ import traceback
 import zipfile
 
 from comiclib import moving, pluginfetch, plugins
-from comiclib.batch import chapter_step, own_group
-from comiclib.library import find_comics
+from comiclib.batch import (chapter_step, kill_tree, own_group, run_batch, select_comics, stopped_code,
+                            with_config)
 from comiclib.chapters.index import index_path, numbering_trouble, set_aside, set_aside_pages
 from comiclib.cookies import as_args
 from comiclib.exits import USAGE
-from comiclib.metadata import METADATA_FILE, write_json
+from comiclib.library import Comic, find_comics
+from comiclib.metadata import METADATA_FILE, settings_to_argv, write_json
+from comiclib.pages import count as folder_pages
 from comiclib.paths import config_folder
 from comiclib.web.edits import rewind_command
 from comiclib.web.uploads import Refused, mark_queued, place
@@ -134,9 +136,8 @@ class Job:
 
 class Runner:
     #one job at a time, whoever asked for it: the page, the schedule or an update-now file
-    def __init__(self, args, uc):
+    def __init__(self, args):
         self.args = args
-        self.uc = uc
         self.waiting = []
         self.current = None
         #what the page shows under Recent: each job as it was shown the moment it finished, newest first
@@ -189,7 +190,7 @@ class Runner:
                 traceback.print_exc(file=sys.stdout)
             job.finished = time.time()
             try:
-                view = job_view(job, self.uc)
+                view = job_view(job)
             except Exception as error:
                 #a summary that will not build is no reason for the queue to stop: the job ran either way
                 view = {"id": job.id, "kind": job.kind, "label": job.label, "started": job.started,
@@ -223,9 +224,9 @@ class Runner:
         for comic in list(job.comics):
             if comic.process is not None and comic.code is None:
                 comic.stopped = True
-                self.uc.kill_tree(comic.process)
+                kill_tree(comic.process)
         if job.process is not None and job.process.poll() is None:
-            self.uc.kill_tree(job.process)
+            kill_tree(job.process)
         print("Stopping: {0}".format(job.label), flush=True)
         return True
 
@@ -239,15 +240,15 @@ class Runner:
         names = list(names or [])
 
         def work(job):
-            chosen = self.uc.with_config(self.args)
+            chosen = with_config(self.args)
             chosen.only = names or None
             chosen.dry_run = False
             chosen.cancel = job.cancel
-            comics, runnable = self.uc.select_comics(chosen)
+            comics, runnable = select_comics(chosen)
             job.comics = runnable
             if not runnable:
                 return 0
-            return self.uc.run_batch(comics, runnable, chosen)
+            return run_batch(comics, runnable, chosen)
 
         if not names:
             label = "{0}: every comic".format(why)
@@ -283,11 +284,10 @@ class Runner:
         return self.submit(Job("check", "Check {0}".format(url), work))
 
     def submit_chapterize(self, comic, listing, walk, every=None, choices=None):
-        uc = self.uc
         choices = choices or {}
 
         def work(job):
-            args = uc.with_config(self.args)
+            args = with_config(self.args)
             script = os.path.join(os.path.dirname(os.path.abspath(args.script)), "chapters.py")
             steps = []
             if every and walk == "start":
@@ -363,13 +363,12 @@ class Runner:
                 #a walk stopped part way keeps every page it recorded, and the next one carries on from there
                 print("{0}: stopped. The pages are untouched, and working the chapters out again carries on "
                       "from where it got to.".format(comic.name), flush=True)
-                return self.uc.stopped_code
+                return stopped_code
             return 0
 
         return self.submit(Job("chapters", chapters_label(comic.name), work))
 
     def submit_add(self, entries, options):
-        uc = self.uc
         comics, listings, cuts = [], {}, {}
         for folder, cbz_path, url, listing in entries:
             settings = {
@@ -385,8 +384,8 @@ class Runner:
                 "cbz": options["cbz"],
                 "direction_check": options["direction_check"],
             }
-            comic = uc.Comic(os.path.join(self.args.root, *folder.split("/")), {}, self.args.root)
-            comic.argv = uc.settings_to_argv(settings)
+            comic = Comic(os.path.join(self.args.root, *folder.split("/")), {}, self.args.root)
+            comic.argv = settings_to_argv(settings)
             if options["prime"]:
                 comic.argv.insert(0, "--prime")
             if listing or options.get("every"):
@@ -401,7 +400,7 @@ class Runner:
             comics.append(comic)
 
         def work(job):
-            chosen = self.uc.with_config(self.args)
+            chosen = with_config(self.args)
             chosen.cancel = job.cancel
             #a comic with a chapter list, or one to be cut by size, is told so before it is scraped, not
             #after: a scrape that does not know builds the single archive it will never want, and then
@@ -414,12 +413,12 @@ class Runner:
             if not options["prime"]:
                 chosen.timeout = 0
             job.comics = comics
-            code = uc.run_batch(comics, comics, chosen, "Priming" if options["prime"] else "Scraping")
+            code = run_batch(comics, comics, chosen, "Priming" if options["prime"] else "Scraping")
             for comic in comics:
                 listing, every = listings.get(comic.name), cuts.get(comic.name)
                 if not (listing or every):
                     continue
-                if not uc.folder_pages(comic.folder):
+                if not folder_pages(comic.folder):
                     #a comic that saved nothing leaves nothing behind but the note we just wrote, which
                     #would otherwise make the folder look like a comic that is already in the library
                     try:
@@ -437,7 +436,7 @@ class Runner:
                 #down and the chapters are worked out by the update that fetches the rest
                 remember_chapters(comic, listing, every)
                 if not options["prime"]:
-                    split_into_chapters(comic, listing, chosen, self.uc, options["cbz"], every)
+                    split_into_chapters(comic, listing, chosen, options["cbz"], every)
             return code
 
         verb = "Prime" if options["prime"] else "Scrape"
@@ -448,17 +447,16 @@ class Runner:
         #comics another program scrapes, through a plugin: each one's metadata written first, since that
         #program knows nothing of it, and then each run the way an update runs it. entries are (folder,
         #archive, the plugin's settings for it)
-        uc = self.uc
         comics = []
         for folder, cbz_path, values in entries:
             settings = plugins.comic_settings(plugin, values, folder, cbz_path, keep_archives)
-            comic = uc.Comic(os.path.join(self.args.root, *folder.split("/")), {"settings": settings}, self.args.root)
+            comic = Comic(os.path.join(self.args.root, *folder.split("/")), {"settings": settings}, self.args.root)
             comic.argv = [comic.name]
             comic.start = (values, folder, cbz_path)
             comics.append(comic)
 
         def work(job):
-            chosen = self.uc.with_config(self.args)
+            chosen = with_config(self.args)
             chosen.cancel = job.cancel
             #a new comic can be long, as with any added: it runs until it is done, and can be stopped here
             chosen.timeout = 0
@@ -470,11 +468,11 @@ class Runner:
                 except (plugins.PluginError, OSError) as error:
                     comic.skipped = str(error)
             job.comics = [comic for comic in comics if not comic.skipped]
-            code = uc.run_batch(comics, job.comics, chosen, "Scraping")
+            code = run_batch(comics, job.comics, chosen, "Scraping")
             for comic in job.comics:
                 #a comic that took nothing in leaves only the metadata just written, which would make the
                 #folder look like a comic already in the library and refuse it being added again
-                if not comic.ok and not uc.folder_pages(comic.folder):
+                if not comic.ok and not folder_pages(comic.folder):
                     try:
                         os.remove(os.path.join(comic.folder, METADATA_FILE))
                         os.rmdir(comic.folder)
@@ -504,7 +502,7 @@ class Runner:
                 elif action == "update":
                     job.outcome = "updated" if pluginfetch.update(target, say) else "already up to date"
                 else:
-                    args = self.uc.with_config(self.args)
+                    args = with_config(self.args)
                     in_use = [comic.name for comic in find_comics(args.root, args.max_depth)
                               if (comic.metadata.get("settings") or {}).get("scraper") == target]
                     pluginfetch.remove(target, in_use, say)
@@ -523,14 +521,13 @@ class Runner:
     def submit_place(self, chosen):
         #an upload put into the library: in the queue like everything else, so it never unpacks into a folder
         #a scrape is writing to, or replaces a comic part way through being updated
-        uc = self.uc
 
         def every_pages(folder, every):
-            remember_chapters(uc.Comic(folder, {}, self.args.root), None, every)
+            remember_chapters(Comic(folder, {}, self.args.root), None, every)
 
         def work(job):
             try:
-                job.outcome = place(chosen, uc.with_config(self.args), every_pages, job.cancel)
+                job.outcome = place(chosen, with_config(self.args), every_pages, job.cancel)
             except (Refused, OSError, zipfile.BadZipFile) as error:
                 job.error = str(error)
                 print("ERROR: {0}: {1}".format(job.label, error), flush=True)
@@ -547,8 +544,8 @@ class Runner:
         #a comic moved to another folder: in the queue, so it is never renamed out from under a scrape. it is
         #looked up and planned again when its turn comes, since the library may have changed while it waited
         def work(job):
-            args = self.uc.with_config(self.args)
-            comic = find_comic(args, self.uc, name)
+            args = with_config(self.args)
+            comic = find_comic(args, name)
             try:
                 if comic is None:
                     raise moving.Refused("there is no comic named {0} any more".format(name))
@@ -570,8 +567,8 @@ class Runner:
         #a ComicInfo put on the end of each that says anything new. through chapters.py, so the page and the
         #command line write the same; in the queue, so no scrape is appending to an archive while it does
         def work(job):
-            args = self.uc.with_config(self.args)
-            comic = find_comic(args, self.uc, name)
+            args = with_config(self.args)
+            comic = find_comic(args, name)
             if comic is None:
                 job.error = "there is no comic named {0} any more".format(name)
                 print("ERROR: {0}: {1}".format(job.label, job.error), flush=True)
@@ -592,7 +589,7 @@ class Runner:
                     told += int(found.group(1) or 1)
             code = job.process.wait()
             if job.cancel.is_set():
-                return self.uc.stopped_code
+                return stopped_code
             job.outcome = ("{0} archive(s) brought up to date".format(told) if told
                            else "every archive already said it") if code == 0 else None
             if code != 0:
@@ -606,8 +603,8 @@ class Runner:
         #off. through chapters.py, so the page and the command line go back the same way; planned again when
         #its turn comes, since an update queued ahead of it may have saved more
         def work(job):
-            args = self.uc.with_config(self.args)
-            comic = find_comic(args, self.uc, name)
+            args = with_config(self.args)
+            comic = find_comic(args, name)
             if comic is None:
                 job.error = "there is no comic named {0} any more".format(name)
                 print("ERROR: {0}: {1}".format(job.label, job.error), flush=True)
@@ -643,8 +640,8 @@ class Runner:
         #or one a scrape folded several pictures of an address into one line of - since a walk only ever adds
         #to the end. in the queue, so no scrape adds to the record while it is being made again
         def work(job):
-            args = self.uc.with_config(self.args)
-            comic = find_comic(args, self.uc, name)
+            args = with_config(self.args)
+            comic = find_comic(args, name)
             if comic is None:
                 job.error = "there is no comic named {0} any more".format(name)
                 print("ERROR: {0}: {1}".format(job.label, job.error), flush=True)
@@ -664,7 +661,7 @@ class Runner:
             if job.cancel.is_set():
                 print("{0}: stopped. The old record is kept aside, and walking again carries on from where this "
                       "got to.".format(name), flush=True)
-                return self.uc.stopped_code
+                return stopped_code
             walked = next((line.split(",")[0] for line in reversed(said) if " pages walked" in line), None)
             if code in (0, 1) and walked:
                 #1 is lined up but not settled, which is an answer: the Pages dialog says what stands in the way
@@ -710,12 +707,7 @@ def remember_chapters(comic, listing, every=None, make_folder=False):
     print("  {0}: {1}".format(comic.name, said), flush=True)
 
 
-def remember_listing(comic, listing, make_folder=False):
-    #its name before a comic could be cut by size as well, which code reaching in through web_ui still uses
-    return remember_chapters(comic, listing, make_folder=make_folder)
-
-
-def split_into_chapters(comic, listing, args, uc, keeps_archives=True, every=None):
+def split_into_chapters(comic, listing, args, keeps_archives=True, every=None):
     #a new comic that was given a chapter list, or a size to cut it at: line up what was just saved, work
     #the chapters out, and write one archive per chapter. every step says what it did, and none of them
     #touches the pages themselves.

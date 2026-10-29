@@ -97,17 +97,14 @@ def test_pointing_a_comic_past_a_broken_page_and_updating(scraped, web):
     assert meta["history"]["first_page_url"].endswith("/c/1"), meta["history"]
 
 
-def test_an_older_comic_is_brought_up_to_date_and_is_not_edited_while_running(serve, library, web):
+def test_a_comic_is_edited_but_not_while_running(serve, library, web):
     site = serve(SlowBroken)
     old = library / "Uncompressed" / "Old"
     old.mkdir(parents=True)
     (old / "0001.png").write_bytes(PNG)
     with open(old / "mirror_metadata.json", "w", encoding="utf-8") as f:
-        json.dump({"schema": 1, "resume_argv": ["--increment", "1", "--output", "Uncompressed/Old", site + "/c/1"],
-                   "resume_command_line": "python mirror_base.py --increment 1 --output Uncompressed/Old "
-                                          + site + "/c/1",
-                   "runs": [{"run_id": "x", "command_line": "old", "stop_reason": "no next button",
-                             "exit_code": 0}]}, f)
+        json.dump({"schema": 2, "settings": {"url": site + "/c/1", "output": "Uncompressed/Old", "increment": 1},
+                   "history": {"runs": [{"run_id": "x", "stop_reason": "no next button", "exit_code": 0}]}}, f)
     page = web()
 
     code, detail = page.call("/api/comic?name=Uncompressed/Old")

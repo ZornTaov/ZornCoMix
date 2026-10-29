@@ -16,7 +16,7 @@ from argparse import Namespace
 from comiclib.adopt.adopting import adopt_one
 from comiclib.adopt.scan import inspect as numbering, is_page
 from comiclib.adopt.unpacking import CHUNK, Refused, pages_folder, unpack  # noqa: F401
-from comiclib.metadata import METADATA_FILE, migrate, now_stamp, read as read_metadata, write as write_metadata
+from comiclib.metadata import METADATA_FILE, now_stamp, read as read_metadata, write as write_metadata
 from comiclib.pages import mac_leftover
 from comiclib.web.adding import clean_folder, default_cbz, under_root
 
@@ -115,11 +115,10 @@ def look_inside(path):
 
 
 def summary(metadata):
-    #what an adopted comic's settings say, in the current shape whatever shape the archive kept them in
-    fresh = migrate(metadata) or metadata
-    settings = fresh.get("settings") or {}
-    history = fresh.get("history") or {}
-    every = (fresh.get("chapters") or {}).get("every")
+    #what an adopted comic's settings say
+    settings = metadata.get("settings") or {}
+    history = metadata.get("history") or {}
+    every = (metadata.get("chapters") or {}).get("every")
     return {"url": settings.get("url"), "increment": settings.get("increment"), "prefix": bool(settings.get("prefix")),
             "ended": bool(settings.get("ended")), "output": settings.get("output"),
             "cbz_path": settings.get("cbz_path"), "every": every,
@@ -307,7 +306,7 @@ def place(chosen, args, every_pages, cancel=None):
 
     if chosen["adopted"]:
         #its settings say where it lived before, which need not be where it lives now
-        metadata = migrate(read_metadata(full)) or read_metadata(full)
+        metadata = read_metadata(full)
         settings = metadata.setdefault("settings", {})
         settings["output"] = chosen["pages_at"]
         if chosen["as_archive"]:

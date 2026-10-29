@@ -5,3 +5,7 @@ pytest>=8
 #runs the tests side by side, one worker per core. most of the suite's time is spent waiting on a browser
 #to start, which is time several can spend at once; every test works in a folder and on ports of its own
 pytest-xdist>=3
+#python -m pytest --cov measures what the suite reaches, the scripts it starts as processes of their own
+#included (.coveragerc). patch = subprocess is what reaches them, and came in coverage 7.10
+pytest-cov>=7
+coverage>=7.10

@@ -8,6 +8,7 @@ import importlib
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -377,7 +378,7 @@ def chapters(config):
 def scrape_args(folder, **over):
     #what setup() would hand back for a scrape into this folder, for calling mirror_base's parts directly
     args = argparse.Namespace(
-        URL="https://example.com/1", element_find_manual=False, element_find_next_manual=False,
+        URL="https://example.com/1", element_find_manual=False,
         prefix=True, output=str(folder), cbz=False, cbz_path=None, increment=1, waittime=0,
         enable_javascript=False, firefox=False, chrome=True, headless=True, verbose=False,
         direction_check=True, multi_page=True, keep_index=False, index=None, index_first=False,
@@ -388,15 +389,62 @@ def scrape_args(folder, **over):
 
 
 # ---------------- a real browser ----------------
+#MIRROR_JS_COVERAGE=FOLDER: which of the web page's functions each browser test ran, a file a test in FOLDER,
+#read by tests/jscoverage.py. measured by chrome itself, since the page is plain scripts nothing instruments
+JS_COVERAGE = os.environ.get("MIRROR_JS_COVERAGE")
+#each driver being measured, and what it has run so far. taken before every page it opens, since opening a
+#page throws away what the scripts of the one before had run
+js_runs = {}
+
+
 @pytest.fixture
-def browser(mirror):
+def browser(mirror, request):
     #headless chrome with javascript on, the way the web page is looked at
     driver = mirror.build_driver(argparse.Namespace(
         firefox=False, chrome=False, headless=True, enable_javascript=True, waittime=0,
-        element_find_next_manual=False, verbose=False))
+        verbose=False))
     driver.set_window_size(1280, 900)
+    if JS_COVERAGE:
+        js_runs[driver] = None
     yield driver
+    if driver in js_runs:
+        try:
+            take_js_coverage(driver)
+            write_js_coverage(request.node.nodeid, js_runs[driver])
+        finally:
+            del js_runs[driver]
     mirror.quit_quietly(driver)
+
+
+def take_js_coverage(driver):
+    if js_runs.get(driver) is None:
+        return
+    found = driver.execute_cdp_cmd("Profiler.takePreciseCoverage", {})["result"]
+    js_runs[driver].extend(entry for entry in found if "/js/" in entry.get("url", ""))
+
+
+def start_js_coverage(driver, address):
+    #the first page from the browser's blank one is another site, and chrome can give it a process of its own,
+    #losing a profiler started before it. so an address of the page's own is opened first, the profiler
+    #started there, and every page after is the same site
+    from urllib.parse import urlsplit
+    there = urlsplit(address)
+    driver.get("{0}://{1}/js-coverage-start".format(there.scheme, there.netloc))
+    driver.execute_cdp_cmd("Profiler.enable", {})
+    driver.execute_cdp_cmd("Profiler.startPreciseCoverage", {"callCount": True, "detailed": True})
+    js_runs[driver] = []
+    #the address is no page, and its 404 is not the test's: read off the console, which empties it, so a test
+    #looking for errors there sees only its own
+    console_errors(driver)
+
+
+def write_js_coverage(test, entries):
+    if not entries:
+        return
+    import uuid
+    os.makedirs(JS_COVERAGE, exist_ok=True)
+    with open(os.path.join(JS_COVERAGE, uuid.uuid4().hex + ".json"), "w", encoding="utf-8") as f:
+        json.dump({"test": test, "scripts": entries}, f)
 
 
 def wait_until(check, limit=60, every=0.1, why="the page never got there"):
@@ -414,6 +462,11 @@ def wait_until(check, limit=60, every=0.1, why="the page never got there"):
 
 def open_page(driver, address):
     #loaded, and its script run, so its buttons do something when pressed
+    if driver in js_runs:
+        if js_runs[driver] is None:
+            start_js_coverage(driver, address)
+        else:
+            take_js_coverage(driver)
     driver.get(address)
     wait_until(lambda: driver.execute_script("return document.readyState") == "complete",
                why="the page never finished loading")
@@ -456,7 +509,9 @@ class WebUI:
                 [sys.executable, os.path.join(PROJECT, "update_comics.py"), str(root), "--web", str(self.port),
                  "--web-host", "127.0.0.1", "--progress", "0", "--config", str(config)] + list(extra),
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
-                env=dict(os.environ, PYTHONUNBUFFERED="1", **env))
+                env=dict(os.environ, PYTHONUNBUFFERED="1", **env),
+                #a group of its own, so ctrl+break can be sent to it alone: see stop()
+                creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
             #what the container log would show, kept for a test to look through
             self.log = []
             threading.Thread(target=lambda log=self.log, out=self.process.stdout: [log.append(line) for line in out],
@@ -525,6 +580,16 @@ class WebUI:
         return "".join(self.log)
 
     def stop(self):
+        #asked to stop, as docker stop asks, so it ends the way it would there. on windows terminate is no
+        #asking - the process is ended where it stands, and what coverage measured in it is lost with it -
+        #so it is sent ctrl+break first, and ended only if that does not stop it
+        if os.name == "nt" and self.process.poll() is None:
+            try:
+                self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                self.process.wait(timeout=10)
+                return
+            except (OSError, subprocess.TimeoutExpired):
+                pass
         self.process.terminate()
         try:
             self.process.wait(timeout=15)

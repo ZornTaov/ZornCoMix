@@ -6,6 +6,7 @@ import time
 
 from comiclib.elements import kinds, shipped
 from comiclib.metadata import write_json
+from comiclib.paths import config_folder
 
 #the file mirror_base reads its element paths from, kept in the config folder so the container can write it
 element_file = "element_paths.json"
@@ -17,21 +18,21 @@ def shipped_paths():
     return {kind: [dict(entry) for entry in shipped[kind]] for kind in kinds}
 
 
-def element_paths_path(args, uc):
+def element_paths_path(args):
     #the config folder is where it belongs now. a file left in the library from an earlier version is still
     #read, and saving writes the config copy, which is the one mirror_base prefers from then on.
-    path = os.path.join(uc.config_folder(), element_file)
+    path = os.path.join(config_folder(), element_file)
     if os.path.exists(path):
         return path
     older = os.path.join(args.root, element_file)
     return older if os.path.exists(older) else path
 
 
-def element_settings(args, uc):
+def element_settings(args):
     #what the page shows: everything mirror_base would try, in the order it would try it, marked with where
     #it came from. the built-in list is the base, and the saved file says what was reordered, added or
     #turned off - so a path added to the script later still turns up here.
-    path = element_paths_path(args, uc)
+    path = element_paths_path(args)
     saved = {}
     problem = None
     if os.path.exists(path):
@@ -59,14 +60,14 @@ def element_settings(args, uc):
     return dict(lists, path=path, saved=bool(saved), problem=problem)
 
 
-def save_elements(args, uc, given):
+def save_elements(args, given):
     cleaned, problems = {}, []
     for kind in kinds:
         if kind not in given:
             #a page loaded before this kind of path existed sends nothing for it. that is not a list with
             #everything turned off, so whatever is saved for it now is kept as it is
             cleaned[kind] = [{"xpath": entry["xpath"], "note": entry["note"], "enabled": entry["enabled"]}
-                             for entry in element_settings(args, uc)[kind]]
+                             for entry in element_settings(args)[kind]]
             continue
         entries, seen = [], set()
         for entry in given.get(kind) or []:
@@ -88,7 +89,7 @@ def save_elements(args, uc, given):
     if problems:
         return 400, {"error": "; ".join(problems)}
 
-    path = os.path.join(uc.config_folder(), element_file)
+    path = os.path.join(config_folder(), element_file)
     body = {"note": "Element paths for mirror_base.py. The order here is the order they are tried; "
                     "anything not listed is added after them.",
             "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}

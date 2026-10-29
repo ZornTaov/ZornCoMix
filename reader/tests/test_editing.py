@@ -273,18 +273,19 @@ def test_a_folder_is_changed_whole_or_not_at_all(library, client):
         assert comicinfo_of(archive)[1].find("Publisher") is None
 
 
-def test_a_comic_adopted_before_schema_2_can_be_changed_alone_and_in_its_folder(library, client, monkeypatch):
-    #its metadata is brought up to the current schema each time it is read, which stamped it with the time
-    #of reading: the stamp the page was given never matched the one the save read moments later, so the comic
-    #- and every folder holding it - was refused as changed since the page was opened
+def test_a_comic_keeps_its_own_stamp_when_changed_alone_and_in_its_folder(library, client, monkeypatch):
+    #the stamp an edit is checked against is the one the file was written with, never the time it was read:
+    #a stamp of reading never matched the one the save read moments later, so the comic - and every folder
+    #holding it - was refused as changed since the page was opened
     folder = comic_folder(library, "Shelf/Adopted", 3)
     archive = library / "CBZs" / "Shelf" / "Adopted.cbz"
     archive.parent.mkdir(parents=True, exist_ok=True)
     cbz.write(str(archive), str(folder), page_names(folder))
     (folder / "mirror_metadata.json").write_text(json.dumps({
-        "generator": "adopt_comic.py", "created": "2026-09-08T13:10:34Z", "updated": "2026-09-08T13:10:34Z",
-        "adopted": True, "runs": [], "output_folder": "Uncompressed/Shelf/Adopted",
-        "archive_path": "CBZs/Shelf/Adopted.cbz", "page_count": 3, "completed": True, "ended": True}))
+        "schema": 2, "generator": "adopt_comic.py", "created": "2026-09-08T13:10:34Z",
+        "updated": "2026-09-08T13:10:34Z", "settings": {"output": "Uncompressed/Shelf/Adopted",
+                                                        "cbz_path": "CBZs/Shelf/Adopted.cbz", "ended": True},
+        "history": {"adopted": True, "runs": []}}))
     their_archive(library, "Shelf/TheirOne.cbz", "<Title>One</Title>")
     settle(library)
     #every read a second after the last, as reads moments apart on a real page are
@@ -298,11 +299,8 @@ def test_a_comic_adopted_before_schema_2_can_be_changed_alone_and_in_its_folder(
     saved = api.put("/api/comics/{0}/info".format(comic["id"]),
                     json={"info": {"writer": "SomeAuthor"}, "updated": info["updated"]})
     assert saved.status_code == 200, saved.text
-    assert json.loads((folder / "mirror_metadata.json").read_text())["schema"] == 2
-    #and in a folder: a second schema 1 comic, so one is still old when the folder is read and saved
-    (folder / "mirror_metadata.json").write_text(json.dumps({
-        "generator": "adopt_comic.py", "updated": "2026-09-08T13:10:34Z", "runs": [],
-        "output_folder": "Uncompressed/Shelf/Adopted", "archive_path": "CBZs/Shelf/Adopted.cbz", "ended": True}))
+    assert json.loads((folder / "mirror_metadata.json").read_text())["info"]["writer"] == "SomeAuthor"
+    #and in a folder
     settle(library)
     ids = [each["id"] for each in api.get("/api/library").json()["comics"] if each["place"].startswith("CBZs/Shelf")
            or each["name"] in ("Adopted", "TheirOne")]

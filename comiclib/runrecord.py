@@ -5,7 +5,7 @@ import os
 import sys
 
 from comiclib.exits import INTERRUPTED as EXIT_INTERRUPTED, OK as EXIT_OK
-from comiclib.metadata import METADATA_FILE as metadata_file, load, now_stamp, write_json
+from comiclib.metadata import METADATA_FILE as metadata_file, SCHEMA, load, now_stamp, write_json
 
 #how many run records to keep. a monthly updater would otherwise grow this file forever; the first run is
 #always kept, since it is the one that says how the comic was originally scraped
@@ -123,9 +123,7 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
                              stop_reason=stop_reason, exit_code=exit_code)
     path = os.path.join(folder, metadata_file)
 
-    #carry over what an earlier run recorded, so a resumed comic still knows where it originally started.
-    #each lookup falls back to the flat key a schema 1 file used, so an old sidecar is read and then
-    #quietly rewritten in the current shape rather than needing a separate conversion first
+    #carry over what an earlier run recorded, so a resumed comic still knows where it originally started
     created = run_start
     first_page_url = scrape_state["first_page_url"]
     first_increment = scrape_state["first_increment"]
@@ -139,15 +137,14 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
             old_state = previous.get("state") or {}
             old_history = previous.get("history") or {}
             created = previous.get("created", created)
-            first_page_url = old_history.get("first_page_url", previous.get("first_page_url")) or first_page_url
-            saved_first = old_history.get("first_page_number", previous.get("first_page_number"))
+            first_page_url = old_history.get("first_page_url") or first_page_url
+            saved_first = old_history.get("first_page_number")
             if saved_first is not None:
                 first_increment = saved_first
             #a comic marked finished by hand stays finished, even if someone runs it once more directly
-            was_ended = bool(old_settings.get("ended", previous.get("ended", False)))
+            was_ended = bool(old_settings.get("ended", False))
             #drop this run's own entry so repeated writes update it instead of stacking up
-            runs = [run for run in old_history.get("runs", previous.get("runs", []))
-                    if run.get("run_id") != run_id]
+            runs = [run for run in old_history.get("runs", []) if run.get("run_id") != run_id]
         except (ValueError, OSError, TypeError, AttributeError):
             pass
 
@@ -186,7 +183,7 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
 
     resume_url, resume_increment = resume_point(scrape_state)
     metadata = {
-        "schema": 2,
+        "schema": SCHEMA,
         "generator": "mirror_base.py",
         "generator_version": "3.5",
         "created": created,
@@ -201,15 +198,14 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
             "completed": completed,
             #the xpaths that actually matched this site, handy if the automatic search ever stops finding
             #them. a run that found nothing keeps whatever an earlier run discovered
-            "image_xpath": image_xpath or old_state.get("image_xpath", previous.get("image_xpath")),
-            "next_xpath": next_xpath or old_state.get("next_xpath", previous.get("next_xpath")),
+            "image_xpath": image_xpath or old_state.get("image_xpath"),
+            "next_xpath": next_xpath or old_state.get("next_xpath"),
             "last_image_url": scrape_state["last_image_src"],
             "last_image_file": scrape_state["last_image_file"],
             #the most pages one address of this comic has been seen to hold, and the first address that
             #held more than one. a run that saw nothing keeps what an earlier one found, so the change
             #stays written down for a comic that has since gone quiet
-            "pages_per_url": max(scrape_state["most_per_url"],
-                                 old_state.get("pages_per_url") or previous.get("pages_per_url") or 0) or None,
+            "pages_per_url": max(scrape_state["most_per_url"], old_state.get("pages_per_url") or 0) or None,
             "multi_page_from": scrape_state["first_multi_url"] or old_state.get("multi_page_from"),
         },
         "history": {
@@ -218,11 +214,11 @@ def metadata_save(args, folder, *, scrape_state, run_id, run_start, stop_reason,
             "index_cache": os.path.basename(index_file) if index_file else None,
             "first_page_url": first_page_url,
             "first_page_number": first_increment,
-            "adopted": bool(old_history.get("adopted", previous.get("adopted", False))),
+            "adopted": bool(old_history.get("adopted", False)),
             "runs": runs,
         },
     }
-    kept_from = old_history.get("adopted_from", previous.get("adopted_from"))
+    kept_from = old_history.get("adopted_from")
     if kept_from:
         metadata["history"]["adopted_from"] = kept_from
     #changes made by hand through the web page, kept so a later look can tell a setting was edited

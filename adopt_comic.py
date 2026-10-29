@@ -2,24 +2,17 @@
 #update_comics.py can carry it on without re-downloading everything that is already there. #V 1.2
 #
 #this is the command; the work is in comiclib.adopt - scanning a library, the report, and adopting one
-#comic. everything this held is still reachable here under its old name.
+#comic.
 import argparse
 import csv
 import os
 import sys
 
-from comiclib.adopt.adopting import (adopt_one, build_archive, build_metadata, migrate_library,  # noqa: F401
-                                     nearest_archive)
-from comiclib.adopt.report import (editable_columns, read_report, report_columns, row_to_args,  # noqa: F401
-                                   truthy, write_report)
+from comiclib.adopt.adopting import adopt_one
+from comiclib.adopt.report import read_report, row_to_args, write_report
+from comiclib.adopt.scan import comic_folder, relative_output, survey
 from comiclib.adopt.unpacking import unpack_and_adopt
-from comiclib.adopt.scan import (comic_folder, comic_names, every_archive, inside, inspect,  # noqa: F401
-                                 is_page, list_pages, loose_pages, matching_archive, numbered,
-                                 one_comic_split_up, page_types, pages_in_archives, prefixed,
-                                 relative_output, survey)
-from comiclib.metadata import METADATA_FILE, migrate as migrate_metadata  # noqa: F401
-
-metadata_file = METADATA_FILE
+from comiclib.metadata import METADATA_FILE
 
 
 def setup():
@@ -61,10 +54,6 @@ def setup():
                              "folders.")
     params.add_argument("-n", "--dry-run", action='store_true', default=False,
                         help="Show the metadata that would be written without writing it.")
-    params.add_argument("--migrate", action='store_true',
-                        help="Rewrite every metadata file under --root in the current shape, pulling "
-                             "the saved command apart into the settings block that replaced it. Safe "
-                             "to run twice.")
     params.add_argument("--force", action='store_true', default=False,
                         help="Overwrite metadata that is already there.")
     return params.parse_args(), params
@@ -72,13 +61,6 @@ def setup():
 
 def main():
     args, params = setup()
-
-    if args.migrate:
-        if not os.path.isdir(args.root):
-            print("ERROR: {0} is not a folder.".format(args.root))
-            return 2
-        print("Migrating metadata under {0}:".format(os.path.abspath(args.root)))
-        return migrate_library(args.root, args.dry_run)
 
     if args.report or args.scan:
         rows = survey(args.root, args.all)
@@ -142,11 +124,11 @@ def main():
         return 1 if failed else 0
 
     if not args.path:
-        params.error("a comic folder or .cbz is required unless --scan, --report, --read-report or --migrate is used")
+        params.error("a comic folder or .cbz is required unless --scan, --report or --read-report is used")
 
     ok, message = unpack_and_adopt(args) if args.unpack_to else adopt_one(args)
     if ok:
-        print("  wrote         : {0}".format(os.path.join(comic_folder(args.path), metadata_file)))
+        print("  wrote         : {0}".format(os.path.join(comic_folder(args.path), METADATA_FILE)))
         return 0
     if message.startswith("would adopt: "):
         print("  (dry run, nothing written)")

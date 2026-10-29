@@ -5,6 +5,9 @@ import zipfile
 
 import pytest
 
+from comiclib.pages import listing as folder_pages
+from comiclib.standin import address_in, archive_entry, held_otherwise
+
 
 @pytest.fixture
 def folder(tmp_path):
@@ -30,34 +33,34 @@ def folder(tmp_path):
     ('0007.txt', True), ('0009.url', True), ('0012.swf', True), ('0015.mp4', True),
     ('README.txt', False), ('notes.txt', False), ('0003.png', False),
     ('0021.txt', True), ('links.txt', False)])
-def test_which_files_hold_a_page(chapters, folder, name, expected):
-    assert bool(chapters.held_otherwise(folder, name)) == expected
+def test_which_files_hold_a_page(folder, name, expected):
+    assert bool(held_otherwise(folder, name)) == expected
 
 
-def test_a_readme_is_not_swallowed_even_though_it_mentions_an_address(chapters, folder):
-    assert not chapters.held_otherwise(folder, 'README.txt'), "because it is not named like a page"
-    assert not chapters.held_otherwise(folder, 'links.txt'), "nor a file of links that names no page"
-    address = chapters.address_in(os.path.join(folder, '0007.txt'))
+def test_a_readme_is_not_swallowed_even_though_it_mentions_an_address(folder):
+    assert not held_otherwise(folder, 'README.txt'), "because it is not named like a page"
+    assert not held_otherwise(folder, 'links.txt'), "nor a file of links that names no page"
+    address = address_in(os.path.join(folder, '0007.txt'))
     assert address[0] == "https://example.com/video/abc123", "while a note named for its page is read"
 
 
-def test_what_the_folder_counts_as_pages(chapters, folder):
-    held = chapters.folder_pages(folder, others=True)
+def test_what_the_folder_counts_as_pages(folder):
+    held = folder_pages(folder, others=True)
     assert held == ['0003.png', '0007.txt', '0009.url', '0012.swf', '0015.mp4', '0021.txt'], \
         "the pages and the pages held otherwise, and nothing else"
-    assert chapters.folder_pages(folder) == ['0003.png'], "and without asking, only the pictures"
+    assert folder_pages(folder) == ['0003.png'], "and without asking, only the pictures"
 
 
-def test_the_stand_in_is_a_png_named_for_its_page_and_packs_into_a_cbz(chapters, folder, tmp_path):
-    entry, made = chapters.archive_entry(folder, '0015.mp4')
+def test_the_stand_in_is_a_png_named_for_its_page_and_packs_into_a_cbz(folder, tmp_path):
+    entry, made = archive_entry(folder, '0015.mp4')
     assert entry == '0015.png', "it is named for the page it stands in for"
     assert made[:8] == b'\x89PNG\r\n\x1a\n', "it is a png"
     assert 1000 < len(made) < 400000, "of a sensible size: {0}".format(len(made))
-    entry2, made2 = chapters.archive_entry(folder, '0007.txt')
+    entry2, made2 = archive_entry(folder, '0007.txt')
     assert entry2 == '0007.png' and made2[:4] == b'\x89PNG', "a note becomes a page too"
-    assert chapters.archive_entry(folder, '0015.mp4')[1] == made, \
+    assert archive_entry(folder, '0015.mp4')[1] == made, \
         "drawing it twice gives the same bytes, so packing is not rewritten every time"
-    entry3, made3 = chapters.archive_entry(folder, '0003.png')
+    entry3, made3 = archive_entry(folder, '0003.png')
     assert entry3 == '0003.png' and made3 is None, "an ordinary page is left alone"
 
     #both sit in a cbz without complaint

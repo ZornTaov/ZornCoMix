@@ -1,0 +1,26 @@
+# coverage for the updater's suite: python -m pytest --cov, which is never run by default since it slows every
+# test. most of what the suite tests it runs as a script in a process of its own - a scrape, chapters.py, the
+# web page's server, a batch starting each comic - so the children have to be measured too, or mirror_base and
+# chapters would read as barely tested. the measured code is named by module rather than by folder, since a
+# child runs in a test's own folder, where a relative path would name nothing.
+[run]
+source =
+    comiclib
+    mirror_base
+    chapters
+    update_comics
+    adopt_comic
+    run_plugin
+    web_ui
+branch = true
+parallel = true
+patch = subprocess
+# a process stopped with sigterm still writes what it measured. on windows a process is stopped without a
+# signal (terminate, taskkill /f), and what it measured is lost: the web page's server, which every web test
+# stops that way, and anything a test kills on purpose
+sigterm = true
+
+[report]
+show_missing = true
+skip_covered = false
+sort = cover

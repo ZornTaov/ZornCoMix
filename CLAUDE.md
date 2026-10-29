@@ -35,7 +35,7 @@ archives, and keep them up to date unattended.
 | --- | --- |
 | `paths` | The config folder, the element-path file, and the one rule naming a comic's index file |
 | `pages` | What makes two filenames one page (`page_key`), a page's number, reading order, the name a scrape gives an image |
-| `metadata` | Reading and writing `mirror_metadata.json` (always written aside and moved into place), timestamps, settings to command and back, schema 1 to 2 |
+| `metadata` | Reading and writing `mirror_metadata.json` (always written aside and moved into place), timestamps, settings to command. Only schema 2 is read: schema 1 was never written outside the machine this began on, and its support is gone |
 | `cbz` | Every archive any script writes: a new one, one added to, a chapter's, a repack. The Uncompressed/CBZs shelf rule |
 | `standin` | Draws a page for a page no reader can show. `cbz` asks it about every file, so every archive agrees |
 | `comicinfo` | The `ComicInfo.xml` every archive carries (v2.1 draft, in the schema's element order), and a picture's size read from its first bytes. `cbz` writes it last-but-metadata and an append rewrites both on the end. Another program's ComicInfo is kept (`kept_tags`, in the metadata as `comicinfo` or a chapter's `comicinfo`) and written back: typed by hand beats it, it beats what is worked out here, and its `Pages`/`PageCount`/`Count` are never believed. `build` must give the same bytes for the same input - that is how an archive is known to be current. What is typed by hand is the metadata's `info`: the nine of `INFO` by their own names (`writer`), any other schema tag of `EXTRA` by its ComicInfo name (`Publisher`), checked by `fit`/`unsayable`. `form()` is the field list both editors - the updater's ComicInfo dialog and the reader's - are drawn from, and `retold` edits another program's ComicInfo in schema order. An edit names every one of the nine but changes an extra tag only where it is named, so a page from before extras existed cannot take one out |
@@ -65,8 +65,9 @@ archives, and keep them up to date unattended.
 | `web/` | The web page's server: the one job queue (`jobs`), what the page is shown (`views`), the element paths as it edits them (`elementpaths`), the add form (`adding`), a comic uploaded as a zip and put in or adopted (`uploads`), the changes it can make (`edits`), and the http handler (`server`). The page itself is `web_page/`, at the top |
 | `chapters/` | Walking a comic to record which page is which, and `KeptIndex`, the index a scrape adds to as it goes (`index`), the same index read from a WordPress site's post list instead of walked (`wordpress`), lining that up against the files (`align`), which file is which page said by hand where that cannot settle it (`pagefixes`: a page pinned to its file, a line that is no page, a file the walk never saw placed after a page - kept in the metadata's `page_fixes`, which a scrape carries, and used by every alignment, so a correction is never written into the index or the alignment, where the next walk or align would lose it), reading an archive page (`archive_page`) or the addresses (`addresses`) for chapters, the chapter list and its corrections (`chapterlist`), a chapter's own number read from its label (`numbering`), packing per chapter (`packing`), renumbering, inserting and refetching pages (`pageops`), and going back to an earlier page (`rewind`: the pages from it on set aside, and the resume point, the index and alignment, the chapters and archives put back to before them - each go-back recorded in `history.rewinds`, which a scrape keeps as `runrecord` does) |
 
-The scripts import what they use by its old name (`chapters.page_key`, `mirror_base.metadata_file`), so
-code reaching into a script still finds it; new code should import from `comiclib`.
+The scripts import only what they use, and nothing reaches into a script for a part of `comiclib`: a test, the web
+page or another module imports it from `comiclib` itself. The web page's server is handed no script either; it
+imports what it needs from `comiclib` like everything else.
 
 ### The web page
 
@@ -276,6 +277,14 @@ names unique across the folders.
 **Every pull request runs all of it** (`.github/workflows/tests.yml`, also on main after a merge): the
 updater's suite as an offline job and a browser job on Ubuntu, the reader's pytest, and its Vitest. The
 suite was written on Windows; a test that passes there and not on the runner is a bug in one or the other.
+
+Coverage is measured by hand, never by default: `python -m pytest --cov --cov-report=html` for the updater
+(`.coveragerc` - the scripts a test starts as processes are measured too, by coverage's `patch = subprocess`),
+`python -m pytest --cov=comicreader --cov=comiclib` in `reader/`, `npm run coverage` in `reader/web`, and for
+the web page's own scripts `MIRROR_JS_COVERAGE=FOLDER python -m pytest tests/web` then
+`python tests/jscoverage.py FOLDER`, which lists the functions no browser test ran. A process ended without being
+asked loses what it measured: the web page's server is stopped with ctrl+break on Windows for that reason
+(`WebUI.stop`), and code reached only by a test killing something on purpose reads as untested.
 
 Browser tests wait for what they are waiting for - `wait_until`, `open_page`, `checked` in the harness -
 never a fixed sleep: a pause long enough for the slowest machine was most of what the suite used to spend.

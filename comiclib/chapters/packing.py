@@ -234,22 +234,6 @@ def verdict(held, wanted):
     return "write"
 
 
-def judged(path, names, folder, sizes=None, drawn=None):
-    #verdict() of an archive by its path; one missing or unreadable is written
-    try:
-        return verdict(cbz.held(path), cbz.expected(folder, names, sizes, drawn))
-    except (OSError, zipfile.BadZipFile):
-        return "write"
-
-
-def already_packed(path, names, folder, sizes=None, drawn=None):
-    return judged(path, names, folder, sizes, drawn) == "keep"
-
-
-def only_short(path, names, folder, sizes=None, drawn=None):
-    return judged(path, names, folder, sizes, drawn) == "add"
-
-
 def pack(folder, args):
     metadata = read_metadata(folder)
     if (metadata.get("settings") or {}).get("cbz") is False and not args.force:

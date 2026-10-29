@@ -17,7 +17,7 @@ from contextlib import contextmanager
 
 from comiclib import cbz, comicinfo
 from comiclib.chapters.numbering import numbered, written
-from comiclib.metadata import METADATA_FILE, migrate, now_stamp, read as read_metadata, write_json
+from comiclib.metadata import METADATA_FILE, now_stamp, read as read_metadata, write_json
 
 from comicreader.library import CHAPTER
 
@@ -173,14 +173,10 @@ def archives_of(library, comic, metadata):
 
 
 def read_kept(folder):
-    #a comic's metadata as the reader works with it, and the stamp it was written with. a file from before
-    #schema 2 is brought up to it every time it is read, and that stamps it with the moment it was read:
-    #checked against that, an edit of a comic adopted back then was always refused as changed since the page
-    #was opened, and with it every folder holding one. the stamp in the file is what says it was changed
+    #a comic's metadata as the reader works with it, and the stamp it was written with, which is what an edit
+    #is checked against to know the comic was not changed since the page was opened
     found = read_metadata(folder)
-    if not found:
-        return found, None
-    return migrate(found) or found, found.get("updated")
+    return found, found.get("updated") if found else None
 
 
 def scraped_plan(library, comic, updated):
