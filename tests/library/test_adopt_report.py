@@ -4,7 +4,7 @@
 import csv
 import zipfile
 
-from conftest import read_meta
+from conftest import read_meta, run, write_meta
 from test_adopt import adopt
 
 
@@ -41,6 +41,61 @@ def test_a_scan_lists_what_has_no_metadata_and_leaves_the_adopted_out(library):
     assert "CBZs/OnlyShelved.cbz" in said, said
     assert "Uncompressed/Adopted" not in said, "an adopted comic is not a candidate: " + said
     assert "Uncompressed/Adopted" in adopt(library, "--scan", "--all", "--root", ".").stdout
+
+
+def chaptered(library, name):
+    #a comic packed a chapter at a time into a shelf folder of its own, as a plugin's comic is: no cbz_path
+    #said, so filed where packing files one, and nothing in that folder saying whose it is
+    folder = library / "Uncompressed" / name
+    for n in range(1, 5):
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "{0:04d}_page.jpg".format(n)).write_bytes(bytes([n]) * (40 + n))
+    write_meta(folder, {"schema": 2, "settings": {"url": "https://example.com/", "output": "Uncompressed/" + name,
+                                                  "cbz_path": None},
+                        "chapters": {"source": "plugin", "list": [
+                            {"number": 1, "label": "#1 Arrival", "start_page": 1, "end_page": 2},
+                            {"number": 2, "label": "#2 Departure", "start_page": 3, "end_page": 4}]}})
+    done = run("chapters.py", "pack", folder, "--root", library)
+    assert done.returncode == 0, done.stdout + done.stderr
+    shelf = library / "CBZs" / name
+    assert len(list(shelf.glob("*.cbz"))) == 2, sorted(p.name for p in shelf.iterdir())
+    return shelf
+
+
+def test_a_scan_leaves_out_the_archives_an_adopted_comic_keeps(library):
+    #a comic's chapter archives, and an archive its settings name under another name in a folder it shares,
+    #are that comic's - but an archive beside them that neither names is still someone's to adopt
+    shelf = chaptered(library, "Chaptered")
+    shelved(library, "Chaptered/001", 3)
+    (library / "CBZs" / "SomeAuthor").mkdir()
+    loose(library, "Mine", 3)
+    assert adopt(library, "Uncompressed/Mine", "--root", ".", "--ended",
+                 "--cbz-path", "CBZs/SomeAuthor/Collected.cbz").returncode == 0
+    assert (library / "CBZs" / "SomeAuthor" / "Collected.cbz").exists()
+    shelved(library, "SomeAuthor/Theirs", 2)
+    report = library / "adopt.csv"
+
+    assert adopt(library, "--scan", "--report", str(report), "--root", ".").returncode == 0
+    assert sorted(rows(report)) == ["CBZs/Chaptered/001.cbz", "CBZs/SomeAuthor/Theirs.cbz"], sorted(rows(report))
+    assert not any(name.startswith("Chaptered - c") for name in rows(report)), shelf
+
+
+def test_a_scan_passes_over_the_covers_on_the_shelf(library):
+    #a reader's cover.jpg in a folder of the shelf, and a picture beside an archive under its name, are covers
+    #- a folder of nothing else is no comic. a comic's own folder of pages counts every picture in it
+    (library / "CBZs" / "Covered").mkdir()
+    (library / "CBZs" / "Covered" / "cover.jpg").write_bytes(b"c")
+    (library / "CBZs" / "Covered" / "Poster.PNG").write_bytes(b"c")
+    shelved(library, "OnlyShelved", 3)
+    (library / "CBZs" / "OnlyShelved.jpg").write_bytes(b"c")
+    pages = loose(library, "Starts", 3)
+    (pages / "cover.jpg").write_bytes(b"page one")
+    report = library / "adopt.csv"
+
+    assert adopt(library, "--scan", "--report", str(report), "--root", ".").returncode == 0
+    written = rows(report)
+    assert sorted(written) == ["CBZs/OnlyShelved.cbz", "Uncompressed/Starts"], sorted(written)
+    assert written["Uncompressed/Starts"]["pages"] == "4", "a cover.jpg among pages is a page"
 
 
 def test_a_library_with_nothing_to_adopt_says_so(library):

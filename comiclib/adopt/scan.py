@@ -4,7 +4,10 @@ import os
 import re
 import zipfile
 
-from comiclib.metadata import METADATA_FILE as metadata_file
+from comiclib import cbz
+from comiclib.chapters.numbering import numbered as numbered_chapters
+from comiclib.chapters.packing import chapter_file, chapter_folder, place_file
+from comiclib.metadata import METADATA_FILE as metadata_file, read as read_metadata
 from comiclib.pages import mac_leftover
 
 page_types = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.avif', '.jxl')
@@ -88,7 +91,13 @@ def survey(root, show_all=False):
             if show_all:
                 folders.append([current, "adopted", None, 0])
             continue
+        #a folder whose only pictures are the covers a reader put on the shelf - cover.jpg, MyComic.jpg beside
+        #MyComic.cbz - is no comic. one with pages besides counts all of them: a scrape packs a cover.jpg among
+        #its pages as a page, and a comic's first page is often called just that
+        stems = cbz.archive_stems(files)
         pages = [f for f in files if is_page(f)]
+        if all(cbz.is_cover(f, stems) for f in pages):
+            pages = []
         if pages:
             folders.append([current, "folder", inspect(sorted(pages)), 0])
         for name in sorted(files):
@@ -109,6 +118,13 @@ def survey(root, show_all=False):
             tops.append(row)
         else:
             parent[3] += 1
+
+    #the archives an adopted comic has packed are its own, wherever its settings put them, and a comic packed
+    #a chapter at a time has a shelf folder of them with no metadata in it to say so
+    owned = set()
+    for folder in adopted:
+        owned.update(owned_archives(folder, root))
+    archives = [a for a in archives if same_path(a[0]) not in owned]
 
     #an archive whose pages sit in a folder elsewhere in the library is that same comic, not another one.
     #it is dropped here and named in the folder's cbz_path instead, so each comic is one row.
@@ -139,6 +155,29 @@ def survey(root, show_all=False):
         archives = sorted(singles) + [grouped[k] for k in sorted(grouped)]
 
     return (folders if show_all else tops) + archives
+
+
+def same_path(path):
+    return os.path.normcase(os.path.abspath(path))
+
+
+def owned_archives(folder, root):
+    #where an adopted comic keeps its archives: its one archive, where its settings name it or where packing
+    #files one when they name none, and each chapter's, by the very name packing gives it - by its own number,
+    #or by its place as it was named before - so anything else in a chapter folder, an archive from before
+    #the comic was adopted, is still listed
+    metadata = read_metadata(folder) or {}
+    settings = metadata.get("settings") or {}
+    if settings.get("cbz") is False:
+        return set()
+    found = {cbz.resolved(settings.get("cbz_path"), folder, root) or cbz.default_path(folder)}
+    block = metadata.get("chapters") or {}
+    if block.get("list"):
+        shelf = chapter_folder(folder, metadata, root)
+        for chapter in numbered_chapters(block):
+            found.update(os.path.join(shelf, name) for name in (chapter_file(folder, chapter),
+                                                                place_file(folder, chapter)))
+    return {same_path(path) for path in found}
 
 
 def every_archive(root):

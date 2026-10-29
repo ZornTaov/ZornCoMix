@@ -7,7 +7,7 @@ import shutil
 import zipfile
 
 from comiclib import cbz, comicinfo
-from comiclib.cbz import shelf
+from comiclib.cbz import COVER_ENDINGS, shelf
 from comiclib.chapters.align import place_recovered, recovered_files
 from comiclib.chapters.index import joined_pages
 from comiclib.chapters.numbering import name_part, numbered
@@ -71,10 +71,6 @@ def place_file(folder, chapter):
     #the name a chapter's archive had before archives were named by the chapter's own number
     return "{0} - c{1:03d} - {2}.cbz".format(os.path.basename(os.path.abspath(folder)),
                                              chapter["number"], tidy_name(chapter["label"]))
-
-
-#what a cover beside an archive can be called, as banners saves one and readers look for one
-COVER_ENDINGS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 
 
 def renames_to_numbers(folder, shelf, chapters):
