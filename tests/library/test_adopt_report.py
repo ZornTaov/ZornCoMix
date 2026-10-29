@@ -98,6 +98,29 @@ def test_a_scan_passes_over_the_covers_on_the_shelf(library):
     assert written["Uncompressed/Starts"]["pages"] == "4", "a cover.jpg among pages is a page"
 
 
+def test_an_adopt_ignore_leaves_out_its_folder_or_what_it_names(library):
+    #an empty .adopt-ignore is the whole folder, nested folders and all. one naming files and folders is
+    #only those, so an ended comic beside one still going is left out alone; --all shows what it hides
+    (library / "CBZs" / "Ended").mkdir()
+    shelved(library, "Ended/One", 2)
+    shelved(library, "Ended/Two", 2)
+    (library / "CBZs" / "Ended" / "Nested").mkdir()
+    shelved(library, "Ended/Nested/Three", 2)
+    (library / "CBZs" / "Ended" / ".adopt-ignore").write_text("")
+    (library / "CBZs" / "SomeAuthor" / "Gone").mkdir(parents=True)
+    shelved(library, "SomeAuthor/Gone/Part 1", 2)
+    shelved(library, "SomeAuthor/Finished", 3)
+    shelved(library, "SomeAuthor/Still Going", 4)
+    (library / "CBZs" / "SomeAuthor" / ".adopt-ignore").write_text("# both ended\nfinished.cbz\n\nGone\n")
+    report = library / "adopt.csv"
+
+    assert adopt(library, "--scan", "--report", str(report), "--root", ".").returncode == 0
+    assert sorted(rows(report)) == ["CBZs/SomeAuthor/Still Going.cbz"], sorted(rows(report))
+    said = adopt(library, "--scan", "--all", "--root", ".").stdout
+    for hidden in ("CBZs/Ended ", "CBZs/SomeAuthor/Finished.cbz", "CBZs/SomeAuthor/Gone"):
+        assert hidden in said and "ignored" in said, said
+
+
 def test_a_library_with_nothing_to_adopt_says_so(library):
     said = adopt(library, "--scan", "--root", ".").stdout
     assert "Nothing under" in said and "needs adopting" in said, said

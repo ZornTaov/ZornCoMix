@@ -17,6 +17,27 @@ page_types = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.avif', '.jxl')
 prefixed = re.compile(r'^(\d+)_')
 numbered = re.compile(r'^(\d+)\.')
 
+#a folder's word that what is in it is not to be adopted: comics that have ended, sites that are gone,
+#collections of other people's. empty, it is the whole folder; otherwise the files and folders it names, a
+#name a line, so one ended comic beside one still going is left out alone
+IGNORE_FILE = ".adopt-ignore"
+EVERYTHING = "everything"
+
+
+def ignoring(folder, files):
+    #what this folder's .adopt-ignore leaves out: None, EVERYTHING, or a set of names, lower-cased. a line
+    #starting # is a note to whoever reads the file
+    if IGNORE_FILE not in files:
+        return None
+    try:
+        with open(os.path.join(folder, IGNORE_FILE), encoding='utf-8-sig') as f:
+            lines = f.read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        #a marker that cannot be read was still put there to say leave this alone
+        return EVERYTHING
+    names = {line.strip().lower() for line in lines if line.strip() and not line.strip().startswith('#')}
+    return names or EVERYTHING
+
 
 def is_page(name):
     return name.lower().endswith(page_types)
@@ -82,7 +103,7 @@ def relative_output(folder, root):
 def survey(root, show_all=False):
     #lists folders and archives that hold pages but have no metadata yet, so a migration can be worked
     #through without hunting for what is left
-    folders, archives, adopted = [], [], []
+    folders, archives, adopted, ignored = [], [], [], []
     for current, dirs, files in os.walk(root):
         dirs[:] = sorted(d for d in dirs if not d.startswith('.'))
         if metadata_file in files:
@@ -91,6 +112,17 @@ def survey(root, show_all=False):
             if show_all:
                 folders.append([current, "adopted", None, 0])
             continue
+        #left out as an .adopt-ignore says, and listed only with --all, to show what the marker is hiding
+        told = ignoring(current, files)
+        if told == EVERYTHING:
+            dirs[:] = []
+            ignored.append([current, "ignored", None, 0])
+            continue
+        if told:
+            ignored.extend([os.path.join(current, name), "ignored", None, 0]
+                           for name in sorted(dirs + files) if name.lower() in told)
+            dirs[:] = [d for d in dirs if d.lower() not in told]
+            files = [f for f in files if f.lower() not in told]
         #a folder whose only pictures are the covers a reader put on the shelf - cover.jpg, MyComic.jpg beside
         #MyComic.cbz - is no comic. one with pages besides counts all of them: a scrape packs a cover.jpg among
         #its pages as a page, and a comic's first page is often called just that
@@ -154,7 +186,7 @@ def survey(root, show_all=False):
             grouped[parent][3] += 1
         archives = sorted(singles) + [grouped[k] for k in sorted(grouped)]
 
-    return (folders if show_all else tops) + archives
+    return (folders if show_all else tops) + archives + (ignored if show_all else [])
 
 
 def same_path(path):
