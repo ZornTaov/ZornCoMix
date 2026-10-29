@@ -472,7 +472,42 @@ def drop_single(folder, metadata, args, shelf=None):
     size = os.path.getsize(full)
     os.remove(full)
     print("Removed {0} ({1:.0f} MB); the chapter archives hold every page it held.".format(full, size / 1e6))
+    shelve_cover(folder, full, shelf or os.path.dirname(full), args.root)
     return 0
+
+
+def shelve_cover(folder, single, shelf, root=None):
+    #the picture beside the single archive under its name was the comic's cover, which with that archive gone
+    #no reader takes it for. it becomes the cover of the folder its chapters are in - the picture itself, byte
+    #for byte under its own ending - unless that folder has one already, which was chosen since
+    #by the folder's own listing, so a picture is found, and recorded, under the name it has - Tiny.PNG - on a
+    #filesystem that minds case and on one that does not
+    where, stem = os.path.split(os.path.splitext(single)[0])
+    picture = next((os.path.join(where, name) for name in sorted(os.listdir(where))
+                    if os.path.splitext(name)[0] == stem and os.path.splitext(name)[1].lower() in COVER_ENDINGS
+                    and os.path.isfile(os.path.join(where, name))), None)
+    if picture is None or any(os.path.exists(os.path.join(shelf, name + ending))
+                              for name in cbz.FOLDER_COVERS for ending in COVER_ENDINGS):
+        return None
+    target = os.path.join(shelf, "cover" + os.path.splitext(picture)[1].lower())
+    try:
+        os.rename(picture, target)
+    except OSError as error:
+        print("WARNING: {0} could not become the chapters' folder cover ({1}); rename it to {2} by hand.".format(
+            picture, error, os.path.basename(target)))
+        return None
+    print("  {0} is the cover of the chapters' folder now, as {1}.".format(os.path.basename(picture),
+                                                                           os.path.basename(target)))
+    #a cover the reader wrote there follows the rename, as it follows a chapter archive's
+    metadata = read_metadata(folder)
+    base = root or library_of(folder, metadata)
+    if base is not None:
+        here = os.path.relpath(folder, base).replace(os.sep, '/')
+        record_moves(metadata, [{"what": "pages", "from": here, "to": here},
+                                {"what": "cover", "from": os.path.relpath(picture, base).replace(os.sep, '/'),
+                                 "to": os.path.relpath(target, base).replace(os.sep, '/')}])
+        write_metadata(folder, metadata)
+    return target
 
 
 def repack(folder, args):
