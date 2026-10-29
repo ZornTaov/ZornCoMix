@@ -36,7 +36,8 @@ def setup():
     params.add_argument("--scan", action='store_true', default=False,
                         help="List everything under --root that holds pages but has no metadata yet, with what would be inferred for each.")
     params.add_argument("--all", action='store_true', default=False,
-                        help="With --scan, also list comics that have already been adopted.")
+                        help="With --scan, also list comics that have already been adopted, and what an "
+                             ".adopt-ignore leaves out.")
     params.add_argument("--report", default=None, metavar="FILE",
                         help="Write the scan to a csv you can open in a spreadsheet. Fill in last_url, next_url, ended and cbz_path, then feed it back with --read-report. Re-running keeps anything already typed in.")
     params.add_argument("--read-report", default=None, metavar="FILE",

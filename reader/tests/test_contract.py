@@ -10,6 +10,7 @@ from conftest import comic_folder, page_names, png
 from comiclib import cbz, comicinfo
 from comiclib.chapters.numbering import name_part, numbered, same, written
 from comiclib.pages import page_key, reading_order
+from comicreader import covers
 from comicreader.sources import original, read_archive
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -102,3 +103,11 @@ def test_a_stand_in_leads_back_to_what_it_stands_for(library):
     link = original(str(folder), pages[3]["entry"])
     assert (link["kind"], link["address"], link["title"]) == ("link", "https://example.com/watch?v=1", "Our trailer")
     assert original(str(folder), pages[0]["entry"]) is None
+
+
+def test_a_picture_the_reader_shows_as_a_cover_is_one_the_adopter_passes_over():
+    #the reader finds covers on the shelf by comiclib's names, which the adopter's scan goes by as well
+    stems = cbz.archive_stems(["MyComic.cbz", "cover.jpg"])
+    assert cbz.is_cover("cover.jpg", stems) and cbz.is_cover("MyComic.PNG", stems)
+    assert not cbz.is_cover("0001.jpg", stems) and not cbz.is_cover("cover.txt", stems)
+    assert covers.FOLDER_NAMES is cbz.FOLDER_COVERS and covers.ENDINGS is cbz.COVER_ENDINGS
