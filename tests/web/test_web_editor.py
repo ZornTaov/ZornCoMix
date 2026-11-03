@@ -147,9 +147,13 @@ def test_the_editor_opens_without_console_errors(scraped, web, browser):
         wait_until(lambda: browser.execute_script(
             "return document.querySelector('[data-edit=\"{0}\"]')".format(NAME)), why="the comic never listed")
         browser.execute_script("document.querySelector('[data-edit=\"{0}\"]').click()".format(NAME))
-        time.sleep(1)
-        browser.execute_script("document.getElementById('edit-runs-box').open = true")
-        time.sleep(0.3)
+        #open once its comic is read: a tab pressed before then is ignored, as the editor is not there yet
+        wait_until(lambda: browser.execute_script("return document.getElementById('editor').open"),
+                   why="the editor never opened")
+        #its history too, drawn as it opened
+        browser.execute_script("document.getElementById('edit-history').click()")
+        wait_until(lambda: not browser.execute_script(
+            "return document.querySelector('#editor [data-panel=\"history\"]').hidden"), why="the history never showed")
     errors = console_errors(browser)
     assert not errors, errors
 
