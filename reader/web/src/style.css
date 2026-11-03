@@ -261,6 +261,20 @@ button {
   background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
 }
 .dialog h2 { font-size: 16px; margin: 0 0 12px; }
+/* the keys and gestures (helpdialog.ts): what is pressed or done on the left, what it does on the right */
+.dialog.help { width: min(640px, 100%); }
+.help h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 6px; }
+.help-row { display: grid; grid-template-columns: minmax(150px, 2fr) 3fr; gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.help-what { display: flex; gap: 10px; align-items: center; }
+.help-what > span:not(.help-keys) { flex: 1; min-width: 0; }
+.help-picture { flex: none; color: var(--text); }
+.help-keys { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.help kbd {
+  font: 12px/1 ui-monospace, "Cascadia Mono", monospace; min-width: 1.6em; text-align: center;
+  padding: 4px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--bg);
+}
+.help-or { color: var(--muted); font-size: 12px; margin: 0 4px; }
+@media (max-width: 480px) { .help-row { grid-template-columns: 1fr; gap: 4px; } }
 .dialog.busy { cursor: progress; }
 .dialog.busy button { pointer-events: none; opacity: .6; }
 .dialog-top { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }

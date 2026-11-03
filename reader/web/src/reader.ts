@@ -7,6 +7,7 @@ import { bookmarkList, chapterOf, chapterTarget, keyAction, type Bookmark, tapAc
 import { Strip } from "./strip";
 import { clean, merged, scopeOf, type Scope, type Settings } from "./settings";
 import { coverMessage, el, esc, refusal } from "./dom";
+import { dialogOpen, helpKey, openHelp } from "./helpdialog";
 import { embedFor } from "./media";
 
 const CACHE = 24;
@@ -406,6 +407,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
           <button data-act="last" title="Last page (End)" aria-label="Last page">⏭</button>
         </div>
         <div class="buttons">
+          <button data-act="help" title="Keys and gestures (?)" aria-label="Keys and gestures">?</button>
           <label class="where">Page <input type="text" inputmode="numeric" data-act="page" aria-label="Go to page"> / ${comic.pages.length}</label>
           <button data-act="mode"></button>
           <button data-act="direction"></button>
@@ -461,6 +463,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     menu.querySelector<HTMLButtonElement>('[data-act="fit"]')!.onclick = cycle("fit", ["screen", "width", "height", "original"]);
     menu.querySelector<HTMLButtonElement>('[data-act="fullscreen"]')!.onclick = toggleFullscreen;
     menu.querySelector<HTMLButtonElement>('[data-act="more"]')!.onclick = openSheet;
+    menu.querySelector<HTMLButtonElement>('[data-act="help"]')!.onclick = () => openHelp("reader", settings);
     menu.querySelector<HTMLButtonElement>('[data-act="cover"]')!.onclick = openCoverSheet;
     menu.addEventListener("pointerdown", (event) => event.stopPropagation());
   }
@@ -569,9 +572,11 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
         ${scope === "comic" ? `<button data-act="forget-own">Use the settings for ${
           inSeries && Object.keys(seriesOwn).length ? "the series" : "every comic"}</button>` : ""}
         ${scope === "series" ? '<button data-act="forget-series">Use the settings for every comic</button>' : ""}
+        <button data-act="all-help">Every key and gesture</button>
         <button data-act="restart">Mark as unread</button>
         <button data-act="close">Done</button>
       </div>`;
+    sheet.querySelector<HTMLButtonElement>('[data-act="all-help"]')!.onclick = () => openHelp("all", settings);
     const input = <T extends HTMLElement>(name: string) => sheet.querySelector<T>(`[data-set="${name}"]`)!;
     input<HTMLSelectElement>("scope").value = scope;
     // shown again, so the button for forgetting what is kept matches what changes are now kept for
@@ -730,6 +735,12 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   });
 
   const keys = (event: KeyboardEvent) => {
+    // the help, or any dialog, over the page: an arrow pressed there turns nothing under it
+    if (dialogOpen()) return;
+    if (helpKey(event)) {
+      event.preventDefault();
+      return openHelp("reader", settings);
+    }
     if ((event.target as HTMLElement).closest("input, select, textarea")) return;
     // a flash movie played with the keyboard keeps its keys while it has them
     if ((event.target as Element).closest?.(".embed") || document.activeElement?.closest(".embed")) return;
