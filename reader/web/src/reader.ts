@@ -539,6 +539,9 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       api.saveSettings(globalSettings).catch(() => notify("Could not save the setting"));
     }
     const wasWebtoon = settings.mode === "webtoon";
+    // a scrolled comic stays as far down its page as it was: drawn again, it is put back on the page alone,
+    // and a padding let go of jumped to the top of the page being read
+    if (wasWebtoon && scrolling) startPart = scrolling.partOf(at);
     settings = merged(globalSettings, own, seriesOwn);
     shown = views(comic.pages, settings, starts);
     view = viewOf(shown, at);
