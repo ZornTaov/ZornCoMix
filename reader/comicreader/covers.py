@@ -11,13 +11,14 @@ import io
 import os
 import re
 
+#the names a folder's own picture goes by, in the order they are looked for, as other readers look for them,
+#and the endings of a picture beside an archive: comiclib's, which the adopter goes by too, so a picture the
+#reader shows as a cover is never taken for a page
+from comiclib.cbz import COVER_ENDINGS as ENDINGS, FOLDER_COVERS as FOLDER_NAMES
 from comiclib.metadata import METADATA_FILE
 
 #what a target is a cover of: "comic:<id>", "folder:<place>", "series:<name>", "author:<name>"
 KINDS = ("comic", "folder", "series", "author")
-#the names a folder's own picture goes by, in the order they are looked for, as other readers look for them
-FOLDER_NAMES = ("cover", "folder", "poster")
-ENDINGS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 #a picture's ending, by the kind Pillow reads it as
 KIND_ENDINGS = {"JPEG": ".jpg", "PNG": ".png", "GIF": ".gif", "WEBP": ".webp"}
 #what an upload can be at most

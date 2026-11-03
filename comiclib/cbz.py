@@ -15,6 +15,23 @@ from comiclib.standin import archive_entry, entry_name, held_otherwise, stand_in
 PAGES_TREE = "uncompressed"
 SHELF = "CBZs"
 
+#a picture on the shelf that is a cover, not a page: one named as the archive beside it is (MyComic.cbz and
+#MyComic.jpg), as packing keeps a chapter's banner, or a folder's own, cover.jpg. the reader shows them as
+#covers and the adopter passes over them - one rule, so the two cannot disagree about which is which
+COVER_ENDINGS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+FOLDER_COVERS = ("cover", "folder", "poster")
+
+
+def archive_stems(names):
+    #the archives among a folder's names, by their names without the ending, for is_cover
+    return {name[:-4].lower() for name in names if name.lower().endswith('.cbz')}
+
+
+def is_cover(name, stems):
+    #stems is archive_stems of the folder the picture is in, worked out once for the folder
+    stem, ending = os.path.splitext(name)
+    return ending.lower() in COVER_ENDINGS and (stem.lower() in FOLDER_COVERS or stem.lower() in stems)
+
 
 def archive_prefix(zf, folder):
     #archives built by Compress-Archive put every entry under the folder name, while a plain zip of the

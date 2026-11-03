@@ -6,14 +6,13 @@ import posixpath
 import urllib.parse
 
 from comiclib import comicinfo
+from comiclib.cbz import COVER_ENDINGS as ENDINGS
 from comiclib.chapters.numbering import numbered
 from comiclib.chapters.packing import chapter_file, chapter_folder
 from comiclib.download import fetch
 from comiclib.exits import MirrorError
 from comiclib.metadata import read as read_metadata
 
-#what a cover beside an archive can be called, as readers look for one
-ENDINGS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 #a picture's ending from its first bytes, for an address that does not say - chapter.php?banner=3
 KINDS = ((b"\x89PNG", ".png"), (b"\xff\xd8", ".jpg"), (b"GIF8", ".gif"), (b"RIFF", ".webp"))
 

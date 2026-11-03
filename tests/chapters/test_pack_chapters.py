@@ -287,6 +287,32 @@ def test_replacing_gives_up_the_single_archive_once_everything_checks_out(tiny):
     assert inside == pages, sorted(pages - inside)
 
 
+def test_the_single_archives_cover_becomes_the_cover_of_the_chapters_folder(tiny):
+    #a picture beside Tiny.cbz under its name is Tiny's cover. with Tiny.cbz given up it is nobody's under
+    #that name, so it goes to the chapters' folder as its cover.png - the same bytes, the same kind - and the
+    #move is kept for the reader to follow
+    picture = tiny.single.with_suffix(".PNG")
+    picture.write_bytes(b"\x89PNG a cover with a clear background")
+    done = tiny.pack("--replace")
+    assert done.returncode == 0 and not tiny.single.exists(), done.stdout[-300:]
+    cover = tiny.out / "cover.png"
+    assert cover.read_bytes() == b"\x89PNG a cover with a clear background" and not picture.exists(), \
+        sorted(p.name for p in tiny.out.iterdir())
+    moved = read_meta(tiny.comic)["history"]["moves"][-1]["moved"]
+    assert {"what": "cover", "from": "CBZs/Group/Tiny.PNG", "to": "CBZs/Group/Tiny/cover.png"} in moved, moved
+
+
+def test_a_cover_the_chapters_folder_has_already_is_left_alone(tiny):
+    picture = tiny.single.with_suffix(".jpg")
+    picture.write_bytes(b"the old cover")
+    tiny.out.mkdir(parents=True, exist_ok=True)
+    (tiny.out / "folder.webp").write_bytes(b"chosen since")
+    done = tiny.pack("--replace")
+    assert done.returncode == 0 and not tiny.single.exists(), done.stdout[-300:]
+    assert picture.read_bytes() == b"the old cover" and not (tiny.out / "cover.jpg").exists()
+    assert (tiny.out / "folder.webp").read_bytes() == b"chosen since"
+
+
 def test_replacing_by_hand_without_a_root_finds_the_single_archive(tiny):
     #run by hand from anywhere, with no --root: the archive's path in the settings is from the folder holding
     #Uncompressed, not from the folder above the comic - where it was looked for, not found, and kept quietly

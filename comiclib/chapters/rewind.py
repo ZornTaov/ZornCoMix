@@ -14,7 +14,8 @@ from comiclib.chapters.index import (aside_target, alignment_path, counted_from_
                                      numbered_files, read_index, write_lines)
 from comiclib.chapters.links import same_page
 from comiclib.chapters.numbering import numbered
-from comiclib.chapters.packing import COVER_ENDINGS, chapter_file, chapter_folder, pack, repack
+from comiclib.cbz import COVER_ENDINGS
+from comiclib.chapters.packing import chapter_file, chapter_folder, pack, repack
 from comiclib.metadata import METADATA_FILE, now_stamp, read as read_metadata, write as write_metadata, write_json
 from comiclib.pages import page_number
 
