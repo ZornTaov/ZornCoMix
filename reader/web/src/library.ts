@@ -4,6 +4,7 @@ import { api, type ComicSummary, type Fit, type GroupCovers } from "./api";
 import { openComicInfoDialog } from "./comicinfodialog";
 import { openCoverDialog, type CoverTarget } from "./coverdialog";
 import { el, esc, fitClass, refusal } from "./dom";
+import { dialogOpen, helpKey, openHelp } from "./helpdialog";
 import { cleanLibrary, type LibrarySettings, libraryDefaults, openLibrarySettings } from "./librarysettings";
 import { BROWSE_LABELS, type Browse, editableTogether, type Group, grewBy, matches, nextIssues, openingPage, pathLabel, randomPick, readShare, reading, recentlyUpdated, shelf, upTo } from "./shelves";
 
@@ -48,6 +49,7 @@ export async function openLibrary(root: HTMLElement, browse: Browse, path: strin
       <button data-act="random" title="Open something to read, picked at random from here">Random</button>
       <button data-act="scan" title="Look for new pages now">Refresh</button>
       <button data-act="settings" title="How the library's shelves are drawn" aria-label="Library settings">⚙</button>
+      <button data-act="help" title="Keys and gestures (?)" aria-label="Keys and gestures">?</button>
     </header>
     <main></main>
     <div class="toast hidden"></div>`;
@@ -272,7 +274,13 @@ export async function openLibrary(root: HTMLElement, browse: Browse, path: strin
     document.body.append(popup);
   }
 
-  const escape = (event: KeyboardEvent) => { if (event.key === "Escape") closeMenu(); };
+  const escape = (event: KeyboardEvent) => {
+    if (event.key === "Escape") closeMenu();
+    else if (helpKey(event) && !dialogOpen()) {
+      event.preventDefault();
+      openHelp("library");
+    }
+  };
   document.addEventListener("click", closeMenu);
   window.addEventListener("keydown", escape);
 
@@ -308,6 +316,7 @@ export async function openLibrary(root: HTMLElement, browse: Browse, path: strin
     settings = cachedSettings = changed;
     draw();
   });
+  page.querySelector<HTMLButtonElement>('[data-act="help"]')!.onclick = () => openHelp("library");
   page.querySelector<HTMLButtonElement>('[data-act="scan"]')!.onclick = async (event) => {
     const button = event.target as HTMLButtonElement;
     button.disabled = true;
