@@ -28,6 +28,8 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+/* the box each screen is drawn into (main.ts), there only to be swapped whole: laid out as if it were not */
+.screen { display: contents; }
 body {
   background: var(--bg);
   color: var(--text);
