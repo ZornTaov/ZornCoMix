@@ -69,6 +69,8 @@ def test_a_boundary_is_added_from_the_chapters_tab(toy, library, web, browser): 
     wait_until(lambda: script("return document.querySelector('[data-edit=\"{0}\"]')".format(NAME)),
                why="the comic never listed")
     script("document.querySelector('[data-edit=\"{0}\"]').click()".format(NAME))
+    #a tab pressed before the editor has read its comic is ignored, the editor not being there yet
+    wait_until(lambda: script("return document.getElementById('editor').open"), why="the editor never opened")
     script("document.getElementById('edit-boundaries').click()")
     #its pages are offered once they are read, so a boundary is chosen rather than guessed at
     wait_until(lambda: "Pick from this comic's 15 pages" in browser.find_element("id", "bd-picked").text,
