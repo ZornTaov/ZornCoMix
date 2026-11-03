@@ -185,6 +185,9 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   // browser until it is done
   function save(closing = false) {
     if (!keepingPlace) return;
+    // a reader off the page - opened for an address already left - has no place to tell: its strip measures
+    // nothing, and the place it worked out would be fifty pages up
+    if (!reader.isConnected) return;
     const at = page();
     if (trying) {
       if (!trialKept(looked.size, at, comic.pages.length)) return;
