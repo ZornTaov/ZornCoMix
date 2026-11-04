@@ -105,9 +105,10 @@ export interface Placed {
 // where every page of a scrolled comic sits, worked out from the sizes the server measured rather than read
 // back from the page: the four fits as the paged view has them, in `room` pixels across and `screen` tall.
 // a page the server could not measure is given 40% of a screen until its picture says otherwise. `gap` is
-// left empty above and below every page
+// left empty above and below every page. `zoom` makes every page that much bigger whatever the fit, the gap
+// between them left as it is
 export function placeStrip(pages: { w: number | null; h: number | null }[], fit: Fit, room: number, screen: number,
-                           gap = 0): Placed {
+                           gap = 0, zoom = 1): Placed {
   const count = pages.length;
   const placed: Placed = { tops: new Float64Array(count), heights: new Float64Array(count),
                            widths: new Float64Array(count), total: 0, widest: 0 };
@@ -132,6 +133,8 @@ export function placeStrip(pages: { w: number | null; h: number | null }[], fit:
       width = w;
       height = h;
     }
+    width *= zoom;
+    height *= zoom;
     y += gap;
     placed.tops[n] = y;
     placed.heights[n] = height;
@@ -141,6 +144,60 @@ export function placeStrip(pages: { w: number | null; h: number | null }[], fit:
   }
   placed.total = y;
   return placed;
+}
+
+// a page zoomed by hand: drawn `scale` times its size, moved `x` and `y` from where it would be unzoomed
+export interface Zoom { scale: number; x: number; y: number }
+export const ZOOM_MIN = 1;
+export const ZOOM_MAX = 6;
+// where a double tap zooms to
+export const ZOOM_TAP = 2.5;
+
+// the fingers moved from `from` to `to` and spread to `scale`: whatever was under them stays under them,
+// so a pinch zooms where it is made and a two-finger drag carries the page along with it. points are
+// measured from the page's own corner as it would be unzoomed
+export function pinched(zoom: Zoom, scale: number, from: { x: number; y: number }, to: { x: number; y: number }): Zoom {
+  const k = scale / zoom.scale;
+  return { scale, x: to.x - k * (from.x - zoom.x), y: to.y - k * (from.y - zoom.y) };
+}
+
+// whether a sideways swipe turns the page. one wider than the screen - a long strip at its actual size - is
+// dragged across before a swipe turns it: a flick that scrolled it was reading it, and only one begun with
+// the page already at its edge, nowhere left to go that way, turns. `from` is how far across it was scrolled
+// as the finger came down, `furthest` how far it can be; a finger moved left pulls its right-hand side in
+export function swipeTurns(direction: "left" | "right", from: number, furthest: number): boolean {
+  if (furthest <= 4) return true;
+  return direction === "left" ? from >= furthest - 4 : from <= 4;
+}
+
+// how far a zoomed page may be moved along one side, the least and the most: one bigger than the screen no
+// further than leaves its edge at the screen's, so it is never pushed off to show nothing; one smaller kept
+// on the screen. `start` is where its unzoomed corner is on the screen, `size` its unzoomed size, `screen`
+// the screen's
+export function panRange(scale: number, start: number, size: number, screen: number): [number, number] {
+  const a = 0 - start;
+  const b = screen - start - size * scale;
+  return [Math.min(a, b), Math.max(a, b)];
+}
+
+// a page bigger than the screen both ways is read as text is: along a row, then down a screen and back to the
+// start of the next, and only past the end of the last row turned. `at` is how far it is scrolled and
+// `furthest` how far it can be, `step` how far one move goes; a row starts on the left reading left to
+// right, on the right reading right to left. where to move to, or null once there is nowhere left to go
+export function zigzag(at: { x: number; y: number }, furthest: { x: number; y: number }, step: { x: number; y: number },
+                       forward: boolean, rtl: boolean): { x: number; y: number } | null {
+  const clampX = (x: number) => Math.min(furthest.x, Math.max(0, x));
+  const rowStart = rtl ? furthest.x : 0;
+  const rowEnd = rtl ? 0 : furthest.x;
+  const along = rtl ? -1 : 1;
+  if (forward) {
+    if (Math.abs(at.x - rowEnd) > 4) return { x: clampX(at.x + along * step.x), y: at.y };
+    if (at.y < furthest.y - 4) return { x: rowStart, y: Math.min(furthest.y, at.y + step.y) };
+    return null;
+  }
+  if (Math.abs(at.x - rowStart) > 4) return { x: clampX(at.x - along * step.x), y: at.y };
+  if (at.y > 4) return { x: rowEnd, y: Math.max(0, at.y - step.y) };
+  return null;
 }
 
 // the chapter a page is in

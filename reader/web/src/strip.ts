@@ -5,7 +5,7 @@
 // picture with it. nothing on screen ever moves when either happens, since no page's place depends on
 // another being there.
 import type { Page } from "./api";
-import { pageAt, type Placed, placeStrip } from "./layout";
+import { pageAt, pinched, type Placed, placeStrip, type Zoom, ZOOM_MAX, ZOOM_MIN } from "./layout";
 import type { Fit } from "./settings";
 
 export interface StripHooks {
@@ -45,6 +45,13 @@ export class Strip {
   private fit: Fit = "width";
   private padding = 0;
   private gap = 0;
+  // zoomed by hand: every page laid out this much bigger, the strip then wider than the screen and scrolled
+  // sideways as well as down, by the browser's own scrolling
+  private zoom = 1;
+  // a pinch under way is the strip as it is laid out, drawn bigger: laying out thousands of pages again at
+  // every move of the fingers would stutter. it is laid out at the new size once they lift
+  private preview: Zoom = { scale: 1, x: 0, y: 0 };
+  private fingers = { x: 0, y: 0 };
 
   constructor(private scroller: HTMLElement, private pages: Page[], private hooks: StripHooks) {
     this.content = document.createElement("div");
@@ -70,7 +77,7 @@ export class Strip {
     const across = this.scroller.clientWidth;
     if (!screen || !across) return;
     const room = Math.max(120, across - 2 * window.innerWidth * this.padding / 100);
-    this.placed = placeStrip(this.pages, this.fit, room, screen, this.gap);
+    this.placed = placeStrip(this.pages, this.fit, room, screen, this.gap, this.zoom);
     this.content.style.height = `${this.placed.total}px`;
     this.content.style.width = `${Math.max(across, this.placed.widest)}px`;
     const { n, part } = this.anchor;
@@ -85,6 +92,52 @@ export class Strip {
     this.anchor = { n, part };
     this.scroller.scrollTop = (this.placed.tops[n] ?? 0) + part * (this.placed.heights[n] ?? 0);
     this.update();
+  }
+
+  // how zoomed the strip is, a pinch under way included
+  get scale(): number {
+    return this.zoom * this.preview.scale;
+  }
+
+  // two fingers spread to `scale`, moved from (fromX, fromY) to (x, y) on the screen
+  pinch(scale: number, x: number, y: number, fromX: number, fromY: number) {
+    this.preview = pinched(this.preview, scale / this.zoom, this.inStrip(fromX, fromY), this.inStrip(x, y));
+    this.fingers = { x, y };
+    const { scale: s, x: tx, y: ty } = this.preview;
+    this.content.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+  }
+
+  // the fingers lifted: laid out at the size they left it
+  settle() {
+    this.zoomTo(this.scale, this.fingers.x, this.fingers.y);
+  }
+
+  // laid out at `scale`, whatever is at (x, y) on the screen staying there: the same page, the same way down
+  // and across it
+  zoomTo(scale: number, x: number, y: number) {
+    const box = this.scroller.getBoundingClientRect();
+    const at = this.inStrip(x, y);
+    const { scale: s, x: tx, y: ty } = this.preview;
+    const cx = (at.x - tx) / s;
+    const cy = (at.y - ty) / s;
+    const n = pageAt({ length: this.pages.length, at: (k: number) => this.placed.tops[k] }, cy);
+    const down = (cy - this.placed.tops[n]) / (this.placed.heights[n] || 1);
+    const across = (cx - this.leftOf(n)) / (this.placed.widths[n] || 1);
+    // nearly unzoomed is unzoomed, so a pinch let go at 1.02 leaves no sideways scroll of a few pixels
+    this.zoom = scale < ZOOM_MIN + 0.01 ? ZOOM_MIN : Math.min(ZOOM_MAX, scale);
+    this.preview = { scale: 1, x: 0, y: 0 };
+    this.content.style.transform = "";
+    this.layout();
+    if (n >= this.pages.length) return;
+    this.scroller.scrollTop = this.placed.tops[n] + down * this.placed.heights[n] - (y - box.top);
+    this.scroller.scrollLeft = this.leftOf(n) + across * this.placed.widths[n] - (x - box.left);
+    this.update();
+  }
+
+  // a point on the screen, in the strip as it is laid out
+  private inStrip(x: number, y: number) {
+    const box = this.scroller.getBoundingClientRect();
+    return { x: x - box.left + this.scroller.scrollLeft, y: y - box.top + this.scroller.scrollTop };
   }
 
   // how far down page n the screen is, as a share of the page: the place kept, beside the page itself
@@ -108,12 +161,16 @@ export class Strip {
     if (!this.frame) this.frame = requestAnimationFrame(() => { this.frame = 0; this.update(); });
   };
 
-  private place(holder: HTMLElement, n: number) {
-    const width = this.placed.widths[n];
+  // where page n's left edge is: a page narrower than the strip is centred in it
+  private leftOf(n: number): number {
     const across = Math.max(this.scroller.clientWidth, this.placed.widest);
+    return Math.max(0, (across - this.placed.widths[n]) / 2);
+  }
+
+  private place(holder: HTMLElement, n: number) {
     holder.style.top = `${this.placed.tops[n]}px`;
-    holder.style.left = `${Math.max(0, (across - width) / 2)}px`;
-    holder.style.width = `${width}px`;
+    holder.style.left = `${this.leftOf(n)}px`;
+    holder.style.width = `${this.placed.widths[n]}px`;
     holder.style.height = `${this.placed.heights[n]}px`;
   }
 

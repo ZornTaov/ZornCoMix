@@ -42,11 +42,18 @@ describe("the help says what the keys do", () => {
 describe("the help shows only the gestures of what is open", () => {
   const gestures = (how: HowRead) => entries(helpSections("reader", how)).map((entry) => entry.gesture).filter(Boolean);
 
-  it("has no swipes or pinches for a scrolled comic, which scrolls the browser's way", () => {
-    expect(gestures({ ...ltr, mode: "webtoon" })).not.toContain("pinch");
+  it("has no swipes for a scrolled comic, which scrolls the browser's way, but zooms it as a page", () => {
     expect(gestures({ ...ltr, mode: "webtoon" })).not.toContain("swipeLeft");
     expect(gestures({ ...ltr, mode: "webtoon" })).toContain("scroll");
-    expect(gestures(ltr)).toContain("pinch");
+    expect(gestures({ ...ltr, mode: "webtoon" })).toEqual(expect.arrayContaining(["pinch", "doubleTap"]));
+    expect(gestures(ltr)).toEqual(expect.arrayContaining(["pinch", "doubleTap", "swipeLeft"]));
+  });
+
+  it("says a page bigger than the screen is read through before it turns, by key, tap and swipe", () => {
+    const readThrough = (how: HowRead) => entries(helpSections("reader", how)).filter((entry) => entry.does.startsWith("Read through"));
+    expect(readThrough(ltr).map((entry) => entry.keys ? "keys" : entry.gesture)).toEqual(["keys", "zoneRight"]);
+    expect(entries(helpSections("reader", ltr)).some((entry) => entry.how?.includes("dragged") || entry.does.includes("dragged to its edge"))).toBe(true);
+    expect(readThrough({ ...ltr, mode: "webtoon" })).toHaveLength(0);
   });
 
   it("has the shelves alone on the shelves, and everything in all", () => {

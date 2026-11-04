@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, placeStrip, tapAction, trialKept, typedPage, viewOf, views, wanted } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, panRange, pinched, placeStrip, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
 import { clean, merged, paddingKey, scopeOf, sidePadding } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -323,6 +323,73 @@ describe("settings", () => {
     const both = merged({ padding: 15, paddingPortrait: 0 }, {});
     expect([sidePadding(both, false), sidePadding(both, true)]).toEqual([15, 0]);
     expect([paddingKey(false), paddingKey(true)]).toEqual(["padding", "paddingPortrait"]);
+  });
+});
+
+describe("zooming by hand", () => {
+  // where a point of the page is on the screen, zoomed
+  const onScreen = (zoom: Zoom, x: number, y: number) => [zoom.x + zoom.scale * x, zoom.y + zoom.scale * y];
+
+  it("keeps what is under the fingers under them as they spread and move", () => {
+    const start: Zoom = { scale: 1.5, x: -40, y: -10 };
+    // the point of the page under (200, 300) before the fingers moved
+    const page = [(200 - start.x) / start.scale, (300 - start.y) / start.scale];
+    const after = pinched(start, 3, { x: 200, y: 300 }, { x: 260, y: 280 });
+    expect(after.scale).toBe(3);
+    expect(onScreen(after, page[0], page[1]).map((v) => Math.round(v * 1e6) / 1e6)).toEqual([260, 280]);
+  });
+
+  it("carries the page along with two fingers that move without spreading", () => {
+    expect(pinched({ scale: 2, x: 0, y: 0 }, 2, { x: 100, y: 100 }, { x: 130, y: 90 })).toEqual({ scale: 2, x: 30, y: -10 });
+  });
+
+  it("turns a page wider than the screen by swipe only once it is dragged to its edge", () => {
+    // a page that fits always turns
+    expect(swipeTurns("left", 0, 0)).toBe(true);
+    // 600 more than the screen: a swipe left at the start, or part way, was dragging it across
+    expect(swipeTurns("left", 0, 600)).toBe(false);
+    expect(swipeTurns("left", 300, 600)).toBe(false);
+    expect(swipeTurns("left", 600, 600)).toBe(true);
+    expect(swipeTurns("right", 600, 600)).toBe(false);
+    expect(swipeTurns("right", 0, 600)).toBe(true);
+  });
+
+  it("never pushes a zoomed page off the screen", () => {
+    // 1000 across zoomed twice on a 400 screen, its corner at 0: it may move between -1600 and 0
+    expect(panRange(2, 0, 1000, 400)).toEqual([-1600, 0]);
+    // still smaller than the screen, it stays on it
+    expect(panRange(1.2, 50, 200, 400)).toEqual([-50, 110]);
+  });
+
+  it("reads a page bigger than the screen both ways along each row, then down to the next", () => {
+    const furthest = { x: 600, y: 900 };
+    const step = { x: 340, y: 680 };
+    // left to right: across, across to the row's end, then down and back to the left
+    expect(zigzag({ x: 0, y: 0 }, furthest, step, true, false)).toEqual({ x: 340, y: 0 });
+    expect(zigzag({ x: 340, y: 0 }, furthest, step, true, false)).toEqual({ x: 600, y: 0 });
+    expect(zigzag({ x: 600, y: 0 }, furthest, step, true, false)).toEqual({ x: 0, y: 680 });
+    expect(zigzag({ x: 600, y: 900 }, furthest, step, true, false)).toBeNull();
+    // back the same way: to the row's start, then up and to the end of the row above
+    expect(zigzag({ x: 0, y: 680 }, furthest, step, false, false)).toEqual({ x: 600, y: 0 });
+    expect(zigzag({ x: 0, y: 0 }, furthest, step, false, false)).toBeNull();
+    // right to left: rows start on the right
+    expect(zigzag({ x: 600, y: 0 }, furthest, step, true, true)).toEqual({ x: 260, y: 0 });
+    expect(zigzag({ x: 0, y: 0 }, furthest, step, true, true)).toEqual({ x: 600, y: 680 });
+  });
+
+  it("reads a page bigger one way only along that way, as before", () => {
+    const step = { x: 340, y: 680 };
+    expect(zigzag({ x: 0, y: 0 }, { x: 0, y: 900 }, step, true, false)).toEqual({ x: 0, y: 680 });
+    expect(zigzag({ x: 0, y: 0 }, { x: 600, y: 0 }, step, true, false)).toEqual({ x: 340, y: 0 });
+    expect(zigzag({ x: 0, y: 0 }, { x: 0, y: 0 }, step, true, false)).toBeNull();
+  });
+
+  it("lays a scrolled comic out bigger, the gap between pages as it was", () => {
+    const pages = [page(800, 1200), page(800, 1200)];
+    const zoomed = placeStrip(pages, "width", 400, 1000, 10, 2);
+    expect([...zoomed.widths]).toEqual([800, 800]);
+    expect([...zoomed.tops]).toEqual([10, 10 + 1200 + 20]);
+    expect(placeStrip(pages, "original", 400, 1000, 0, 1.5).widest).toBe(1200);
   });
 });
 
