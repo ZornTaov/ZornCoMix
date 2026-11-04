@@ -62,6 +62,10 @@ function arrows(direction: "ltr" | "rtl"): { on: string; back: string } {
   return direction === "rtl" ? { on: "←", back: "→" } : { on: "→", back: "←" };
 }
 
+// a turn on a page bigger than the screen, by key, tap or swipe alike
+const READ_THROUGH = "Read through it first: along the row, then down and back to the start of the next - past "
+  + "the last row, the next page, opened at the same zoom";
+
 function readerKeys(how: HowRead): Entry[] {
   const { on, back } = arrows(how.direction);
   const scrolling = how.mode === "webtoon";
@@ -70,6 +74,8 @@ function readerKeys(how: HowRead): Entry[] {
       does: scrolling ? "Down a screen - at the very end, on into the next chapter" : "Next page" },
     { keys: [[back], ["Shift", "Space"], ["Page Up"], ["Backspace"]],
       does: scrolling ? "Up a screen - at the very top, back into the chapter before" : "Previous page" },
+    // a page bigger than the screen is read through before it turns (reader.ts readThrough)
+    ...(scrolling ? [] : [{ keys: [[on], [back]], does: READ_THROUGH }]),
     { keys: [["Shift", on]], does: "Ten pages on" },
     { keys: [["Shift", back]], does: "Ten pages back" },
     { keys: [["]"]], does: "Next chapter" },
@@ -98,13 +104,18 @@ function pagedGestures(how: HowRead): Entry[] {
   // a swipe goes on the way the page would be pulled: leftward reading left to right
   const onSwipe = how.direction === "rtl" ? "swipeRight" : "swipeLeft";
   const backSwipe = how.direction === "rtl" ? "swipeLeft" : "swipeRight";
+  const onSide = leftGoesForward(how) ? "zoneLeft" : "zoneRight";
+  const onWay = onSwipe === "swipeLeft" ? "left" : "right";
   return [
     ...sides(how, "Next page", "Previous page"),
+    { gesture: onSide, how: "Tap a side of a page bigger than the screen, or zoomed", does: READ_THROUGH },
     { gesture: "doubleTap", how: "Double-tap the middle", does: "Zoom in there, or back out" },
-    { gesture: onSwipe, how: `Swipe ${onSwipe === "swipeLeft" ? "left" : "right"}`, does: "Next page" },
+    { gesture: onSwipe, how: `Swipe ${onWay}`, does: "Next page" },
     { gesture: backSwipe, how: `Swipe ${backSwipe === "swipeLeft" ? "left" : "right"}`, does: "Previous page" },
+    { gesture: onSwipe, how: `Swipe ${onWay} on a page wider than the screen, or zoomed`,
+      does: "Only once it is dragged to its edge, then as a tap on that side - a swipe still dragging it across just moves it" },
     { gesture: "pinch", how: "Pinch, or drag with two fingers", does: "Zoom in or out, or move with the fingers" },
-    { gesture: "drag", how: "Drag", does: "Move around a zoomed page, or down one taller than the screen" },
+    { gesture: "drag", how: "Drag", does: "Move around a zoomed page, or one bigger than the screen" },
     { gesture: "wheel", how: "Mouse wheel", does: "Turn the page - a page taller than the screen is scrolled to its end first" },
   ];
 }

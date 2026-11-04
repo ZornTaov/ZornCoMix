@@ -49,6 +49,13 @@ describe("the help shows only the gestures of what is open", () => {
     expect(gestures(ltr)).toEqual(expect.arrayContaining(["pinch", "doubleTap", "swipeLeft"]));
   });
 
+  it("says a page bigger than the screen is read through before it turns, by key, tap and swipe", () => {
+    const readThrough = (how: HowRead) => entries(helpSections("reader", how)).filter((entry) => entry.does.startsWith("Read through"));
+    expect(readThrough(ltr).map((entry) => entry.keys ? "keys" : entry.gesture)).toEqual(["keys", "zoneRight"]);
+    expect(entries(helpSections("reader", ltr)).some((entry) => entry.how?.includes("dragged") || entry.does.includes("dragged to its edge"))).toBe(true);
+    expect(readThrough({ ...ltr, mode: "webtoon" })).toHaveLength(0);
+  });
+
   it("has the shelves alone on the shelves, and everything in all", () => {
     expect(helpSections("library", ltr).map((section) => section.title)).toEqual(["The shelves"]);
     const all = helpSections("all", ltr).map((section) => section.title);
