@@ -161,6 +161,15 @@ export function pinched(zoom: Zoom, scale: number, from: { x: number; y: number 
   return { scale, x: to.x - k * (from.x - zoom.x), y: to.y - k * (from.y - zoom.y) };
 }
 
+// whether a sideways swipe turns the page. one wider than the screen - a long strip at its actual size - is
+// dragged across before a swipe turns it: a flick that scrolled it was reading it, and only one begun with
+// the page already at its edge, nowhere left to go that way, turns. `from` is how far across it was scrolled
+// as the finger came down, `furthest` how far it can be; a finger moved left pulls its right-hand side in
+export function swipeTurns(direction: "left" | "right", from: number, furthest: number): boolean {
+  if (furthest <= 4) return true;
+  return direction === "left" ? from >= furthest - 4 : from <= 4;
+}
+
 // how far a zoomed page may be moved along one side: one bigger than the screen no further than leaves its
 // edge at the screen's, so it is never pushed off to show nothing; one smaller kept on the screen. `start`
 // is where its unzoomed corner is on the screen, `size` its unzoomed size, `screen` the screen's

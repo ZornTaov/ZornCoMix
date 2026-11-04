@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, pageAt, pinched, placeStrip, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, pageAt, pinched, placeStrip, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom } from "./layout";
 import { clean, merged, scopeOf } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -332,6 +332,17 @@ describe("zooming by hand", () => {
 
   it("carries the page along with two fingers that move without spreading", () => {
     expect(pinched({ scale: 2, x: 0, y: 0 }, 2, { x: 100, y: 100 }, { x: 130, y: 90 })).toEqual({ scale: 2, x: 30, y: -10 });
+  });
+
+  it("turns a page wider than the screen by swipe only once it is dragged to its edge", () => {
+    // a page that fits always turns
+    expect(swipeTurns("left", 0, 0)).toBe(true);
+    // 600 more than the screen: a swipe left at the start, or part way, was dragging it across
+    expect(swipeTurns("left", 0, 600)).toBe(false);
+    expect(swipeTurns("left", 300, 600)).toBe(false);
+    expect(swipeTurns("left", 600, 600)).toBe(true);
+    expect(swipeTurns("right", 600, 600)).toBe(false);
+    expect(swipeTurns("right", 0, 600)).toBe(true);
   });
 
   it("never pushes a zoomed page off the screen", () => {

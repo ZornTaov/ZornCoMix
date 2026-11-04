@@ -3,7 +3,7 @@
 // changes, by page rather than by number, so it survives the comic growing or being renumbered.
 import { api, type StandIn } from "./api";
 import { attachGestures } from "./gestures";
-import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, type Bookmark, pinched, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_TAP } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, type Bookmark, pinched, swipeTurns, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_TAP } from "./layout";
 import { Strip } from "./strip";
 import { clean, merged, scopeOf, type Scope, type Settings } from "./settings";
 import { coverMessage, el, esc, refusal } from "./dom";
@@ -691,6 +691,9 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   }
   const middle = (x: number) => tapAction(x, reader.clientWidth, settings) === "menu";
 
+  // how far across a page wider than the screen was scrolled when the finger came down
+  let swipeFrom = 0;
+
   const detachStage = attachGestures(stage, {
     tap,
     middle,
@@ -698,7 +701,11 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       if (zoom.scale > 1.01) return resetZoom();
       zoomTo(ZOOM_TAP, x, y);
     },
+    start() {
+      swipeFrom = stage.scrollLeft;
+    },
     swipe(direction) {
+      if (!swipeTurns(direction, swipeFrom, stage.scrollWidth - stage.clientWidth)) return;
       const forward = (direction === "left") !== (settings.direction === "rtl");
       turn(forward);
     },
@@ -735,6 +742,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     },
     scale: () => scrolling?.scale ?? 1,
     // one finger is the browser's own scrolling there, never asked about
+    start() {},
     swipe() {},
     drag() {},
     pan() {},

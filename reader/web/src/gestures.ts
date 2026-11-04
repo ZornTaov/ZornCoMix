@@ -9,6 +9,8 @@ export interface GestureHandlers {
   tap(x: number, y: number): void;
   // a second tap in the middle soon after the first: zoom in there, or back out
   doubleTap(x: number, y: number): void;
+  // a first finger down: a swipe it ends in is judged against where the page was then
+  start(): void;
   swipe(direction: "left" | "right"): void;
   // a one-finger drag on an unzoomed page: the stage scrolls by it
   drag(dx: number, dy: number): void;
@@ -33,6 +35,10 @@ const DOUBLE = 280;
 export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls = false): () => void {
   const pointers = new Map<number, { x: number; y: number; startX: number; startY: number; at: number }>();
   let moved = false;
+  // a second finger was down at some point since the first landed: a pinch or a two-finger drag, which
+  // ends as neither a tap nor a swipe however its last finger lifts - a pinch let go at 1x, fingers sliding
+  // sideways as they part, turned the page
+  let twoFingers = false;
   let lastTap = 0;
   let pendingTap: number | undefined;
 
@@ -45,6 +51,11 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls
                                     at: performance.now() });
     // a second finger makes it a pinch, never a tap, whichever lifts first
     moved = pointers.size > 1;
+    if (pointers.size > 1) twoFingers = true;
+    else {
+      twoFingers = false;
+      on.start();
+    }
   };
 
   const move = (event: PointerEvent) => {
@@ -85,7 +96,7 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls
       on.tap(held.x, held.y);
       return;
     }
-    if (!scrolls && on.scale() <= 1.01 && Math.abs(totalX) > SWIPE && Math.abs(totalX) > Math.abs(totalY) * 1.5
+    if (!scrolls && !twoFingers && on.scale() <= 1.01 && Math.abs(totalX) > SWIPE && Math.abs(totalX) > Math.abs(totalY) * 1.5
         && performance.now() - held.at < 600) {
       on.swipe(totalX < 0 ? "left" : "right");
     }
@@ -110,6 +121,7 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls
   const touchStart = (event: TouchEvent) => {
     if (event.touches.length !== 2) return;
     if ((event.target as Element).closest?.(".embed")) return;
+    twoFingers = true;
     pinch = { ...between(event.touches), scale: on.scale() };
   };
 
