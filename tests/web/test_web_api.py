@@ -121,7 +121,9 @@ def test_a_running_scrape_can_be_watched_and_stopped_and_a_queued_job_dropped(pa
     assert 0 < held < SLOW_PAGES, "stopped part way, with the pages kept: {0}".format(held)
     assert state["history"][0]["counts"].get("stopped") == 1, state["history"][0]
     url = read_meta(slow)["settings"]["url"]
-    assert url.endswith("/slow/{0}".format(held + 1)) or url.endswith("/slow/{0}".format(held)), (held, url)
+    #a stop kills the scrape where it stands, which can be after a page's picture is saved but before the
+    #metadata says so: it then carries on a page early, from one it holds, which is only looked at again
+    assert any(url.endswith("/slow/{0}".format(n)) for n in (held - 1, held, held + 1)), (held, url)
     labels = [job["label"] for job in state["history"]]
     assert "Started from the web page: every comic" not in labels, "the dropped job ran: {0}".format(labels)
 
