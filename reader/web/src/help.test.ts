@@ -42,11 +42,11 @@ describe("the help says what the keys do", () => {
 describe("the help shows only the gestures of what is open", () => {
   const gestures = (how: HowRead) => entries(helpSections("reader", how)).map((entry) => entry.gesture).filter(Boolean);
 
-  it("has no swipes or pinches for a scrolled comic, which scrolls the browser's way", () => {
-    expect(gestures({ ...ltr, mode: "webtoon" })).not.toContain("pinch");
+  it("has no swipes for a scrolled comic, which scrolls the browser's way, but zooms it as a page", () => {
     expect(gestures({ ...ltr, mode: "webtoon" })).not.toContain("swipeLeft");
     expect(gestures({ ...ltr, mode: "webtoon" })).toContain("scroll");
-    expect(gestures(ltr)).toContain("pinch");
+    expect(gestures({ ...ltr, mode: "webtoon" })).toEqual(expect.arrayContaining(["pinch", "doubleTap"]));
+    expect(gestures(ltr)).toEqual(expect.arrayContaining(["pinch", "doubleTap", "swipeLeft"]));
   });
 
   it("has the shelves alone on the shelves, and everything in all", () => {

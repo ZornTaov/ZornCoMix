@@ -1,7 +1,8 @@
 // what the keys and gestures do, written down once as data, so the help for the shelves, for the comic open
 // and for everything at once are three views of one list and cannot disagree. the reader's is worked out for
 // the way it is being read: the arrows and the sides of the screen as they go now, and only what the mode
-// open has - a scrolled comic is scrolled the browser's own way, with no swipes or pinches of its own
+// open has - a scrolled comic is scrolled the browser's own way, with no swipes of its own, though it zooms
+// as a page does
 import type { Settings } from "./settings";
 
 export type Context = "library" | "reader" | "all";
@@ -102,7 +103,7 @@ function pagedGestures(how: HowRead): Entry[] {
     { gesture: "doubleTap", how: "Double-tap the middle", does: "Zoom in there, or back out" },
     { gesture: onSwipe, how: `Swipe ${onSwipe === "swipeLeft" ? "left" : "right"}`, does: "Next page" },
     { gesture: backSwipe, how: `Swipe ${backSwipe === "swipeLeft" ? "left" : "right"}`, does: "Previous page" },
-    { gesture: "pinch", how: "Pinch", does: "Zoom in or out" },
+    { gesture: "pinch", how: "Pinch, or drag with two fingers", does: "Zoom in or out, or move with the fingers" },
     { gesture: "drag", how: "Drag", does: "Move around a zoomed page, or down one taller than the screen" },
     { gesture: "wheel", how: "Mouse wheel", does: "Turn the page - a page taller than the screen is scrolled to its end first" },
   ];
@@ -111,7 +112,9 @@ function pagedGestures(how: HowRead): Entry[] {
 function scrollGestures(how: HowRead): Entry[] {
   return [
     ...sides(how, "Down a screen", "Up a screen"),
-    { gesture: "scroll", how: "Scroll, or drag with a finger", does: "Move through the comic, every page one under the next" },
+    { gesture: "doubleTap", how: "Double-tap the middle", does: "Zoom in there, or back out" },
+    { gesture: "pinch", how: "Pinch, or drag with two fingers", does: "Zoom in or out, or move with the fingers" },
+    { gesture: "scroll", how: "Scroll, or drag with a finger", does: "Move through the comic, every page one under the next - and across it, zoomed" },
   ];
 }
 

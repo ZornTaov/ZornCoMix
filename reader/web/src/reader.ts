@@ -3,7 +3,7 @@
 // changes, by page rather than by number, so it survives the comic growing or being renumbered.
 import { api, type StandIn } from "./api";
 import { attachGestures } from "./gestures";
-import { bookmarkList, chapterOf, chapterTarget, keyAction, type Bookmark, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, type Bookmark, pinched, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_TAP } from "./layout";
 import { Strip } from "./strip";
 import { clean, merged, scopeOf, type Scope, type Settings } from "./settings";
 import { coverMessage, el, esc, refusal } from "./dom";
@@ -34,7 +34,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   let shown = views(comic.pages, settings, starts);
   let view = viewOf(shown, clamp(startAt ?? comic.position, 0, comic.pages.length - 1));
   const images = new Map<number, HTMLImageElement>();
-  let zoom = { scale: 1, x: 0, y: 0 };
+  let zoom: Zoom = { scale: 1, x: 0, y: 0 };
   let saveTimer: number | undefined;
   let lastSaved = "";
   // false once the comic has been marked unread from inside it
@@ -679,18 +679,24 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     sheet.classList.remove("hidden");
   }
 
-  // input: taps, swipes and pinches on the stage; keys and a page-turner anywhere; the wheel at a page's end
-  const detach = attachGestures(stage, {
-    tap(x) {
-      if (!sheet.classList.contains("hidden")) return sheet.classList.add("hidden");
-      const action = tapAction(x, stage.clientWidth, settings);
-      if (action === "menu") return toggleMenu();
-      if (!menu.classList.contains("hidden")) return toggleMenu(false);
-      turn(action === "forward");
-    },
+  // input: taps, double taps and pinches the same on a page and on the strip, each tap doing what its side of
+  // the screen is for; swipes and one-finger panning on a page, the strip scrolled by the browser itself;
+  // keys and a page-turner anywhere; the wheel at a page's end
+  function tap(x: number) {
+    if (!sheet.classList.contains("hidden")) return sheet.classList.add("hidden");
+    const action = tapAction(x, reader.clientWidth, settings);
+    if (action === "menu") return toggleMenu();
+    if (!menu.classList.contains("hidden")) return toggleMenu(false);
+    turn(action === "forward");
+  }
+  const middle = (x: number) => tapAction(x, reader.clientWidth, settings) === "menu";
+
+  const detachStage = attachGestures(stage, {
+    tap,
+    middle,
     doubleTap(x, y) {
       if (zoom.scale > 1.01) return resetZoom();
-      zoomTo(2.5, x, y);
+      zoomTo(ZOOM_TAP, x, y);
     },
     swipe(direction) {
       const forward = (direction === "left") !== (settings.direction === "rtl");
@@ -699,40 +705,69 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     drag(dx, dy) {
       stage.scrollBy({ left: -dx, top: -dy });
     },
-    zoom(scale, originX, originY, panX, panY) {
-      if (scale !== zoom.scale && originX) zoomTo(scale, originX, originY);
-      zoom.x += panX;
-      zoom.y += panY;
+    pan(dx, dy) {
+      zoom.x += dx;
+      zoom.y += dy;
       paintZoom();
     },
+    pinch(scale, x, y, fromX, fromY) {
+      const at = corner();
+      zoom = pinched(zoom, scale, { x: fromX - at.x, y: fromY - at.y }, { x: x - at.x, y: y - at.y });
+      paintZoom();
+    },
+    pinchEnd() {
+      if (zoom.scale <= 1.01) resetZoom();
+    },
     scale: () => zoom.scale,
-    middle: (x) => tapAction(x, stage.clientWidth, settings) === "menu",
   });
 
+  const detachStrip = attachGestures(strip, {
+    tap,
+    middle,
+    doubleTap(x, y) {
+      scrolling?.zoomTo(scrolling.scale > 1.01 ? 1 : ZOOM_TAP, x, y);
+    },
+    pinch(scale, x, y, fromX, fromY) {
+      scrolling?.pinch(scale, x, y, fromX, fromY);
+    },
+    pinchEnd() {
+      scrolling?.settle();
+    },
+    scale: () => scrolling?.scale ?? 1,
+    // one finger is the browser's own scrolling there, never asked about
+    swipe() {},
+    drag() {},
+    pan() {},
+  }, true);
+
+  // where the spread's own corner is on the screen, unzoomed: what zooming is measured from. read from its
+  // place in the stage, which a transform does not move
+  function corner() {
+    const box = stage.getBoundingClientRect();
+    return { x: box.left + spread.offsetLeft - stage.scrollLeft, y: box.top + spread.offsetTop - stage.scrollTop };
+  }
+
+  // a double tap: zoomed to `scale`, the point tapped staying where it is
   function zoomTo(scale: number, x: number, y: number) {
-    // the point under the fingers stays under them: the spread's own corner is where scaling is measured from
-    const box = spread.getBoundingClientRect();
-    const originX = box.left - zoom.x;
-    const originY = box.top - zoom.y;
-    const k = scale / zoom.scale;
-    zoom.x = (x - originX) - ((x - originX) - zoom.x) * k;
-    zoom.y = (y - originY) - ((y - originY) - zoom.y) * k;
-    zoom.scale = scale;
+    const at = corner();
+    const point = { x: x - at.x, y: y - at.y };
+    zoom = pinched(zoom, scale, point, point);
     if (scale <= 1.01) return resetZoom();
     paintZoom();
   }
 
+  // drawn as zoomed, kept from being pushed off the screen
   function paintZoom() {
-    spread.style.transform = zoom.scale > 1.01 ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : "";
+    if (zoom.scale <= 1.01) {
+      spread.style.transform = "";
+      return;
+    }
+    const at = corner();
+    const box = stage.getBoundingClientRect();
+    zoom.x = clampPan(zoom.x, zoom.scale, at.x - box.left, spread.offsetWidth, stage.clientWidth);
+    zoom.y = clampPan(zoom.y, zoom.scale, at.y - box.top, spread.offsetHeight, stage.clientHeight);
+    spread.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
   }
-
-  strip.addEventListener("click", (event) => {
-    // a click on a video or a flash movie is its own - a flash comic's own next button among them
-    if ((event.target as Element).closest?.(".embed")) return;
-    const action = tapAction(event.clientX, strip.clientWidth, settings);
-    if (action === "menu") toggleMenu();
-    else turn(action === "forward");
-  });
 
   const keys = (event: KeyboardEvent) => {
     // the help, or any dialog, over the page: an arrow pressed there turns nothing under it
@@ -851,7 +886,8 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   return () => {
     window.clearTimeout(saveTimer);
     save(true);
-    detach();
+    detachStage();
+    detachStrip();
     clearStrip();
     window.removeEventListener("keydown", keys);
     document.removeEventListener("visibilitychange", hidden);

@@ -1,6 +1,10 @@
-// touch and mouse on the page, as one stream of pointers: a tap turns or opens the menu, a sideways swipe
-// turns, two fingers zoom, one finger pans a zoomed page or scrolls one taller than the screen. done by
-// hand rather than left to the browser, which would zoom the whole page and turn nothing.
+// touch and mouse on the page: a tap does what its side of the screen is for, a double tap in the middle
+// zooms, two fingers zoom by how far they spread and carry the page along as they move. the paged view
+// also has a sideways swipe to turn and one finger to pan a zoomed page or scroll one taller than the
+// screen; the scrolled one leaves one finger to the browser's own scrolling. done by hand rather than left
+// to the browser, which would zoom the whole page, menu and all, and turn nothing.
+import { ZOOM_MAX, ZOOM_MIN } from "./layout";
+
 export interface GestureHandlers {
   tap(x: number, y: number): void;
   // a second tap in the middle soon after the first: zoom in there, or back out
@@ -8,8 +12,12 @@ export interface GestureHandlers {
   swipe(direction: "left" | "right"): void;
   // a one-finger drag on an unzoomed page: the stage scrolls by it
   drag(dx: number, dy: number): void;
-  // two fingers, or a pan of a zoomed page
-  zoom(scale: number, originX: number, originY: number, panX: number, panY: number): void;
+  // a one-finger drag on a zoomed page
+  pan(dx: number, dy: number): void;
+  // two fingers, now spread to `scale` and between them at (x, y), having been at (fromX, fromY)
+  pinch(scale: number, x: number, y: number, fromX: number, fromY: number): void;
+  // the fingers lifted
+  pinchEnd(): void;
   scale(): number;
   // whether a tap here is in the middle, where a double tap is waited for
   middle(x: number): boolean;
@@ -19,9 +27,11 @@ const TAP_SLOP = 10;
 const SWIPE = 50;
 const DOUBLE = 280;
 
-export function attachGestures(target: HTMLElement, on: GestureHandlers): () => void {
+// scrolls: the target is scrolled by the browser itself, with its own momentum, so one finger is left to
+// it - neither captured, which would take a mouse off the scrollbar it is dragging, nor turned into swipes,
+// which a zoomed strip panned sideways would be
+export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls = false): () => void {
   const pointers = new Map<number, { x: number; y: number; startX: number; startY: number; at: number }>();
-  let pinch: { distance: number; scale: number } | null = null;
   let moved = false;
   let lastTap = 0;
   let pendingTap: number | undefined;
@@ -30,14 +40,11 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers): () => 
     // a video's controls, or flash being played, take their own taps; capturing them here would turn the
     // page under a finger pressing play
     if ((event.target as Element).closest?.(".embed")) return;
-    target.setPointerCapture(event.pointerId);
+    if (!scrolls) target.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY,
                                     at: performance.now() });
-    moved = pointers.size > 1 ? true : false;
-    if (pointers.size === 2) {
-      const [a, b] = [...pointers.values()];
-      pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y), scale: on.scale() };
-    }
+    // a second finger makes it a pinch, never a tap, whichever lifts first
+    moved = pointers.size > 1;
   };
 
   const move = (event: PointerEvent) => {
@@ -48,21 +55,14 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers): () => 
     held.x = event.clientX;
     held.y = event.clientY;
     if (Math.hypot(held.x - held.startX, held.y - held.startY) > TAP_SLOP) moved = true;
-    if (pointers.size === 2 && pinch) {
-      const [a, b] = [...pointers.values()];
-      const distance = Math.hypot(a.x - b.x, a.y - b.y);
-      on.zoom(Math.max(1, Math.min(6, pinch.scale * distance / pinch.distance)), (a.x + b.x) / 2, (a.y + b.y) / 2,
-              dx / 2, dy / 2);
-    } else if (pointers.size === 1 && moved) {
-      if (on.scale() > 1.01) on.zoom(on.scale(), 0, 0, dx, dy);
-      else if (event.pointerType !== "mouse") on.drag(dx, dy);
-    }
+    if (scrolls || pointers.size !== 1 || !moved) return;
+    if (on.scale() > 1.01) on.pan(dx, dy);
+    else if (event.pointerType !== "mouse") on.drag(dx, dy);
   };
 
   const up = (event: PointerEvent) => {
     const held = pointers.get(event.pointerId);
     pointers.delete(event.pointerId);
-    if (pointers.size < 2) pinch = null;
     if (!held || pointers.size > 0) return;
     const totalX = held.x - held.startX;
     const totalY = held.y - held.startY;
@@ -85,26 +85,70 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers): () => 
       on.tap(held.x, held.y);
       return;
     }
-    if (on.scale() <= 1.01 && Math.abs(totalX) > SWIPE && Math.abs(totalX) > Math.abs(totalY) * 1.5
+    if (!scrolls && on.scale() <= 1.01 && Math.abs(totalX) > SWIPE && Math.abs(totalX) > Math.abs(totalY) * 1.5
         && performance.now() - held.at < 600) {
       on.swipe(totalX < 0 ? "left" : "right");
     }
   };
 
+  // the browser taking a finger over for its own scrolling: no tap, and nothing left held
   const cancel = (event: PointerEvent) => {
     pointers.delete(event.pointerId);
-    if (pointers.size < 2) pinch = null;
+  };
+
+  // two fingers, read from touches rather than pointers: a scrolled strip's browser takes its pointers for
+  // its own scrolling, cancelling them, where touches keep coming - and a touch moved can be kept from
+  // scrolling at all, which the strip needs while two fingers are zooming it
+  let pinch: { distance: number; scale: number; x: number; y: number } | null = null;
+
+  const between = (touches: TouchList) => {
+    const [a, b] = [touches[0], touches[1]];
+    return { distance: Math.max(1, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)),
+             x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+  };
+
+  const touchStart = (event: TouchEvent) => {
+    if (event.touches.length !== 2) return;
+    if ((event.target as Element).closest?.(".embed")) return;
+    pinch = { ...between(event.touches), scale: on.scale() };
+  };
+
+  const touchMove = (event: TouchEvent) => {
+    if (!pinch || event.touches.length !== 2) return;
+    if (event.cancelable) event.preventDefault();
+    const now = between(event.touches);
+    // a pinch kept proportional to how far the fingers have spread since they landed, not added up a move
+    // at a time, so a slow pinch and a fast one end at the same size
+    const scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, pinch.scale * now.distance / pinch.distance));
+    on.pinch(scale, now.x, now.y, pinch.x, pinch.y);
+    pinch.x = now.x;
+    pinch.y = now.y;
+  };
+
+  // a finger lifted ends the pinch; one finger still down goes on as one finger
+  const touchEnd = (event: TouchEvent) => {
+    if (!pinch || event.touches.length === 2) return;
+    pinch = null;
+    on.pinchEnd();
   };
 
   target.addEventListener("pointerdown", down);
   target.addEventListener("pointermove", move);
   target.addEventListener("pointerup", up);
   target.addEventListener("pointercancel", cancel);
+  target.addEventListener("touchstart", touchStart, { passive: true });
+  target.addEventListener("touchmove", touchMove, { passive: false });
+  target.addEventListener("touchend", touchEnd);
+  target.addEventListener("touchcancel", touchEnd);
   return () => {
     window.clearTimeout(pendingTap);
     target.removeEventListener("pointerdown", down);
     target.removeEventListener("pointermove", move);
     target.removeEventListener("pointerup", up);
     target.removeEventListener("pointercancel", cancel);
+    target.removeEventListener("touchstart", touchStart);
+    target.removeEventListener("touchmove", touchMove);
+    target.removeEventListener("touchend", touchEnd);
+    target.removeEventListener("touchcancel", touchEnd);
   };
 }

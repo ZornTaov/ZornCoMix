@@ -146,7 +146,7 @@ button {
    size its measured shape gives it - so a picture arriving or being let go never moves anything, and the
    browser's own scroll anchoring has nothing to do */
 .strip { position: absolute; inset: 0; overflow: auto; touch-action: pan-x pan-y; overflow-anchor: none; }
-.strip-content { position: relative; }
+.strip-content { position: relative; transform-origin: 0 0; }
 .strip-page { position: absolute; }
 .strip-page img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .sheet .value { margin-left: auto; color: #bbb; font-variant-numeric: tabular-nums; }

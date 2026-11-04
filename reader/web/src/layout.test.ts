@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, placeStrip, tapAction, trialKept, typedPage, viewOf, views, wanted } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, pageAt, pinched, placeStrip, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom } from "./layout";
 import { clean, merged, scopeOf } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -314,6 +314,42 @@ describe("settings", () => {
     expect(clean({ padding: 75 })).toEqual({ padding: 40 });
     expect(clean({ padding: -5 })).toEqual({ padding: 0 });
     expect(clean({ padding: 12.4 })).toEqual({ padding: 12 });
+  });
+});
+
+describe("zooming by hand", () => {
+  // where a point of the page is on the screen, zoomed
+  const onScreen = (zoom: Zoom, x: number, y: number) => [zoom.x + zoom.scale * x, zoom.y + zoom.scale * y];
+
+  it("keeps what is under the fingers under them as they spread and move", () => {
+    const start: Zoom = { scale: 1.5, x: -40, y: -10 };
+    // the point of the page under (200, 300) before the fingers moved
+    const page = [(200 - start.x) / start.scale, (300 - start.y) / start.scale];
+    const after = pinched(start, 3, { x: 200, y: 300 }, { x: 260, y: 280 });
+    expect(after.scale).toBe(3);
+    expect(onScreen(after, page[0], page[1]).map((v) => Math.round(v * 1e6) / 1e6)).toEqual([260, 280]);
+  });
+
+  it("carries the page along with two fingers that move without spreading", () => {
+    expect(pinched({ scale: 2, x: 0, y: 0 }, 2, { x: 100, y: 100 }, { x: 130, y: 90 })).toEqual({ scale: 2, x: 30, y: -10 });
+  });
+
+  it("never pushes a zoomed page off the screen", () => {
+    // 1000 across zoomed twice on a 400 screen, its corner at 0: it may move between -1600 and 0
+    expect(clampPan(50, 2, 0, 1000, 400)).toBe(0);
+    expect(clampPan(-2000, 2, 0, 1000, 400)).toBe(-1600);
+    expect(clampPan(-700, 2, 0, 1000, 400)).toBe(-700);
+    // still smaller than the screen, it stays on it
+    expect(clampPan(-100, 1.2, 50, 200, 400)).toBe(-50);
+    expect(clampPan(500, 1.2, 50, 200, 400)).toBe(110);
+  });
+
+  it("lays a scrolled comic out bigger, the gap between pages as it was", () => {
+    const pages = [page(800, 1200), page(800, 1200)];
+    const zoomed = placeStrip(pages, "width", 400, 1000, 10, 2);
+    expect([...zoomed.widths]).toEqual([800, 800]);
+    expect([...zoomed.tops]).toEqual([10, 10 + 1200 + 20]);
+    expect(placeStrip(pages, "original", 400, 1000, 0, 1.5).widest).toBe(1200);
   });
 });
 

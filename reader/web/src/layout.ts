@@ -105,9 +105,10 @@ export interface Placed {
 // where every page of a scrolled comic sits, worked out from the sizes the server measured rather than read
 // back from the page: the four fits as the paged view has them, in `room` pixels across and `screen` tall.
 // a page the server could not measure is given 40% of a screen until its picture says otherwise. `gap` is
-// left empty above and below every page
+// left empty above and below every page. `zoom` makes every page that much bigger whatever the fit, the gap
+// between them left as it is
 export function placeStrip(pages: { w: number | null; h: number | null }[], fit: Fit, room: number, screen: number,
-                           gap = 0): Placed {
+                           gap = 0, zoom = 1): Placed {
   const count = pages.length;
   const placed: Placed = { tops: new Float64Array(count), heights: new Float64Array(count),
                            widths: new Float64Array(count), total: 0, widest: 0 };
@@ -132,6 +133,8 @@ export function placeStrip(pages: { w: number | null; h: number | null }[], fit:
       width = w;
       height = h;
     }
+    width *= zoom;
+    height *= zoom;
     y += gap;
     placed.tops[n] = y;
     placed.heights[n] = height;
@@ -141,6 +144,30 @@ export function placeStrip(pages: { w: number | null; h: number | null }[], fit:
   }
   placed.total = y;
   return placed;
+}
+
+// a page zoomed by hand: drawn `scale` times its size, moved `x` and `y` from where it would be unzoomed
+export interface Zoom { scale: number; x: number; y: number }
+export const ZOOM_MIN = 1;
+export const ZOOM_MAX = 6;
+// where a double tap zooms to
+export const ZOOM_TAP = 2.5;
+
+// the fingers moved from `from` to `to` and spread to `scale`: whatever was under them stays under them,
+// so a pinch zooms where it is made and a two-finger drag carries the page along with it. points are
+// measured from the page's own corner as it would be unzoomed
+export function pinched(zoom: Zoom, scale: number, from: { x: number; y: number }, to: { x: number; y: number }): Zoom {
+  const k = scale / zoom.scale;
+  return { scale, x: to.x - k * (from.x - zoom.x), y: to.y - k * (from.y - zoom.y) };
+}
+
+// how far a zoomed page may be moved along one side: one bigger than the screen no further than leaves its
+// edge at the screen's, so it is never pushed off to show nothing; one smaller kept on the screen. `start`
+// is where its unzoomed corner is on the screen, `size` its unzoomed size, `screen` the screen's
+export function clampPan(offset: number, scale: number, start: number, size: number, screen: number): number {
+  const a = 0 - start;
+  const b = screen - start - size * scale;
+  return Math.min(Math.max(a, b), Math.max(Math.min(a, b), offset));
 }
 
 // the chapter a page is in
