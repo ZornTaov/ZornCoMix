@@ -21,6 +21,9 @@ export interface Settings {
   // space left empty either side of the page, as a share of the screen's width: on a wide monitor a page
   // fitted to the width is otherwise far too big to read
   padding: number;
+  // the same on a screen taller than it is wide - a phone held upright, where padding that suits it on its
+  // side squeezes the page to a strip. never set, the one padding serves both, as it did before there were two
+  paddingPortrait?: number;
   // space above and below every page when scrolling, in pixels: comics of short strips otherwise run
   // together, and a two-row strip cannot be told from two one-row ones
   gap: number;
@@ -39,6 +42,12 @@ export const defaults: Settings = {
   padding: 0,
   gap: 0,
 };
+
+// which setting the side padding is kept in for a screen this way round, and what it is
+export const paddingKey = (portrait: boolean): "padding" | "paddingPortrait" => portrait ? "paddingPortrait" : "padding";
+export function sidePadding(settings: Settings, portrait: boolean): number {
+  return portrait ? settings.paddingPortrait ?? settings.padding : settings.padding;
+}
 
 // the nearer wins: one comic's own over its series', its series' over every comic's
 export function merged(global: Partial<Settings>, comic: Partial<Settings>, series: Partial<Settings> = {}): Settings {
@@ -67,6 +76,7 @@ export function clean(given: Partial<Settings>): Partial<Settings> {
   if (typeof given.ahead === "number") out.ahead = Math.min(12, Math.max(1, Math.round(given.ahead)));
   if (typeof given.behind === "number") out.behind = Math.min(6, Math.max(0, Math.round(given.behind)));
   if (typeof given.padding === "number" && Number.isFinite(given.padding)) out.padding = Math.min(40, Math.max(0, Math.round(given.padding)));
+  if (typeof given.paddingPortrait === "number" && Number.isFinite(given.paddingPortrait)) out.paddingPortrait = Math.min(40, Math.max(0, Math.round(given.paddingPortrait)));
   if (typeof given.gap === "number" && Number.isFinite(given.gap)) out.gap = Math.min(120, Math.max(0, Math.round(given.gap)));
   return out;
 }
