@@ -567,14 +567,32 @@ class WebUI:
                 return error.code, raw
 
     def wait_idle(self, limit=240):
-        #until nothing is running or waiting; the last state seen, or None if it never settled
+        #until nothing is running or waiting; the last state seen, or None if it never settled. settled, it
+        #waits for the output to have caught up too, so what the job said last is in said()
         end = time.time() + limit
         while time.time() < end:
             _, state = self.call("/api/state")
             if not state["current"] and not state["waiting"]:
+                self.caught_up(max(5, end - time.time()))
                 return state
             time.sleep(0.5)
         return None
+
+    def caught_up(self, limit=30):
+        #until everything the page has printed so far has come through its output into said(). the state comes
+        #over http and the output up a pipe a thread reads, so the state can say a job is done before its last
+        #line has been read: a test asserting on the log the moment the page went idle found that line missing.
+        #the page keeps what it printed, in order, so the last of it is what to wait for
+        _, state = self.call("/api/state?since=0")
+        printed = [line["text"].strip() for line in state.get("log") or [] if line["text"].strip()]
+        if printed:
+            wait_until(lambda: printed[-1] in self.said(), limit=limit,
+                       why="the page's output never caught up with what it printed: {0!r}".format(printed[-1]))
+
+    def wait_said(self, text, limit=60):
+        #until the page's output has said `text`, for a line looked for while a job is still running
+        return wait_until(lambda: text in self.said(), limit=limit,
+                          why="the page never said {0!r}: {1}".format(text, self.said()[-400:]))
 
     def said(self):
         return "".join(self.log)
