@@ -143,7 +143,8 @@ def test_a_long_walk_says_how_far_it_has_got_and_can_be_stopped(serve, library, 
         return "indexed" in (current.get("doing") or "") and current["doing"]
     said = wait_until(doing, limit=120, why="the running job never said how far the walk had got")
     assert said.startswith("index: indexed "), said
-    assert "indexed 25 pages" in page.said(), "the walk's progress should reach the log as it happens"
+    #the progress is in the state as soon as the job reads it, and through the output a moment after
+    page.wait_said("indexed 25 pages")
 
     assert page.call("/api/stop", {})[1].get("stopping") is True
     state = page.wait_idle(60)
