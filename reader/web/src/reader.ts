@@ -3,7 +3,7 @@
 // changes, by page rather than by number, so it survives the comic growing or being renumbered.
 import { api, type StandIn } from "./api";
 import { attachGestures } from "./gestures";
-import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, type Bookmark, pinched, swipeTurns, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_TAP } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, keyAction, type Bookmark, panRange, pinched, swipeTurns, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_TAP, zigzag } from "./layout";
 import { Strip } from "./strip";
 import { clean, merged, scopeOf, type Scope, type Settings } from "./settings";
 import { coverMessage, el, esc, refusal } from "./dom";
@@ -218,29 +218,17 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     api.saveProgress(comic.id, at, part, closing).catch(() => { lastSaved = ""; });
   }
 
-  // a page taller than the screen is read down before it is turned, as a reader of a printed page reads
-  // to the bottom of it; only then does forward turn
-  function scrolledThrough(forward: boolean): boolean {
-    const vertical = stage.scrollHeight - stage.clientHeight > 4;
-    const horizontal = stage.scrollWidth - stage.clientWidth > 4;
-    if (vertical) {
-      const at = headedTo(stage);
-      const atEnd = forward ? at + stage.clientHeight >= stage.scrollHeight - 4 : at <= 4;
-      if (!atEnd) {
-        glideBy(stage, (forward ? 1 : -1) * stage.clientHeight * 0.85);
-        return false;
-      }
-    } else if (horizontal) {
-      const rtl = settings.direction === "rtl";
-      const left = stage.scrollLeft <= 4;
-      const right = stage.scrollLeft + stage.clientWidth >= stage.scrollWidth - 4;
-      const atEnd = forward ? (rtl ? left : right) : (rtl ? right : left);
-      if (!atEnd) {
-        stage.scrollBy({ left: (forward !== rtl ? 1 : -1) * stage.clientWidth * 0.85 });
-        return false;
-      }
-    }
-    return true;
+  // a page bigger than the screen is read through before it is turned, as a printed page is read to its
+  // bottom: down one taller than the screen, across one wider, and one bigger both ways along each row and
+  // down to the start of the next (zigzag). zoomed, the same through the zoomed page. true once there is
+  // nothing more of it to read that way
+  function readThrough(forward: boolean): boolean {
+    const where = place();
+    const to = zigzag(headed(where), where.furthest, { x: stage.clientWidth * 0.85, y: stage.clientHeight * 0.85 },
+                      forward, settings.direction === "rtl");
+    if (!to) return true;
+    glideTo(where, to);
+    return false;
   }
 
   function turn(forward: boolean) {
@@ -248,21 +236,38 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       // scrolled to the very end of a chapter, or the very start, a turn goes on into the next or the last.
       // judged by where a glide under way is headed, so a turn pressed while one is still easing to the end
       // goes on rather than waiting for it
-      const at = headedTo(strip);
+      const at = headed(scrollPlace(strip)).y;
       if (forward && at + strip.clientHeight >= strip.scrollHeight - 2) return onward(true);
       if (!forward && at <= 2) return onward(false);
       glideBy(strip, (forward ? 1 : -1) * strip.clientHeight * 0.85);
       return;
     }
-    if (zoom.scale > 1.01) {
-      resetZoom();
-      return;
-    }
-    if (!scrolledThrough(forward)) return;
+    if (!readThrough(forward)) return;
     const next = view + (forward ? 1 : -1);
     if (next < 0 || next >= shown.length) return onward(forward);
+    // a page read zoomed in opens the next at the same zoom, so a chapter can be read through zoomed
+    const kept = zoom.scale > 1.01 ? zoom.scale : 0;
     view = next;
     render();
+    if (kept) zoomToStart(kept);
+  }
+
+  // zoomed to `scale` at the start of the page: its top, and the side its rows start from. a picture still
+  // arriving has no size yet to be zoomed by, so it waits for it
+  function zoomToStart(scale: number) {
+    const at = view;
+    const apply = () => {
+      if (view !== at) return;
+      zoom = { scale, x: 0, y: 0 };
+      foldScroll();
+      const { x, y } = zoomAxes();
+      zoom.x = x.fits ? (x.low + x.high) / 2 : settings.direction === "rtl" ? x.low : x.high;
+      zoom.y = y.fits ? (y.low + y.high) / 2 : y.high;
+      paintZoom();
+    };
+    const waiting = [...spread.querySelectorAll("img")].find((picture) => !picture.complete);
+    if (waiting) waiting.addEventListener("load", apply, { once: true });
+    else apply();
   }
 
   // past the end of a chapter, its next chapter from the start; before its start, the one before from its
@@ -706,7 +711,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   }
   const middle = (x: number) => tapAction(x, reader.clientWidth, settings) === "menu";
 
-  // how far across a page wider than the screen was scrolled when the finger came down
+  // how far across a page wider than the screen - or zoomed wider - was when the finger came down
   let swipeFrom = 0;
 
   const detachStage = attachGestures(stage, {
@@ -717,10 +722,10 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       zoomTo(ZOOM_TAP, x, y);
     },
     start() {
-      swipeFrom = stage.scrollLeft;
+      swipeFrom = place().at().x;
     },
     swipe(direction) {
-      if (!swipeTurns(direction, swipeFrom, stage.scrollWidth - stage.clientWidth)) return;
+      if (!swipeTurns(direction, swipeFrom, place().furthest.x)) return;
       const forward = (direction === "left") !== (settings.direction === "rtl");
       turn(forward);
     },
@@ -785,17 +790,28 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     paintZoom();
   }
 
+  // how far a zoomed page may be moved each way, by paintZoom's rule, and whether it fits the screen that way
+  function zoomAxes() {
+    const at = corner();
+    const box = stage.getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(stage).paddingLeft) || 0;
+    const axis = (start: number, size: number, screen: number) => {
+      const [low, high] = panRange(zoom.scale, start, size, screen);
+      return { low, high, fits: size * zoom.scale <= screen + 4 };
+    };
+    return { x: axis(at.x - box.left - pad, spread.offsetWidth, stage.clientWidth - 2 * pad),
+             y: axis(at.y - box.top, spread.offsetHeight, stage.clientHeight) };
+  }
+
   // drawn as zoomed, kept from being pushed off the screen - or into the side padding, as far as the page
   // scrolls unzoomed: kept to the screen's own edges, a page zoomed a hair past 1x leapt out over the padding
   // and back as a pinch crossed it
   function paintZoom() {
     if (zoom.scale <= 1.01) return resetZoom();
     foldScroll();
-    const at = corner();
-    const box = stage.getBoundingClientRect();
-    const pad = parseFloat(getComputedStyle(stage).paddingLeft) || 0;
-    zoom.x = clampPan(zoom.x, zoom.scale, at.x - box.left - pad, spread.offsetWidth, stage.clientWidth - 2 * pad);
-    zoom.y = clampPan(zoom.y, zoom.scale, at.y - box.top, spread.offsetHeight, stage.clientHeight);
+    const { x, y } = zoomAxes();
+    zoom.x = clamp(zoom.x, x.low, x.high);
+    zoom.y = clamp(zoom.y, y.low, y.high);
     spread.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
   }
 
@@ -826,7 +842,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   // mouse wheel's smooth scrolling does, rather than jumping: each press moves where the page is headed,
   // and the page closes on it a share of the way each frame - so a key held down, repeating, glides, and
   // slows to a stop when let go. a zoomed page is moved within its zoom instead
-  let glide: { scroller: HTMLElement; target: number; frame: number } | null = null;
+  let glide: { where: Place; target: Point; frame: number } | null = null;
 
   function nudge(way: number) {
     if (settings.mode !== "webtoon" && zoom.scale > 1.01) {
@@ -838,37 +854,81 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     glideBy(scroller, way * Math.max(40, scroller.clientHeight * 0.08));
   }
 
-  // where a scroller is headed: where a glide under way will end, or where it is
-  function headedTo(scroller: HTMLElement): number {
-    return glide && glide.scroller === scroller ? glide.target : scroller.scrollTop;
+  // where what is read is up to across and down, as a scroll: how far it is, how far it can be, and moving
+  // it. a scroller's own scroll; or, zoomed, where the zoom has moved the page to, counted from its left and
+  // top edges as a scroll is - so the reading through and the glides are one for both. a way the zoomed page
+  // fits the screen it is not moved
+  interface Place { key: string; at(): Point; furthest: Point; set(to: Point): void }
+  type Point = { x: number; y: number };
+
+  function scrollPlace(scroller: HTMLElement): Place {
+    return {
+      key: scroller === strip ? "strip" : "stage",
+      at: () => ({ x: scroller.scrollLeft, y: scroller.scrollTop }),
+      furthest: { x: Math.max(0, scroller.scrollWidth - scroller.clientWidth),
+                  y: Math.max(0, scroller.scrollHeight - scroller.clientHeight) },
+      set(to) {
+        scroller.scrollLeft = to.x;
+        scroller.scrollTop = to.y;
+      },
+    };
   }
 
-  // move a scroller by `distance`, easing there: a nudge, or a whole page turned in scroll mode. a press
-  // during a glide carries on from where it was headed, so presses in a row add up rather than restarting
-  function glideBy(scroller: HTMLElement, distance: number) {
-    const furthest = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const target = clamp(headedTo(scroller) + distance, 0, furthest);
-    if (glide && glide.scroller === scroller) {
+  function place(): Place {
+    if (settings.mode === "webtoon") return scrollPlace(strip);
+    if (zoom.scale <= 1.01) return scrollPlace(stage);
+    const { x, y } = zoomAxes();
+    return {
+      key: "zoom",
+      at: () => ({ x: x.fits ? 0 : x.high - zoom.x, y: y.fits ? 0 : y.high - zoom.y }),
+      furthest: { x: x.fits ? 0 : x.high - x.low, y: y.fits ? 0 : y.high - y.low },
+      set(to) {
+        if (!x.fits) zoom.x = x.high - to.x;
+        if (!y.fits) zoom.y = y.high - to.y;
+        paintZoom();
+      },
+    };
+  }
+
+  // where a place is headed: where a glide under way will end, or where it is
+  function headed(where: Place): Point {
+    return glide && glide.where.key === where.key ? glide.target : where.at();
+  }
+
+  // move a place to `target`, easing there. a press during a glide carries on from where it was headed, so
+  // presses in a row add up rather than restarting
+  function glideTo(where: Place, target: Point) {
+    if (glide && glide.where.key === where.key) {
       glide.target = target;
       return;
     }
     stopGlide();
-    glide = { scroller, target, frame: requestAnimationFrame(glideOn) };
+    glide = { where, target, frame: requestAnimationFrame(glideOn) };
+  }
+
+  // a scroller moved down by `distance`: a nudge, or a whole page turned in scroll mode
+  function glideBy(scroller: HTMLElement, distance: number) {
+    const where = scrollPlace(scroller);
+    const from = headed(where);
+    glideTo(where, { x: from.x, y: clamp(from.y + distance, 0, where.furthest.y) });
   }
 
   function glideOn() {
     if (!glide) return;
-    const { scroller, target } = glide;
-    const left = target - scroller.scrollTop;
-    if (Math.abs(left) < 1) {
-      scroller.scrollTop = target;
+    const { where, target } = glide;
+    const was = where.at();
+    const dx = target.x - was.x;
+    const dy = target.y - was.y;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
+      where.set(target);
       glide = null;
       return;
     }
-    const was = scroller.scrollTop;
     // at least a pixel a frame, or a page whose scroll is kept to whole pixels would never arrive
-    scroller.scrollTop = was + Math.sign(left) * Math.max(1, Math.abs(left) * 0.2);
-    if (scroller.scrollTop === was) {
+    const step = (d: number) => Math.abs(d) < 1 ? d : Math.sign(d) * Math.max(1, Math.abs(d) * 0.2);
+    where.set({ x: was.x + step(dx), y: was.y + step(dy) });
+    const now = where.at();
+    if (now.x === was.x && now.y === was.y) {
       glide = null;
       return;
     }

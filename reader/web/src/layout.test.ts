@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { bookmarkList, chapterOf, chapterTarget, clampPan, keyAction, pageAt, pinched, placeStrip, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, panRange, pinched, placeStrip, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
 import { clean, merged, scopeOf } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -347,12 +347,32 @@ describe("zooming by hand", () => {
 
   it("never pushes a zoomed page off the screen", () => {
     // 1000 across zoomed twice on a 400 screen, its corner at 0: it may move between -1600 and 0
-    expect(clampPan(50, 2, 0, 1000, 400)).toBe(0);
-    expect(clampPan(-2000, 2, 0, 1000, 400)).toBe(-1600);
-    expect(clampPan(-700, 2, 0, 1000, 400)).toBe(-700);
+    expect(panRange(2, 0, 1000, 400)).toEqual([-1600, 0]);
     // still smaller than the screen, it stays on it
-    expect(clampPan(-100, 1.2, 50, 200, 400)).toBe(-50);
-    expect(clampPan(500, 1.2, 50, 200, 400)).toBe(110);
+    expect(panRange(1.2, 50, 200, 400)).toEqual([-50, 110]);
+  });
+
+  it("reads a page bigger than the screen both ways along each row, then down to the next", () => {
+    const furthest = { x: 600, y: 900 };
+    const step = { x: 340, y: 680 };
+    // left to right: across, across to the row's end, then down and back to the left
+    expect(zigzag({ x: 0, y: 0 }, furthest, step, true, false)).toEqual({ x: 340, y: 0 });
+    expect(zigzag({ x: 340, y: 0 }, furthest, step, true, false)).toEqual({ x: 600, y: 0 });
+    expect(zigzag({ x: 600, y: 0 }, furthest, step, true, false)).toEqual({ x: 0, y: 680 });
+    expect(zigzag({ x: 600, y: 900 }, furthest, step, true, false)).toBeNull();
+    // back the same way: to the row's start, then up and to the end of the row above
+    expect(zigzag({ x: 0, y: 680 }, furthest, step, false, false)).toEqual({ x: 600, y: 0 });
+    expect(zigzag({ x: 0, y: 0 }, furthest, step, false, false)).toBeNull();
+    // right to left: rows start on the right
+    expect(zigzag({ x: 600, y: 0 }, furthest, step, true, true)).toEqual({ x: 260, y: 0 });
+    expect(zigzag({ x: 0, y: 0 }, furthest, step, true, true)).toEqual({ x: 600, y: 680 });
+  });
+
+  it("reads a page bigger one way only along that way, as before", () => {
+    const step = { x: 340, y: 680 };
+    expect(zigzag({ x: 0, y: 0 }, { x: 0, y: 900 }, step, true, false)).toEqual({ x: 0, y: 680 });
+    expect(zigzag({ x: 0, y: 0 }, { x: 600, y: 0 }, step, true, false)).toEqual({ x: 340, y: 0 });
+    expect(zigzag({ x: 0, y: 0 }, { x: 0, y: 0 }, step, true, false)).toBeNull();
   });
 
   it("lays a scrolled comic out bigger, the gap between pages as it was", () => {

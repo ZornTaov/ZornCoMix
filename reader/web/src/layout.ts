@@ -170,13 +170,34 @@ export function swipeTurns(direction: "left" | "right", from: number, furthest: 
   return direction === "left" ? from >= furthest - 4 : from <= 4;
 }
 
-// how far a zoomed page may be moved along one side: one bigger than the screen no further than leaves its
-// edge at the screen's, so it is never pushed off to show nothing; one smaller kept on the screen. `start`
-// is where its unzoomed corner is on the screen, `size` its unzoomed size, `screen` the screen's
-export function clampPan(offset: number, scale: number, start: number, size: number, screen: number): number {
+// how far a zoomed page may be moved along one side, the least and the most: one bigger than the screen no
+// further than leaves its edge at the screen's, so it is never pushed off to show nothing; one smaller kept
+// on the screen. `start` is where its unzoomed corner is on the screen, `size` its unzoomed size, `screen`
+// the screen's
+export function panRange(scale: number, start: number, size: number, screen: number): [number, number] {
   const a = 0 - start;
   const b = screen - start - size * scale;
-  return Math.min(Math.max(a, b), Math.max(Math.min(a, b), offset));
+  return [Math.min(a, b), Math.max(a, b)];
+}
+
+// a page bigger than the screen both ways is read as text is: along a row, then down a screen and back to the
+// start of the next, and only past the end of the last row turned. `at` is how far it is scrolled and
+// `furthest` how far it can be, `step` how far one move goes; a row starts on the left reading left to
+// right, on the right reading right to left. where to move to, or null once there is nowhere left to go
+export function zigzag(at: { x: number; y: number }, furthest: { x: number; y: number }, step: { x: number; y: number },
+                       forward: boolean, rtl: boolean): { x: number; y: number } | null {
+  const clampX = (x: number) => Math.min(furthest.x, Math.max(0, x));
+  const rowStart = rtl ? furthest.x : 0;
+  const rowEnd = rtl ? 0 : furthest.x;
+  const along = rtl ? -1 : 1;
+  if (forward) {
+    if (Math.abs(at.x - rowEnd) > 4) return { x: clampX(at.x + along * step.x), y: at.y };
+    if (at.y < furthest.y - 4) return { x: rowStart, y: Math.min(furthest.y, at.y + step.y) };
+    return null;
+  }
+  if (Math.abs(at.x - rowStart) > 4) return { x: clampX(at.x - along * step.x), y: at.y };
+  if (at.y > 4) return { x: rowEnd, y: Math.max(0, at.y - step.y) };
+  return null;
 }
 
 // the chapter a page is in

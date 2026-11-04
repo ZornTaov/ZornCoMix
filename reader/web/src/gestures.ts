@@ -96,7 +96,9 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls
       on.tap(held.x, held.y);
       return;
     }
-    if (!scrolls && !twoFingers && on.scale() <= 1.01 && Math.abs(totalX) > SWIPE && Math.abs(totalX) > Math.abs(totalY) * 1.5
+    // a zoomed page swipes as one bigger than the screen does: whether it turns is the handler's to say, by
+    // whether the page was already at its edge
+    if (!scrolls && !twoFingers && Math.abs(totalX) > SWIPE && Math.abs(totalX) > Math.abs(totalY) * 1.5
         && performance.now() - held.at < 600) {
       on.swipe(totalX < 0 ? "left" : "right");
     }
