@@ -101,9 +101,24 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     spread.className = `spread fit-${settings.fit} count-${shown[view]?.length ?? 1}${settings.direction === "rtl" ? " rtl" : ""}`;
   }
 
+  // zoomed out, what the zoom had moved the page by is handed back to the stage's scrolling, so the page is
+  // left about where it was rather than thrown back to its start
   function resetZoom() {
+    const back = { left: -zoom.x / zoom.scale, top: -zoom.y / zoom.scale };
     zoom = { scale: 1, x: 0, y: 0 };
     spread.style.transform = "";
+    if (back.left > 0 || back.top > 0) stage.scrollBy(back);
+  }
+
+  // zoomed, the stage's own scrolling - a page wider or taller than the screen - is folded into the zoom,
+  // so the page is moved one way only. the two at once fought: the stage's scroll is pulled back by the
+  // browser as the zoomed page's size changes under it, the zoom moved the page to make up, and it shook
+  function foldScroll() {
+    if (!stage.scrollLeft && !stage.scrollTop) return;
+    zoom.x -= stage.scrollLeft;
+    zoom.y -= stage.scrollTop;
+    stage.scrollLeft = 0;
+    stage.scrollTop = 0;
   }
 
   function render() {
@@ -718,6 +733,12 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       paintZoom();
     },
     pinch(scale, x, y, fromX, fromY) {
+      // two fingers moved without zooming an unzoomed page scroll it, as one does
+      if (scale <= 1.01 && zoom.scale <= 1.01) {
+        stage.scrollBy({ left: fromX - x, top: fromY - y });
+        return;
+      }
+      foldScroll();
       const at = corner();
       zoom = pinched(zoom, scale, { x: fromX - at.x, y: fromY - at.y }, { x: x - at.x, y: y - at.y });
       paintZoom();
@@ -757,22 +778,23 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
 
   // a double tap: zoomed to `scale`, the point tapped staying where it is
   function zoomTo(scale: number, x: number, y: number) {
+    foldScroll();
     const at = corner();
     const point = { x: x - at.x, y: y - at.y };
     zoom = pinched(zoom, scale, point, point);
-    if (scale <= 1.01) return resetZoom();
     paintZoom();
   }
 
-  // drawn as zoomed, kept from being pushed off the screen
+  // drawn as zoomed, kept from being pushed off the screen - or into the side padding, as far as the page
+  // scrolls unzoomed: kept to the screen's own edges, a page zoomed a hair past 1x leapt out over the padding
+  // and back as a pinch crossed it
   function paintZoom() {
-    if (zoom.scale <= 1.01) {
-      spread.style.transform = "";
-      return;
-    }
+    if (zoom.scale <= 1.01) return resetZoom();
+    foldScroll();
     const at = corner();
     const box = stage.getBoundingClientRect();
-    zoom.x = clampPan(zoom.x, zoom.scale, at.x - box.left, spread.offsetWidth, stage.clientWidth);
+    const pad = parseFloat(getComputedStyle(stage).paddingLeft) || 0;
+    zoom.x = clampPan(zoom.x, zoom.scale, at.x - box.left - pad, spread.offsetWidth, stage.clientWidth - 2 * pad);
     zoom.y = clampPan(zoom.y, zoom.scale, at.y - box.top, spread.offsetHeight, stage.clientHeight);
     spread.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
   }
