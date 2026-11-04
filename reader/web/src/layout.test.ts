@@ -3,7 +3,7 @@ import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
 import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, panRange, pinched, placeStrip, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
-import { clean, merged, scopeOf } from "./settings";
+import { clean, merged, paddingKey, scopeOf, sidePadding } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
 import { describeCover } from "./coverdialog";
@@ -314,6 +314,15 @@ describe("settings", () => {
     expect(clean({ padding: 75 })).toEqual({ padding: 40 });
     expect(clean({ padding: -5 })).toEqual({ padding: 0 });
     expect(clean({ padding: 12.4 })).toEqual({ padding: 12 });
+    expect(clean({ paddingPortrait: 75 })).toEqual({ paddingPortrait: 40 });
+  });
+
+  it("keeps a side padding for a portrait screen apart, the one padding until it is set", () => {
+    const one = merged({ padding: 15 }, {});
+    expect([sidePadding(one, false), sidePadding(one, true)]).toEqual([15, 15]);
+    const both = merged({ padding: 15, paddingPortrait: 0 }, {});
+    expect([sidePadding(both, false), sidePadding(both, true)]).toEqual([15, 0]);
+    expect([paddingKey(false), paddingKey(true)]).toEqual(["padding", "paddingPortrait"]);
   });
 });
 

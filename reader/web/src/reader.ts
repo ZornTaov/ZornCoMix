@@ -5,7 +5,7 @@ import { api, type StandIn } from "./api";
 import { attachGestures } from "./gestures";
 import { bookmarkList, chapterOf, chapterTarget, keyAction, type Bookmark, panRange, pinched, swipeTurns, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_TAP, zigzag } from "./layout";
 import { Strip } from "./strip";
-import { clean, merged, scopeOf, type Scope, type Settings } from "./settings";
+import { clean, merged, paddingKey, scopeOf, type Scope, type Settings, sidePadding } from "./settings";
 import { coverMessage, el, esc, refusal } from "./dom";
 import { dialogOpen, helpKey, openHelp } from "./helpdialog";
 import { embedFor } from "./media";
@@ -94,9 +94,14 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     return pages[pages.length - 1];
   }
 
+  // the screen upright or on its side: each keeps a side padding of its own, and turning the phone over
+  // swaps which is shown
+  const portrait = window.matchMedia("(orientation: portrait)");
+  const pad = () => sidePadding(settings, portrait.matches);
+
   function applyLook() {
     reader.style.background = settings.background;
-    reader.style.setProperty("--pad", `${settings.padding}vw`);
+    reader.style.setProperty("--pad", `${pad()}vw`);
     reader.dataset.mode = settings.mode;
     spread.className = `spread fit-${settings.fit} count-${shown[view]?.length ?? 1}${settings.direction === "rtl" ? " rtl" : ""}`;
   }
@@ -176,7 +181,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
         moved: remember,
       });
     }
-    scrolling.look(settings.fit, settings.padding, settings.gap);
+    scrolling.look(settings.fit, pad(), settings.gap);
     // opened again exactly where it was left: the same page, the same way down it
     scrolling.jumpTo(page(), startPart);
     startPart = 0;
@@ -580,7 +585,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
           ${inSeries ? '<option value="series">this series</option><option value="comic">this chapter only</option>'
                      : '<option value="comic">this comic only</option>'}</select></label>
       <label class="row">Background <input type="color" data-set="background"></label>
-      <label class="row">Side padding <span class="value" data-show="padding"></span>
+      <label class="row">Side padding (${portrait.matches ? "portrait" : "landscape"}) <span class="value" data-show="padding"></span>
         <input type="range" min="0" max="40" step="1" data-set="padding"></label>
       <label class="row">Space above and below pages <span class="value" data-show="gap"></span>
         <input type="range" min="0" max="120" step="2" data-set="gap"></label>
@@ -608,15 +613,16 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     input<HTMLInputElement>("background").onchange = (event) => change({ background: (event.target as HTMLInputElement).value });
     const padding = input<HTMLInputElement>("padding");
     const paddingShown = sheet.querySelector<HTMLElement>('[data-show="padding"]')!;
-    padding.value = String(settings.padding);
-    paddingShown.textContent = `${settings.padding}%`;
+    // the padding for the way round the screen is now; the other is set by turning it over
+    padding.value = String(pad());
+    paddingShown.textContent = `${pad()}%`;
     // shown as it is dragged, saved when it is let go
     padding.oninput = () => {
       paddingShown.textContent = `${padding.value}%`;
       reader.style.setProperty("--pad", `${padding.value}vw`);
       scrolling?.look(settings.fit, Number(padding.value), settings.gap);
     };
-    padding.onchange = () => change({ padding: Number(padding.value) });
+    padding.onchange = () => change({ [paddingKey(portrait.matches)]: Number(padding.value) } as Partial<Settings>);
     // space between pages when scrolling, so short strips do not run together: in pixels, shown as dragged
     const gap = input<HTMLInputElement>("gap");
     const gapShown = sheet.querySelector<HTMLElement>('[data-show="gap"]')!;
@@ -624,7 +630,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     gapShown.textContent = `${settings.gap}px`;
     gap.oninput = () => {
       gapShown.textContent = `${gap.value}px`;
-      scrolling?.look(settings.fit, settings.padding, Number(gap.value));
+      scrolling?.look(settings.fit, pad(), Number(gap.value));
     };
     gap.onchange = () => change({ gap: Number(gap.value) });
     input<HTMLInputElement>("zone").value = String(settings.zone);
@@ -965,6 +971,15 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
   document.addEventListener("visibilitychange", hidden);
   window.addEventListener("pagehide", closing);
 
+  // turned over: the other padding, and the settings open drawn again so the slider is the one now in use.
+  // a slider being dragged as the phone turns is let go, rather than saved to the way round it no longer is
+  const turned = () => {
+    applyLook();
+    scrolling?.look(settings.fit, pad(), settings.gap);
+    if (!sheet.classList.contains("hidden") && sheet.querySelector('[data-set="padding"]')) openSheet();
+  };
+  portrait.addEventListener("change", turned);
+
   buildMenu();
   render();
   if (trial) {
@@ -982,6 +997,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     window.removeEventListener("keydown", keys);
     document.removeEventListener("visibilitychange", hidden);
     window.removeEventListener("pagehide", closing);
+    portrait.removeEventListener("change", turned);
     stage.removeEventListener("wheel", wheel);
     stopGlide();
   };
