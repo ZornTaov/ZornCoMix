@@ -181,8 +181,8 @@ where it is cheap to (`standin.py` draws PNGs and `comicinfo.py` reads image siz
   imported already (a scrape it starts imports `comiclib` afresh, but the web page does not).
 - **A version tag publishes both images; a push to main does not.** `.github/workflows/images.yml` builds
   the updater and the reader for amd64 and arm64 and pushes them to `ghcr.io/zorntaov/` as `zcm-updater`
-  and `zcm-reader`, and under their names from before the rename (`comics-updater`, `comic-reader`) too,
-  until a release drops those (each matrix entry's `legacy`). The two share one
+  and `zcm-reader`; their names from before the rename (`comics-updater`, `comic-reader`) stopped at v1.2.0
+  and are left frozen there, not deleted. The two share one
   version: `git tag v1.2.0 && git push origin v1.2.0` releases both as `:1.2.0`, `:1.2`, `:1` and
   `:latest`, which both compose files pull. Main is built as `:nightly` (and `:sha-<commit>`) once a night,
   only when it has moved. A release reaches whoever next pulls - not a container running already, nor one

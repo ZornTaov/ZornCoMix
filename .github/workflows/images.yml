@@ -4,8 +4,8 @@
 #   ghcr.io/zorntaov/zcm-updater   ZornCoMix Updater (Dockerfile)
 #   ghcr.io/zorntaov/zcm-reader    ZornCoMix Reader (reader/Dockerfile, built from the root for comiclib)
 #
-# Each is pushed under its name from before the rename too (comics-updater, comic-reader), so a compose
-# file nobody has touched since still gets every release. Those go in a later release, once said so.
+# Their names from before the rename (comics-updater, comic-reader) are no longer pushed: v1.2.0 was the
+# last release under them, left where it is, so a compose file still naming them pulls that and no later.
 #
 # Main is not published per commit. The two share one version, and a release is a tag:
 #
@@ -98,14 +98,12 @@ jobs:
             cache-inputs: |
               Dockerfile
               requirements.txt
-            legacy: comics-updater
           - name: zcm-reader
             dockerfile: reader/Dockerfile
             cache-inputs: |
               reader/Dockerfile
               reader/requirements.txt
               reader/web/package-lock.json
-            legacy: comic-reader
     env:
       PUBLISH: ${{ (github.event_name != 'push' || startsWith(github.ref, 'refs/tags/')) && !inputs.cache-only }}
     steps:
@@ -147,7 +145,6 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.legacy }}
           flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
