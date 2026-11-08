@@ -5,7 +5,7 @@
 // picture with it. nothing on screen ever moves when either happens, since no page's place depends on
 // another being there.
 import type { Page } from "./api";
-import { pageAt, pinched, type Placed, placeStrip, type Zoom, ZOOM_MAX, ZOOM_MIN } from "./layout";
+import { pageAt, pinched, type Placed, placeStrip, stripLeft, type Zoom, ZOOM_MAX, ZOOM_MIN } from "./layout";
 import type { Fit } from "./settings";
 
 export interface StripHooks {
@@ -161,10 +161,10 @@ export class Strip {
     if (!this.frame) this.frame = requestAnimationFrame(() => { this.frame = 0; this.update(); });
   };
 
-  // where page n's left edge is: a page narrower than the strip is centred in it
+  // where page n's left edge is: centred on the screen, a wider one from the strip's left edge. the strip is
+  // still as wide as its widest page, so that page can be scrolled across
   private leftOf(n: number): number {
-    const across = Math.max(this.scroller.clientWidth, this.placed.widest);
-    return Math.max(0, (across - this.placed.widths[n]) / 2);
+    return stripLeft(this.placed.widths[n], this.scroller.clientWidth);
   }
 
   private place(holder: HTMLElement, n: number) {

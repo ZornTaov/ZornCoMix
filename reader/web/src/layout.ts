@@ -102,6 +102,13 @@ export interface Placed {
   widest: number;
 }
 
+// where a page of a scrolled comic starts across: centred on the screen, or from its left edge when wider. a
+// comic's one panorama several screens wide, centring every page in the strip as wide as it, left every
+// other page off the screen to the right as the strip opens at its left edge
+export function stripLeft(width: number, screen: number): number {
+  return Math.max(0, (screen - width) / 2);
+}
+
 // where every page of a scrolled comic sits, worked out from the sizes the server measured rather than read
 // back from the page: the four fits as the paged view has them, in `room` pixels across and `screen` tall.
 // a page the server could not measure is given 40% of a screen until its picture says otherwise. `gap` is
