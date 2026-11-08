@@ -125,7 +125,7 @@ function scrollGestures(how: HowRead): Entry[] {
     ...sides(how, "Down a screen", "Up a screen"),
     { gesture: "doubleTap", how: "Double-tap the middle", does: "Zoom in there, or back out" },
     { gesture: "pinch", how: "Pinch, or drag with two fingers", does: "Zoom in or out, or move with the fingers" },
-    { gesture: "scroll", how: "Scroll, or drag with a finger", does: "Move through the comic, every page one under the next - and across it, zoomed" },
+    { gesture: "scroll", how: "Scroll, or drag", does: "Move through the comic, every page one under the next - and across it, zoomed" },
   ];
 }
 
