@@ -773,10 +773,13 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       scrolling?.settle();
     },
     scale: () => scrolling?.scale ?? 1,
-    // one finger is the browser's own scrolling there, never asked about
+    // one finger is the browser's own scrolling there, never asked about; a mouse's left button drags it,
+    // across as well as down when zoomed, since a zoomed strip is scrolled rather than moved
     start() {},
     swipe() {},
-    drag() {},
+    drag(dx, dy) {
+      strip.scrollBy({ left: -dx, top: -dy, behavior: "instant" });
+    },
     pan() {},
   }, true);
 

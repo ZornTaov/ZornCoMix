@@ -30,10 +30,13 @@ const SWIPE = 50;
 const DOUBLE = 280;
 
 // scrolls: the target is scrolled by the browser itself, with its own momentum, so one finger is left to
-// it - neither captured, which would take a mouse off the scrollbar it is dragging, nor turned into swipes,
-// which a zoomed strip panned sideways would be
+// it - neither captured nor turned into swipes, which a zoomed strip panned sideways would be. a mouse has
+// no such scrolling of its own to drag with, so its left button held on the pages is captured and drags
+// the strip as a finger would; held on the strip's scrollbar it is not, which would take the mouse off the
+// scrollbar it is dragging
 export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls = false): () => void {
-  const pointers = new Map<number, { x: number; y: number; startX: number; startY: number; at: number }>();
+  const pointers = new Map<number, { x: number; y: number; startX: number; startY: number; at: number;
+                                     grabbed: boolean }>();
   let moved = false;
   // a second finger was down at some point since the first landed: a pinch or a two-finger drag, which
   // ends as neither a tap nor a swipe however its last finger lifts - a pinch let go at 1x, fingers sliding
@@ -46,9 +49,13 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls
     // a video's controls, or flash being played, take their own taps; capturing them here would turn the
     // page under a finger pressing play
     if ((event.target as Element).closest?.(".embed")) return;
-    if (!scrolls) target.setPointerCapture(event.pointerId);
+    // the scrollbar is the target's own, outside its client box; the pages are inside it
+    const onScrollbar = event.target === target
+      && (event.offsetX >= target.clientWidth || event.offsetY >= target.clientHeight);
+    const grabbed = !scrolls || (event.pointerType === "mouse" && event.button === 0 && !onScrollbar);
+    if (grabbed) target.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY,
-                                    at: performance.now() });
+                                    at: performance.now(), grabbed });
     // a second finger makes it a pinch, never a tap, whichever lifts first
     moved = pointers.size > 1;
     if (pointers.size > 1) twoFingers = true;
@@ -66,7 +73,11 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls
     held.x = event.clientX;
     held.y = event.clientY;
     if (Math.hypot(held.x - held.startX, held.y - held.startY) > TAP_SLOP) moved = true;
-    if (scrolls || pointers.size !== 1 || !moved) return;
+    if (pointers.size !== 1 || !moved) return;
+    if (scrolls) {
+      if (held.grabbed && event.buttons === 1) on.drag(dx, dy);
+      return;
+    }
     if (on.scale() > 1.01) on.pan(dx, dy);
     // a mouse drags with its left button only: the capture above keeps a held left button from selecting
     // anything, so dragging it scrolls a page bigger than the screen as a finger does, where the middle
