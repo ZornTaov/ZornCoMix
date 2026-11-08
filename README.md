@@ -1,9 +1,9 @@
 # ZornCoMix
 
 **ZornCoMix Updater** keeps a webcomic library up to date; **ZornCoMix Reader** (in `reader/`) reads it.
-Formerly ZC-ComicUpdater - the images are now `ghcr.io/zorntaov/zcm-updater` and `zcm-reader`, and the
-old names (`comics-updater`, `comic-reader`) are still published for now, so an existing setup keeps
-updating until it is moved over (see [Docker](https://github.com/ZornTaov/ZornCoMix/wiki/Docker)).
+Formerly ZC-ComicUpdater - the images are now `ghcr.io/zorntaov/zcm-updater` and `zcm-reader`. The old
+names (`comics-updater`, `comic-reader`) stopped at v1.2.0, so a setup still pulling them needs moving over
+to get anything later (see [Docker](https://github.com/ZornTaov/ZornCoMix/wiki/Docker)).
 
 The updater downloads a webcomic page by page, packs it into a `.cbz`, and remembers enough about the run to carry on
 from where it stopped the next time. Point it at a library folder and it will update every comic in it
