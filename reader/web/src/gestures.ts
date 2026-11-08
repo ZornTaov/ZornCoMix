@@ -1,7 +1,7 @@
 // touch and mouse on the page: a tap does what its side of the screen is for, a double tap in the middle
 // zooms, two fingers zoom by how far they spread and carry the page along as they move. the paged view
-// also has a sideways swipe to turn and one finger to pan a zoomed page or scroll one taller than the
-// screen; the scrolled one leaves one finger to the browser's own scrolling. done by hand rather than left
+// also has a sideways swipe to turn and one finger, or the mouse's left button, to pan a zoomed page or
+// scroll one taller than the screen; the scrolled one leaves one finger to the browser's own scrolling. done by hand rather than left
 // to the browser, which would zoom the whole page, menu and all, and turn nothing.
 import { ZOOM_MAX, ZOOM_MIN } from "./layout";
 
@@ -68,7 +68,10 @@ export function attachGestures(target: HTMLElement, on: GestureHandlers, scrolls
     if (Math.hypot(held.x - held.startX, held.y - held.startY) > TAP_SLOP) moved = true;
     if (scrolls || pointers.size !== 1 || !moved) return;
     if (on.scale() > 1.01) on.pan(dx, dy);
-    else if (event.pointerType !== "mouse") on.drag(dx, dy);
+    // a mouse drags with its left button only: the capture above keeps a held left button from selecting
+    // anything, so dragging it scrolls a page bigger than the screen as a finger does, where the middle
+    // button is left to the browser's own autoscroll
+    else if (event.pointerType !== "mouse" || event.buttons === 1) on.drag(dx, dy);
   };
 
   const up = (event: PointerEvent) => {
