@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, panRange, pinched, placeStrip, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, panRange, pinched, placeStrip, stripLeft, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
 import { clean, merged, paddingKey, scopeOf, sidePadding } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -390,6 +390,13 @@ describe("zooming by hand", () => {
     expect([...zoomed.widths]).toEqual([800, 800]);
     expect([...zoomed.tops]).toEqual([10, 10 + 1200 + 20]);
     expect(placeStrip(pages, "original", 400, 1000, 0, 1.5).widest).toBe(1200);
+  });
+
+  it("centres a scrolled page on the screen whatever the widest page, and starts a wider one at the left", () => {
+    // a panorama 3600 across among pages of 1000, on a screen 1366 wide
+    expect(stripLeft(1000, 1366)).toBe(183);
+    expect(stripLeft(3600, 1366)).toBe(0);
+    expect(stripLeft(1366, 1366)).toBe(0);
   });
 });
 
