@@ -140,10 +140,11 @@
         <div class="note">Where .cbz files are filed, mirroring the pages folder.</div></div>
       <div class="field"><label for="c-shelves">Other shelves</label>
         <textarea id="c-shelves" rows="3" spellcheck="false" placeholder="Manga&#10;Comic = Shelves/Comic"></textarea>
-        <div class="note">One a line. A comic in the pages folder's <code>Manga/</code> has its archives on the
-          library's <code>Manga</code> shelf instead, mirrored the same way; <code>Comic = Shelves/Comic</code>
-          files a folder's comics on a shelf of another name. Each can be a library of its own in another reader.
-          Add comics and Move offer them.</div></div>
+        <div class="note">One shelf per line. <code>Manga</code> means comics whose pages are in
+          <code>Uncompressed/Manga/</code> have their archives in <code>Manga/</code>, beside the archive folder,
+          instead of in it. To use a different archive folder, write both:
+          <code>Comic = Shelves/Comic</code> sends <code>Uncompressed/Comic/</code> to <code>Shelves/Comic/</code>.
+          Add comics and Move to another folder both offer these shelves.</div></div>
       <div class="field"><label for="c-jobs">Comics at once</label>
         <span><input type="number" id="c-jobs" min="1" style="width:80px"> <span class="muted" id="c-jobs-note"></span></span></div>
       <div class="field"><label for="c-timeout">Time limit</label>

@@ -41,7 +41,7 @@ function shelvesNamed() {
   return (config && config.settings && config.settings.shelves) || {};
 }
 
-//"Manga" or "Comic = Shelves/Comic" a line, as {folder: shelf}; the server says what is wrong with one
+//"Manga" or "Comic = Shelves/Comic", one per line, as {folder: shelf}; the server says what is wrong with one
 function shelfTable(text) {
   const table = {};
   text.split("\n").map((line) => line.trim()).filter(Boolean).forEach((line) => {
