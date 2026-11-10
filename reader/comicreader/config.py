@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Config:
-    #the library, mounted read-only: the folder holding Uncompressed/ and CBZs/, or any folder of archives
+    #the library: the folder holding Uncompressed/ and its shelves (Webcomics/, or CBZs/ in a library made
+    #before), or any folder of archives. mounted read-write, for covers chosen here and ComicInfo edits
     library: str = "/library"
     #where the reader keeps what it owns: progress, the scan, thumbnails
     data: str = "/data"

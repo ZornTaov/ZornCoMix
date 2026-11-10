@@ -68,10 +68,26 @@ def test_the_default_shelf_is_the_one_the_settings_name(library, config):
     assert cbz.default_path(str(library / "Uncompressed" / "MyComic")) == str(library / "Webcomics" / "MyComic.cbz")
 
 
+def test_with_none_named_the_default_shelf_is_the_one_the_library_has(library, tmp_path):
+    #a library from before keeps CBZs, as the reader does with no settings at all
+    folder = library / "Uncompressed" / "MyComic"
+    assert cbz.default_shelf(str(library)) == "CBZs"
+    assert cbz.default_path(str(folder)) == str(library / "CBZs" / "MyComic.cbz")
+    #one with Webcomics instead files there
+    (library / "CBZs").rename(library / "Webcomics")
+    assert cbz.default_shelf(str(library)) == "Webcomics"
+    assert cbz.default_path(str(folder)) == str(library / "Webcomics" / "MyComic.cbz")
+    #CBZs first when both are there: a library from before may have a shelf called Webcomics beside it
+    (library / "CBZs").mkdir()
+    assert cbz.default_shelf(str(library)) == "CBZs"
+    #and a new library with neither is given Webcomics
+    assert cbz.default_shelf(str(tmp_path / "new")) == "Webcomics"
+
+
 def test_a_shelf_reaching_outside_the_library_is_not_one(library, config):
     shelve(config, {"Out": "../Elsewhere", "A/B": "Nested", "C:": "Drive", "Ok": "Fine"})
     default, extra = cbz.shelves()
-    assert default == "CBZs" and extra == {"ok": ("Ok", "Fine")}, extra
+    assert default is None and extra == {"ok": ("Ok", "Fine")}, extra
 
 
 def test_a_comic_moved_onto_a_shelf_names_its_archive_for_the_reader(library, config):

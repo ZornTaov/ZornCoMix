@@ -170,7 +170,9 @@ where it is cheap to (`standin.py` draws PNGs and `comicinfo.py` reads image siz
   `standin.py` was imported by two modules while committed nowhere, because of exactly this. Any change
   that adds a file must update `.gitignore` in the same commit. A folder needs two lines, `!folder/`
   then `!folder/*.py`, because `*` matches at every depth.
-- **The library** holds `Uncompressed/<Comic>` for loose pages and `CBZs/` for archives. A comic's
+- **The library** holds `Uncompressed/<Comic>` for loose pages and `Webcomics/` for archives - `CBZs/` in a
+  library made before then, which is still found: with no `cbz_folder` set, the default shelf is whichever
+  of the two the library has, `CBZs` first (`cbz.default_shelf`), so the reader agrees without settings. A comic's
   `output` and `cbz_path` are stored relative to the library root, so the library can move. Other shelves
   sit beside `CBZs` (`shelves` in `ComicScraper.json`), one library root still, so a reader pointed at each
   shelf as a library of its own needs no more mounts. The library root is the folder holding

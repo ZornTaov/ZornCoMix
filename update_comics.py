@@ -12,6 +12,7 @@ import sys
 from datetime import datetime, timedelta
 
 from comiclib.batch import run_once
+from comiclib.cbz import default_shelf
 from comiclib.config import config_file, load_config
 from comiclib.paths import config_folder
 from comiclib.schedule import (RESTART, local_zone, next_run, parse_schedule, ready_to_restart, restart_files,
@@ -79,9 +80,10 @@ def setup():
         if getattr(args, key) is None:
             setattr(args, key, saved[key])
     args.pages_folder = saved["pages_folder"]
-    args.cbz_folder = saved["cbz_folder"]
 
     args.root = os.path.abspath(args.root)
+    #the one the settings name, or the one this library has
+    args.cbz_folder = default_shelf(args.root, saved["cbz_folder"])
     if args.script is None:
         args.script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mirror_base.py")
     return args

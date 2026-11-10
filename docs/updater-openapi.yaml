@@ -277,6 +277,9 @@ paths:
                   user_agent_default:
                     type: string
                     description: The User-Agent images and chapter pages are fetched under when neither the library's user_agent nor a comic's own is set
+                  cbz_folder_found:
+                    type: string
+                    description: The default shelf in use - cbz_folder when set, else the one the library has (CBZs, else Webcomics), or Webcomics for a new library
     post:
       tags: [Config]
       summary: Save library configuration

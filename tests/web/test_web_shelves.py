@@ -31,6 +31,16 @@ def test_shelves_are_saved_with_the_settings(library, config):
     assert answer["settings"]["shelves"] == {"Manga": "Manga", "Comic": "Shelves/Comic"}
 
 
+def test_a_blank_archive_folder_is_the_one_the_library_has(library, config):
+    (library / "CBZs").rename(library / "Webcomics")
+    status, answer = save_config(setup(library), {"cbz_folder": "", "shelves": {"Manga": "Manga"}})
+    assert status == 200, answer
+    assert saved(config)["cbz_folder"] is None
+    #and a shelf may not be the folder that is the default without being named
+    status, answer = save_config(setup(library), {"cbz_folder": "", "shelves": {"Webcomics": "Webcomics"}})
+    assert status == 400 and "the default shelf" in answer["error"], answer
+
+
 def test_a_shelf_that_could_not_be_one_is_refused(library, config):
     status, answer = save_config(setup(library), {"shelves": {
         "A/B": "Nested", "Out": "../Elsewhere", "Same": "CBZs", "Inside": "Uncompressed/Inside",

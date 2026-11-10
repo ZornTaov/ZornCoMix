@@ -468,7 +468,7 @@ def report_scan(library, counted, took):
     count = len(library.comics)
     if count == 0:
         print("scanned {0} in {1:.1f}s and found no comics: check the library is mounted there and holds "
-              "Uncompressed/ or CBZs/, and that the container's user can read it".format(
+              "Uncompressed/ or Webcomics/ (CBZs/ before), and that the container's user can read it".format(
                   library.config.library, took), flush=True)
     elif count != counted:
         print("scanned {0} in {1:.1f}s: {2} comics{3}".format(

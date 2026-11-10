@@ -8,7 +8,7 @@ import os
 import re
 
 from comiclib import metadata as sidecar
-from comiclib.cbz import PAGES_TREE, default_path, on_other_shelf, shelf, shelves
+from comiclib.cbz import NEW_SHELF, PAGES_TREE, SHELF, default_path, on_other_shelf, shelf, shelves
 from comiclib.chapters.index import index_path
 from comiclib.chapters.packing import chapter_folder
 from comiclib.metadata import METADATA_FILE
@@ -62,7 +62,7 @@ def filed_like(unit, folder, new_folder):
     new_tree, new_found = shelf(new_folder)
     if not new_found:
         return None, "the pages are leaving the {0} folder, so there is no place on the {1} shelf to match".format(
-            PAGES_TREE.title(), shelves()[0])
+            PAGES_TREE.title(), os.path.basename(found))
     #normalised, since a comic going to the top of a shelf's folder is "." below it
     return os.path.normpath(os.path.join(new_found, os.path.relpath(new_parent, new_tree),
                                          os.path.basename(unit))), None
@@ -279,7 +279,7 @@ def tidy(folder, root):
     #rmdir removes nothing that holds anything, so a folder holding as much as a stray thumbnail stays. nor
     #does a shelf go, nor the folder under Uncompressed that files comics on one, the last comic moved off it
     default, extra = shelves()
-    kept = {PAGES_TREE, default.lower().split("/")[-1]}
+    kept = {PAGES_TREE, (default or "").lower().split("/")[-1], SHELF.lower(), NEW_SHELF.lower()}
     kept.update(key for key in extra)
     kept.update(named.lower().split("/")[-1] for _, named in extra.values())
     while within(folder, root) and not same(folder, root) and os.path.basename(folder).lower() not in kept:

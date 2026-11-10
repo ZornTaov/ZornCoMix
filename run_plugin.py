@@ -24,7 +24,8 @@ def setup():
     params.add_argument("--add", metavar="PLUGIN",
                         help="Start a new comic in FOLDER, scraped by this plugin, and run it.")
     params.add_argument("--cbz-path", help="With --add: where the comic's archive goes, if not on the "
-                                           "CBZs shelf beside its pages.")
+                                           "archive shelf matching its pages (Webcomics, or CBZs in a "
+                                           "library made before).")
     params.add_argument("--cbz", action=argparse.BooleanOptionalAction, default=True,
                         help="With --add: keep archives of the comic (default on).")
     params.add_argument("--deadline", type=float, default=0,

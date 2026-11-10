@@ -11,6 +11,8 @@ function applyConfig(data) {
   });
   $("c-shelves").value = Object.entries(s.shelves || {})
     .map(([folder, shelf]) => (folder === shelf ? folder : `${folder} = ${shelf}`)).join("\n");
+  //blank is the folder this library has, which the box says
+  $("c-cbz_folder").placeholder = data.cbz_folder_found || "";
   $("c-schedule").value = s.schedule || "";
   $("c-user_agent").value = s.user_agent || "";
   $("c-user_agent").placeholder = data.user_agent_default || "";

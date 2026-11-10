@@ -9,6 +9,7 @@ import time
 
 from comiclib import metadata as sidecar, plugins, runlogs, useragent
 from comiclib.batch import describe
+from comiclib.cbz import default_shelf
 from comiclib.chapters.index import reaches_newest, read_index
 from comiclib.chapters.numbering import numbered
 from comiclib.config import config_defaults, config_path, load_config
@@ -319,4 +320,6 @@ def config_view(args):
             "restart_needed": ["schedule"], "root": args.root,
             "from_command_line": sorted(getattr(args, "from_command_line", [])),
             #what a blank User-Agent box means, for the box to say so
-            "user_agent_default": useragent.default}
+            "user_agent_default": useragent.default,
+            #and a blank archive folder: the one this library has
+            "cbz_folder_found": default_shelf(args.root, saved.get("cbz_folder"))}

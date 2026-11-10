@@ -14,7 +14,9 @@ from comiclib.standin import archive_entry, entry_name, held_otherwise, stand_in
 
 #the Compress-Archive name for the tree beside a library's loose pages
 PAGES_TREE = "uncompressed"
+#the default shelf's name when the settings give none: a library made before it was Webcomics keeps CBZs
 SHELF = "CBZs"
+NEW_SHELF = "Webcomics"
 
 #a picture on the shelf that is a cover, not a page: one named as the archive beside it is (MyComic.cbz and
 #MyComic.jpg), as packing keeps a chapter's banner, or a folder's own, cover.jpg. the reader shows them as
@@ -61,12 +63,12 @@ def library_folder(text):
 
 
 def shelves():
-    #(the default shelf, {folder under Uncompressed, lower-cased: (that folder, its shelf)}), from
-    #ComicScraper.json's cbz_folder and shelves, read fresh as every setting is. a program without the
-    #updater's config folder - the reader - gets CBZs and nothing else, which is why a comic on any other
-    #shelf has its archives named in its settings rather than left to this rule
+    #(the default shelf as the settings name it, or None, {folder under Uncompressed, lower-cased: (that
+    #folder, its shelf)}), from ComicScraper.json's cbz_folder and shelves, read fresh as every setting is.
+    #a program without the updater's config folder - the reader - gets no others, which is why a comic on any
+    #other shelf has its archives named in its settings rather than left to this rule
     settings = load_config(quiet=True)
-    default = library_folder(settings.get("cbz_folder")) or SHELF
+    default = library_folder(settings.get("cbz_folder"))
     extra = {}
     table = settings.get("shelves")
     for key, value in (table.items() if isinstance(table, dict) else ()):
@@ -77,16 +79,30 @@ def shelves():
     return default, extra
 
 
+def default_shelf(library, named=None):
+    #the default shelf's folder in this library: the one the settings name, else the one it has. CBZs before
+    #Webcomics, since a library from before Webcomics may have made a shelf of that name beside it; and a new
+    #library with neither is given Webcomics. the reader, with no settings, finds the same one
+    named = named or shelves()[0]
+    if named:
+        return named
+    for name in (SHELF, NEW_SHELF):
+        if os.path.isdir(os.path.join(library, name)):
+            return name
+    return NEW_SHELF
+
+
 def layout(folder):
     #(library, pages tree, shelf) for a comic laid out as Uncompressed/<comic> beside a CBZs shelf, or
     #(None, None, None) for one that is not. the pages tree is Uncompressed, or Uncompressed/<folder> for a
     #comic filed under one of the other shelves' folders, and the shelf its archives go in matches it
     parts = os.path.abspath(folder).replace('\\', '/').split('/')
-    default, extra = shelves()
+    named, extra = shelves()
     #the last part is the comic itself and the first is the drive or root, so neither can be the tree
     for at in range(len(parts) - 2, 0, -1):
         if parts[at].lower() != PAGES_TREE:
             continue
+        default = default_shelf(os.path.dirname(os.sep.join(parts[:at + 1])), named)
         found = os.sep.join(parts[:at] + default.split('/'))
         #the default shelf being there is what says the library is laid out this way; another shelf
         #can be named before anything is on it, and its folder made by the first archive put there

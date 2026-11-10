@@ -26,7 +26,7 @@ function chooseScraper() {
 function fillShelfPicker() {
   const shelves = Object.keys(shelvesNamed()), picker = $("add-shelf"), was = picker.value;
   const s = (config && config.settings) || {};
-  picker.innerHTML = `<option value="">${esc(s.cbz_folder || "CBZs")} (default)</option>` +
+  picker.innerHTML = `<option value="">${esc(archiveFolder())} (default)</option>` +
     shelves.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
   picker.value = shelves.includes(was) ? was : "";
   $("add-shelf-row").hidden = !shelves.length;
@@ -39,7 +39,12 @@ function showAddRoots() {
   const pages = s.pages_folder || "Uncompressed";
   $("add-roots").textContent = shelf
     ? `${pages}/${shelf}/ and ${shelvesNamed()[shelf] || shelf}/`
-    : `${pages}/ and ${s.cbz_folder || "CBZs"}/`;
+    : `${pages}/ and ${archiveFolder()}/`;
+}
+
+//the default shelf: the one the settings name, or the one the library has
+function archiveFolder() {
+  return (config && (config.settings.cbz_folder || config.cbz_folder_found)) || "Webcomics";
 }
 
 //the shelf, said only when one is picked, so the default's request is the one it always was

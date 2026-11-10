@@ -7,7 +7,7 @@
 # The places on your machine come from the environment (a .env file beside this one, or your compose
 # GUI's environment settings), so nothing here is anyone's own setup:
 #
-#     LIBRARY=/path/to/the/library        the folder holding CBZs/ and Uncompressed/
+#     LIBRARY=/path/to/the/library        the folder holding Uncompressed/ and its shelves
 #     READER_DATA_DIR=/path/to/reader-data  an empty folder the reader keeps its progress and covers in
 #     READER_PASSWORD=change-me             optional; without one anyone who can reach the port can read
 services:

@@ -591,13 +591,17 @@ def save_config(args, given):
         if key == "shelves":
             current = load_config(quiet=True)
             pages = clean_folder(str(given.get("pages_folder") or current["pages_folder"])) or "Uncompressed"
-            default = clean_folder(str(given.get("cbz_folder") or current["cbz_folder"])) or "CBZs"
+            named = given.get("cbz_folder") if "cbz_folder" in given else current["cbz_folder"]
+            default = cbz.default_shelf(args.root, clean_folder(str(named or "")))
             table, wrong = checked_shelves(args, value, pages, default)
             problems += wrong
             if table is not None:
                 saved[key] = table
         elif key == "add_defaults" and isinstance(value, dict):
             saved[key] = {name: value.get(name, default) for name, default in fallback.items()}
+        elif key == "cbz_folder" and not str(value or "").strip():
+            #none named: the one the library has, CBZs or Webcomics
+            saved[key] = None
         elif key in ("pages_folder", "cbz_folder"):
             folder = clean_folder(str(value or ""))
             if folder is None:
