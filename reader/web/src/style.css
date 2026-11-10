@@ -132,7 +132,11 @@ button {
   scrollbar-width: none;
 }
 .stage::-webkit-scrollbar { display: none; }
-.spread { margin: auto; display: flex; transform-origin: 0 0; will-change: transform; }
+.spread { margin: auto; display: flex; transform-origin: 0 0; }
+/* only while fingers are zooming it: chromium draws a will-change layer once, at the size it starts, and
+   stretches that - a page shrunk to fit and then zoomed was the shrunk copy blown up, its detail gone. let go,
+   it is drawn again from the picture itself at the size it was left */
+.spread.pinching { will-change: transform; }
 .spread.rtl { flex-direction: row-reverse; }
 .spread img { display: block; -webkit-user-drag: none; }
 .spread.fit-screen img { max-width: calc(var(--room) / var(--count, 1)); max-height: 100dvh; object-fit: contain; }

@@ -750,11 +750,13 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
         return;
       }
       foldScroll();
+      spread.classList.add("pinching");
       const at = corner();
       zoom = pinched(zoom, scale, { x: fromX - at.x, y: fromY - at.y }, { x: x - at.x, y: y - at.y });
       paintZoom();
     },
     pinchEnd() {
+      spread.classList.remove("pinching");
       if (zoom.scale <= 1.01) resetZoom();
     },
     scale: () => zoom.scale,
