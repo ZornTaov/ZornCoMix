@@ -8,7 +8,7 @@ import os
 import re
 
 from comiclib import metadata as sidecar
-from comiclib.cbz import PAGES_TREE, SHELF, default_path, shelf
+from comiclib.cbz import NEW_SHELF, PAGES_TREE, SHELF, default_path, on_other_shelf, shelf, shelves
 from comiclib.chapters.index import index_path
 from comiclib.chapters.packing import chapter_folder
 from comiclib.metadata import METADATA_FILE
@@ -62,8 +62,10 @@ def filed_like(unit, folder, new_folder):
     new_tree, new_found = shelf(new_folder)
     if not new_found:
         return None, "the pages are leaving the {0} folder, so there is no place on the {1} shelf to match".format(
-            PAGES_TREE.title(), SHELF)
-    return os.path.join(new_found, os.path.relpath(new_parent, new_tree), os.path.basename(unit)), None
+            PAGES_TREE.title(), os.path.basename(found))
+    #normalised, since a comic going to the top of a shelf's folder is "." below it
+    return os.path.normpath(os.path.join(new_found, os.path.relpath(new_parent, new_tree),
+                                         os.path.basename(unit))), None
 
 
 def own_folder(path, folder):
@@ -93,13 +95,18 @@ def places(root, under, max_depth=5, shelf=None):
     pages_at = inside_library(root, under)
     found = set()
 
-    def visit(folder, depth, place, offered):
+    def visit(folder, depth, place, offered, pages=pages_at):
         try:
             with os.scandir(folder) as listing:
                 entries = [entry for entry in listing if not entry.name.startswith(".")]
         except OSError:
+            entries = None
+        if entries is None:
+            #another shelf named before anything is on it has no folder yet, and is still somewhere to go
+            if place and same(folder, place) and not same(pages, pages_at):
+                found.add(relative(pages, root))
             return
-        here = os.path.join(pages_at, os.path.relpath(folder, place)) if place else folder
+        here = os.path.join(pages, os.path.relpath(folder, place)) if place else folder
         if not offered(folder, entries, here):
             return
         found.add(relative(here, root))
@@ -108,7 +115,7 @@ def places(root, under, max_depth=5, shelf=None):
             return
         for entry in entries:
             if entry.is_dir() and not os.path.isfile(os.path.join(entry.path, METADATA_FILE)):
-                visit(entry.path, depth + 1, place, offered)
+                visit(entry.path, depth + 1, place, offered, pages)
 
     def pages_folder(folder, entries, here):
         #pages straight inside it are a comic's, if not one tracked yet
@@ -133,6 +140,11 @@ def places(root, under, max_depth=5, shelf=None):
     shelf_at = inside_library(root, shelf) if shelf else None
     if shelf_at and os.path.isdir(shelf_at) and not same(shelf_at, pages_at):
         visit(shelf_at, depth, shelf_at, shelf_folder)
+        #every other shelf, as the folder under Uncompressed that files a comic on it: the shelf's own
+        #folders are offered as its pages folders are, so a comic can be moved onto it whole
+        for key, named in shelves()[1].values():
+            visit(inside_library(root, named), depth + 1, inside_library(root, named), shelf_folder,
+                  os.path.join(pages_at, key))
     found.discard(".")
     return sorted(found, key=str.lower)
 
@@ -264,9 +276,13 @@ def make_folders(folder):
 
 def tidy(folder, root):
     #the folders a move left empty - an author's with nothing else in it - up to the shelf or the library.
-    #rmdir removes nothing that holds anything, so a folder holding as much as a stray thumbnail stays
-    while within(folder, root) and not same(folder, root) and \
-            os.path.basename(folder).lower() not in (PAGES_TREE, SHELF.lower()):
+    #rmdir removes nothing that holds anything, so a folder holding as much as a stray thumbnail stays. nor
+    #does a shelf go, nor the folder under Uncompressed that files comics on one, the last comic moved off it
+    default, extra = shelves()
+    kept = {PAGES_TREE, (default or "").lower().split("/")[-1], SHELF.lower(), NEW_SHELF.lower()}
+    kept.update(key for key in extra)
+    kept.update(named.lower().split("/")[-1] for _, named in extra.values())
+    while within(folder, root) and not same(folder, root) and os.path.basename(folder).lower() not in kept:
         try:
             os.rmdir(folder)
         except OSError:
@@ -322,8 +338,11 @@ def moved_metadata(planned):
         shown = archive if os.path.isabs(stored) else relative(archive, root)
         if shown != stored:
             settings["cbz_path"] = shown
-    elif os.path.isfile(archive) and not same(default_path(planned["new_folder"]), archive):
-        #an archive the shelf rule found, which the rule would not find from the new place: named outright
+    elif os.path.isfile(archive) and (not same(default_path(planned["new_folder"]), archive)
+                                      or on_other_shelf(planned["new_folder"])):
+        #an archive the shelf rule found, which the rule would not find from the new place: named outright.
+        #so is one on a shelf other than the default, which the rule finds only with the updater's settings,
+        #and the reader has none of them
         settings["cbz_path"] = relative(archive, root)
     if settings.get("cbz_path") != stored:
         changed["cbz_path"] = [stored, settings.get("cbz_path")]
@@ -337,6 +356,10 @@ def moved_metadata(planned):
         if shown != recorded:
             chapters["folder"] = shown
             changed["chapters_folder"] = [recorded, shown]
+    elif planned["chapters_to"] and on_other_shelf(planned["new_folder"]):
+        #found by the shelf rule, which the reader cannot follow onto another shelf
+        chapters["folder"] = relative(planned["chapters_to"], root)
+        changed["chapters_folder"] = [None, chapters["folder"]]
 
     history = metadata.setdefault("history", {})
     if planned["index"] and history.get("index_cache") != os.path.basename(planned["index"]):

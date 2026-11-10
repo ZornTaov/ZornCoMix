@@ -13,6 +13,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from comiclib import exits, runlogs
+from comiclib.cbz import default_shelf
 from comiclib.chapters.index import index_path
 from comiclib.config import load_config
 from comiclib.library import find_comics, page_count, resume_argv
@@ -414,7 +415,7 @@ def with_config(args):
         if key not in getattr(args, "from_command_line", ()):
             setattr(fresh, key, saved[key])
     fresh.pages_folder = saved["pages_folder"]
-    fresh.cbz_folder = saved["cbz_folder"]
+    fresh.cbz_folder = default_shelf(args.root, saved["cbz_folder"])
     return fresh
 
 

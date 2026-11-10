@@ -36,14 +36,14 @@ archives, and keep them up to date unattended.
 | `paths` | The config folder, the element-path file, and the one rule naming a comic's index file |
 | `pages` | What makes two filenames one page (`page_key`), a page's number, reading order, the name a scrape gives an image |
 | `metadata` | Reading and writing `mirror_metadata.json` (always written aside and moved into place), timestamps, settings to command. Only schema 2 is read: schema 1 was never written outside the machine this began on, and its support is gone |
-| `cbz` | Every archive any script writes: a new one, one added to, a chapter's, a repack. The Uncompressed/CBZs shelf rule, and which pictures on the shelf are covers (`is_cover`), which the reader shows and the adopter's scan passes over |
+| `cbz` | Every archive any script writes: a new one, one added to, a chapter's, a repack. The Uncompressed/CBZs shelf rule (`layout`), with the other shelves `ComicScraper.json` names: `Uncompressed/Manga/<comic>` files on the `Manga` shelf. The reader has no updater settings, so a comic on another shelf always has its archive (or chapter folder) named in its settings (`named_path`, and moving). And which pictures on the shelf are covers (`is_cover`), which the reader shows and the adopter's scan passes over |
 | `standin` | Draws a page for a page no reader can show. `cbz` asks it about every file, so every archive agrees |
 | `comicinfo` | The `ComicInfo.xml` every archive carries (v2.1 draft, in the schema's element order), and a picture's size read from its first bytes. `cbz` writes it last-but-metadata and an append rewrites both on the end. Another program's ComicInfo is kept (`kept_tags`, in the metadata as `comicinfo` or a chapter's `comicinfo`) and written back: typed by hand beats it, it beats what is worked out here, and its `Pages`/`PageCount`/`Count` are never believed. `build` must give the same bytes for the same input - that is how an archive is known to be current. What is typed by hand is the metadata's `info`: the nine of `INFO` by their own names (`writer`), any other schema tag of `EXTRA` by its ComicInfo name (`Publisher`), checked by `fit`/`unsayable`. `form()` is the field list both editors - the updater's ComicInfo dialog and the reader's - are drawn from, and `retold` edits another program's ComicInfo in schema order. An edit names every one of the nine but changes an extra tag only where it is named, so a page from before extras existed cannot take one out |
 | `plugins` | Finding a plugin, checking its `plugin.json` and a comic's settings against its fields, building its command, a plugin comic's first metadata |
 | `intake` | Taking in what a plugin's program wrote: pages numbered on, a chapter's name in each of its pages' names (or every chapter's `001.jpg` is one `page_key`), nothing written over, the same file fetched again not taken twice, chapters added to the list |
 | `pluginrun` | One plugin run: leftovers of a killed run taken in, the program run in the staging folder until its deadline, the run recorded, the single archive kept |
 | `pluginenv` | A plugin's python packages (`install` in its `plugin.json`), in a `.venv` of its own in its folder, built again when its stamp says another python or another ask; and the programs it `needs`, only looked for |
-| `pluginsetup` | A plugin's own settings, its `plugin.json` `setup`, the same for every comic of it: kept in `config/plugin-setup/<id>.json` (mode 600, not in the plugin's clone), edited in the Plugins dialog, handed to its program as environment variables and to its `plugin.py` as `settings["setup"]`. A `secret` is never put on a command line, which the log and the run record keep; the page shows and edits it, since whoever can reach the page is trusted with the setup |
+| `pluginsetup` | A plugin's own settings, its `plugin.json` `setup`, the same for every comic of it: kept in `config/plugin-setup/<id>.json` (mode 600, not in the plugin's clone), edited in the Plugins dialog, handed to its program as environment variables and to its `plugin.py` as `settings["setup"]`. Beside them, under `zcm:shelf` (a key no `plugin.json` can name, never handed over), the shelf Add comics starts its comics on. A `secret` is never put on a command line, which the log and the run record keep; the page shows and edits it, since whoever can reach the page is trusted with the setup |
 | `pluginfetch` | Installing a plugin from its git repository (cloned aside, checked, renamed to its `id`), updating it, removing one no comic uses, and whether the web page may (`MIRROR_WEB_PASSWORD`, or `MIRROR_ALLOW_PLUGIN_INSTALLS`) |
 | `exits` | `mirror_base`'s exit codes and what each means, and `MirrorError`, which carries one |
 | `browser` | Starting the browser a scrape drives, and closing it however it ended. `after_open` is what `mirror_base` does with a page opened by its address: passing an age gate |
@@ -170,8 +170,13 @@ where it is cheap to (`standin.py` draws PNGs and `comicinfo.py` reads image siz
   `standin.py` was imported by two modules while committed nowhere, because of exactly this. Any change
   that adds a file must update `.gitignore` in the same commit. A folder needs two lines, `!folder/`
   then `!folder/*.py`, because `*` matches at every depth.
-- **The library** holds `Uncompressed/<Comic>` for loose pages and `CBZs/` for archives. A comic's
-  `output` and `cbz_path` are stored relative to the library root, so the library can move.
+- **The library** holds `Uncompressed/<Comic>` for loose pages and `Webcomics/` for archives - `CBZs/` in a
+  library made before then, which is still found: with no `cbz_folder` set, the default shelf is whichever
+  of the two the library has, `CBZs` first (`cbz.default_shelf`), so the reader agrees without settings. A comic's
+  `output` and `cbz_path` are stored relative to the library root, so the library can move. Other shelves
+  sit beside `CBZs` (`shelves` in `ComicScraper.json`), one library root still, so a reader pointed at each
+  shelf as a library of its own needs no more mounts. The library root is the folder holding
+  `Uncompressed`, never the folder above a comic's pages tree, which for a shelved comic is `Uncompressed`.
 - **The scripts also run in a container**, from a folder mounted over the copies baked into the image
   (see the wiki's Docker page, "Changing the scripts without rebuilding"). So **committing is not deploying**:
   the running copy is the mounted folder, and a new module has to reach it too or both scripts fail on

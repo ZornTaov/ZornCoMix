@@ -8,9 +8,14 @@ from comiclib.paths import config_folder
 
 config_file = "ComicScraper.json"
 config_defaults = {
-    #where a library keeps its pages and its archives, as folder names inside the library
+    #where a library keeps its pages and its archives, as folder names inside the library. no archive folder
+    #is the one the library has, CBZs or Webcomics, or Webcomics for a new one (cbz.default_shelf)
     "pages_folder": "Uncompressed",
-    "cbz_folder": "CBZs",
+    "cbz_folder": None,
+    #shelves beside that one, by the folder under the pages folder that files a comic on each: a comic in
+    #Uncompressed/Manga/<comic> has its archives in the library's Manga shelf rather than in cbz_folder. so a
+    #library pointed at by a reader per shelf keeps, say, manga apart from webcomics. {"Manga": "Manga"}
+    "shelves": {},
     #after a chaptered comic gains pages, line them up and write the chapter archives again
     "pack_chapters": True,
     #and read its archive page again first, in case those pages started a new chapter

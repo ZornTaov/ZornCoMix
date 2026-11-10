@@ -37,7 +37,8 @@ services:
       - "8081:8081"
 
     volumes:
-      # CHANGE ME: the library root, the folder holding CBZs/ and Uncompressed/. Always mounted at
+      # CHANGE ME: the library root, the folder holding Uncompressed/ and Webcomics/ (CBZs/ in a library
+      # made before then), and any other shelves. Always mounted at
       # /library, because comics are addressed by paths relative to it in their metadata.
       - /path/to/Comics:/library
 

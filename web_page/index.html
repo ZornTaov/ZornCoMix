@@ -63,6 +63,9 @@
         <label class="check">Scraper <select id="add-scraper"><option value="">Built in</option></select></label>
         <span class="muted" id="add-scraper-about"></span>
       </div>
+      <div class="row" id="add-shelf-row" hidden>
+        <label class="check">Shelf <select id="add-shelf"></select></label>
+      </div>
       <div class="help">One row per comic. Folders are inside <span id="add-roots"></span>, and a comic with
         no folder of its own is given one so its archive is not loose in the root.
         <span class="builtin-only">Give a chapter list - the comic's archive page - and it is split into one
@@ -134,7 +137,15 @@
         <div class="note">Inside the library, holding one folder per comic.</div></div>
       <div class="field"><label for="c-cbz_folder">Archive folder</label>
         <input type="text" id="c-cbz_folder" spellcheck="false">
-        <div class="note">Where .cbz files are filed, mirroring the pages folder.</div></div>
+        <div class="note">Where .cbz files are filed, mirroring the pages folder. Blank is the one the library
+          has: CBZs, or Webcomics for a library made since.</div></div>
+      <div class="field"><label for="c-shelves">Other shelves</label>
+        <textarea id="c-shelves" rows="3" spellcheck="false" placeholder="Manga&#10;Comic = Shelves/Comic"></textarea>
+        <div class="note">One shelf per line. <code>Manga</code> means comics whose pages are in
+          <code>Uncompressed/Manga/</code> have their archives in <code>Manga/</code>, beside the archive folder,
+          instead of in it. To use a different archive folder, write both:
+          <code>Comic = Shelves/Comic</code> sends <code>Uncompressed/Comic/</code> to <code>Shelves/Comic/</code>.
+          Add comics and Move to another folder both offer these shelves.</div></div>
       <div class="field"><label for="c-jobs">Comics at once</label>
         <span><input type="number" id="c-jobs" min="1" style="width:80px"> <span class="muted" id="c-jobs-note"></span></span></div>
       <div class="field"><label for="c-timeout">Time limit</label>
@@ -346,7 +357,7 @@
         <div class="note advanced-why">Set wrongly, these can save the wrong pages, number them wrongly or put the
           comic somewhere else. Change them on purpose.</div>
         <div class="field"><label for="e-cbz_path">Archive</label>
-          <input type="text" id="e-cbz_path" spellcheck="false" placeholder="default: CBZs/… beside the Uncompressed folder"></div>
+          <input type="text" id="e-cbz_path" spellcheck="false" placeholder="default: the archive shelf beside the Uncompressed folder"></div>
         <div class="field builtin-only">
           <label>Saving</label>
           <div class="row">
@@ -386,7 +397,7 @@
           <input type="text" id="e-move-into" spellcheck="false" list="e-move-places" placeholder="Uncompressed/SomeAuthor">
           <datalist id="e-move-places"></datalist>
           <div class="note">A folder inside the library, made if it is not there. The comic keeps its name; its
-            archive or chapter archives move to the matching place on the CBZs shelf, and its record of which
+            archive or chapter archives move to the matching place on the archive shelf, and its record of which
             page is which goes with it.</div>
         </div>
         <div class="move-plan" id="e-move-plan" hidden></div>

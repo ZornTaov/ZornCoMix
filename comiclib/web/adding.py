@@ -3,7 +3,7 @@
 import os
 import re
 
-from comiclib import plugins
+from comiclib import cbz, plugins
 from comiclib.config import load_config
 from comiclib.metadata import METADATA_FILE
 
@@ -33,11 +33,27 @@ def clean_folder(text):
     return "/".join(parts)
 
 
-def parse_entries(rows, args, url_needed=True):
+def shelf_roots(args, shelf):
+    #(pages folder, archive folder) the rows are inside: the library's own, or for one of its other shelves
+    #the folder under the pages folder that files a comic there, and that shelf. None for a shelf not named
+    if not shelf:
+        return args.pages_folder, args.cbz_folder
+    _, extra = cbz.shelves()
+    if str(shelf).lower() not in extra:
+        return None
+    folder, named = extra[str(shelf).lower()]
+    return "{0}/{1}".format(args.pages_folder.strip("/"), folder), named
+
+
+def parse_entries(rows, args, url_needed=True, shelf=None):
     #one comic per row: where its pages go, where its archive goes, and the page to start from. the two
     #folders are given relative to the library's pages and archive folders, since that is all that differs
     #between one comic and the next. a comic scraped by a plugin that takes no address has none to give.
     entries, problems = [], []
+    roots = shelf_roots(args, shelf)
+    if roots is None:
+        return [], ["there is no shelf called {0}; the Settings name them".format(shelf)]
+    pages_root, archive_root = roots
     for number, row in enumerate(rows or [], 1):
         if isinstance(row, str):
             row = {"folder": row}
@@ -56,12 +72,12 @@ def parse_entries(rows, args, url_needed=True):
         if folder is None:
             problems.append("row {0}: needs a folder, like MyComic or Series/MyComic".format(number))
             continue
-        pages_at = under_root(args.pages_folder, folder)
+        pages_at = under_root(pages_root, folder)
         archive = clean_folder(archive) if archive else None
         if row.get("cbz") and archive is None:
             problems.append("row {0}: the archive path is not a path inside the library".format(number))
             continue
-        archive_at = under_root(args.cbz_folder, archive or default_cbz(folder))
+        archive_at = under_root(archive_root, archive or default_cbz(folder))
         if not archive_at.lower().endswith(".cbz"):
             archive_at += ".cbz"
         if os.path.exists(os.path.join(args.root, *pages_at.split("/"), METADATA_FILE)):
@@ -88,7 +104,8 @@ def add_with_plugin(body, runner, args):
     if any(str((row or {}).get("chapters") or "").strip() for row in rows if isinstance(row, dict)):
         return 400, {"error": "a comic scraped by {0} has its chapters from it, so leave the chapter list "
                               "empty".format(plugin.title)}
-    found, problems = parse_entries(rows, args, url_needed=plugin.field("url") is not None)
+    found, problems = parse_entries(rows, args, url_needed=plugin.field("url") is not None,
+                                    shelf=body.get("shelf"))
     shared = dict(body.get("plugin") or {})
     entries = []
     for pages_at, archive_at, url, _ in found:

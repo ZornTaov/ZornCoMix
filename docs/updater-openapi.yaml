@@ -218,7 +218,7 @@ paths:
                     type: array
                     items:
                       type: object
-                      description: A plugin's view
+                      description: A plugin's view. Its shelf is the one Add comics starts its comics on, "" for the default
                   problems:
                     type: array
                     items:
@@ -277,6 +277,9 @@ paths:
                   user_agent_default:
                     type: string
                     description: The User-Agent images and chapter pages are fetched under when neither the library's user_agent nor a comic's own is set
+                  cbz_folder_found:
+                    type: string
+                    description: The default shelf in use - cbz_folder when set, else the one the library has (CBZs, else Webcomics), or Webcomics for a new library
     post:
       tags: [Config]
       summary: Save library configuration
@@ -289,7 +292,7 @@ paths:
               properties:
                 settings:
                   type: object
-                  description: Settings to save (only known keys are accepted). user_agent is one line of text, or empty for the built-in one
+                  description: Settings to save (only known keys are accepted, and a key not sent is not kept). user_agent is one line of text, or empty for the built-in one. shelves is an object of a folder under pages_folder to the shelf its comics' archives go on instead of cbz_folder, like {"Manga": "Manga"}; refused where that folder already holds comics whose archives are elsewhere
       responses:
         "200":
           description: Saved
@@ -1421,6 +1424,9 @@ paths:
                 values:
                   type: object
                   description: Settings to save
+                shelf:
+                  type: string
+                  description: The shelf Add comics starts this plugin's comics on, one the settings name, or "" for the default. Left out, it is unchanged. Never handed to the plugin
       responses:
         "200":
           description: Saved settings
@@ -1431,6 +1437,8 @@ paths:
                 properties:
                   setup:
                     type: object
+                  shelf:
+                    type: string
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -1891,6 +1899,9 @@ components:
           type: integer
         every:
           type: ["string", "integer"]
+        shelf:
+          type: string
+          description: One of the settings' shelves, so the rows are inside pages_folder/<shelf> and that shelf instead of pages_folder and cbz_folder. Left out for the default
 
     AddPlugin:
       type: object
@@ -1916,6 +1927,9 @@ components:
           description: Plugin-specific settings shared by all rows
         cbz:
           type: boolean
+        shelf:
+          type: string
+          description: As for the built-in scraper
 
   responses:
     JobQueued:

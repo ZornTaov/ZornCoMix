@@ -10,7 +10,8 @@ import sys
 import tempfile
 import time
 
-from comiclib import comicinfo, cookies, moving, placeholders, plugins, useragent
+from comiclib import cbz, comicinfo, cookies, moving, placeholders, plugins, useragent
+from comiclib.library import find_comics
 from comiclib.chapters.index import index_path, set_aside
 from comiclib.config import config_defaults, config_path, load_config
 from comiclib.metadata import METADATA_FILE, load as read_metadata, write_json
@@ -527,6 +528,59 @@ def save_comicinfo(args, runner, name, said, expected_updated):
     return 200, {"saved": True, "changed": changed, "updated": stamp}, comic
 
 
+def astray(args, under, shelf_at):
+    #the comics already under a folder of the pages folder whose archives are not on the shelf it would name:
+    #made a shelf, the rule would file their next archive there, a second copy beside the one they have
+    found = []
+    if not os.path.isdir(under):
+        return found
+    for comic in find_comics(under, args.max_depth):
+        if comic.skipped:
+            continue
+        settings = comic.metadata.get("settings") or {}
+        held = [cbz.resolved(settings.get("cbz_path"), comic.folder, args.root) or cbz.default_path(comic.folder),
+                cbz.resolved((comic.metadata.get("chapters") or {}).get("folder"), comic.folder, args.root)]
+        if any(path and os.path.exists(path) and not moving.within(path, shelf_at) for path in held):
+            found.append(os.path.relpath(comic.folder, args.root).replace(os.sep, "/"))
+    return found
+
+
+def checked_shelves(args, value, pages_folder, default):
+    #the shelves as the page sent them, {folder under the pages folder: shelf}: (table, problems)
+    if not isinstance(value, dict):
+        return None, ["shelves has to be a table of a folder under {0} to its shelf".format(pages_folder)]
+    before = {key.lower(): named for key, named in (load_config(quiet=True).get("shelves") or {}).items()}
+    table, problems = {}, []
+    taken = {default.lower(): "the default shelf", pages_folder.lower(): "the pages folder"}
+    for key, named in value.items():
+        key, named = cbz.library_folder(key), cbz.library_folder(named)
+        if not key or "/" in key:
+            problems.append("a shelf's folder under {0} is one folder's name, like Manga".format(pages_folder))
+            continue
+        if not named:
+            problems.append("{0}'s shelf has to be a folder inside the library".format(key))
+            continue
+        if key.lower() in (other.lower() for other in table):
+            problems.append("{0} is named twice".format(key))
+            continue
+        clash = taken.get(named.lower()) or (
+            "inside the pages folder" if named.lower().startswith(pages_folder.lower() + "/") else None)
+        if clash:
+            problems.append("{0}'s shelf {1} is {2}".format(key, named, clash))
+            continue
+        taken[named.lower()] = "{0}'s shelf already".format(key)
+        table[key] = named
+        if before.get(key.lower()) != named:
+            shelf_at = os.path.join(args.root, *named.split("/"))
+            stray = astray(args, os.path.join(args.root, *pages_folder.split("/"), key), shelf_at)
+            if stray:
+                problems.append("{0}/{1} already holds comics whose archives are not on {2}: {3}. Move them out "
+                                "first, or name the shelf for another folder".format(
+                                    pages_folder, key, named, ", ".join(stray[:5]) +
+                                    (" and {0} more".format(len(stray) - 5) if len(stray) > 5 else "")))
+    return table, problems
+
+
 def save_config(args, given):
     #only the settings that are known, so the file cannot fill up with things nothing reads
     saved, problems = {}, []
@@ -534,8 +588,20 @@ def save_config(args, given):
         if key not in given:
             continue
         value = given[key]
-        if key == "add_defaults" and isinstance(value, dict):
+        if key == "shelves":
+            current = load_config(quiet=True)
+            pages = clean_folder(str(given.get("pages_folder") or current["pages_folder"])) or "Uncompressed"
+            named = given.get("cbz_folder") if "cbz_folder" in given else current["cbz_folder"]
+            default = cbz.default_shelf(args.root, clean_folder(str(named or "")))
+            table, wrong = checked_shelves(args, value, pages, default)
+            problems += wrong
+            if table is not None:
+                saved[key] = table
+        elif key == "add_defaults" and isinstance(value, dict):
             saved[key] = {name: value.get(name, default) for name, default in fallback.items()}
+        elif key == "cbz_folder" and not str(value or "").strip():
+            #none named: the one the library has, CBZs or Webcomics
+            saved[key] = None
         elif key in ("pages_folder", "cbz_folder"):
             folder = clean_folder(str(value or ""))
             if folder is None:

@@ -20,6 +20,9 @@ from comiclib.paths import config_folder
 
 FOLDER = "plugin-setup"
 SECRET = "secret"
+#the shelf a plugin's comics are added to unless another is picked, kept with its settings but the updater's
+#own: a colon is in no key plugin.json can name, and only plugin.json's settings are ever handed over
+SHELF = "zcm:shelf"
 #an environment variable a setting is handed to the program as
 ENV = re.compile(r'^[A-Z_][A-Z0-9_]*$')
 
@@ -149,6 +152,28 @@ def save(plugin, given):
         raise SetupError("; ".join(problems))
     write(plugin.name, kept)
     return view(plugin)
+
+
+def shelf(name):
+    #the shelf its comics start on in Add comics, or "" for the library's default one
+    value = stored(name).get(SHELF)
+    return value if isinstance(value, str) else ""
+
+
+def save_shelf(plugin, value):
+    #only one of the shelves the settings name, or none; one renamed since is shown as none by the page
+    from comiclib.cbz import shelves
+    value = str(value or "").strip()
+    known = shelves()[1]
+    if value and value.lower() not in known:
+        raise SetupError("there is no shelf called {0}; the Settings name them".format(value))
+    kept = stored(plugin.name)
+    if value:
+        kept[SHELF] = known[value.lower()][0]
+    else:
+        kept.pop(SHELF, None)
+    write(plugin.name, kept)
+    return shelf(plugin.name)
 
 
 def default_of(field, kind, field_value):

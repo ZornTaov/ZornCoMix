@@ -10,6 +10,7 @@ import re
 import sys
 
 from comiclib import pluginenv, pluginsetup
+from comiclib.cbz import named_path
 from comiclib.metadata import METADATA_FILE, SCHEMA, now_stamp, write as write_metadata
 from comiclib.paths import config_folder
 
@@ -88,7 +89,7 @@ class Plugin:
                 "about": self.manifest.get("about"), "dialog": self.has_dialog,
                 "style": os.path.isfile(os.path.join(self.folder, STYLE)), "version": self.version,
                 "repository": self.is_repository, "env": pluginenv.state(self.folder, self.manifest),
-                "setup": pluginsetup.view(self),
+                "setup": pluginsetup.view(self), "shelf": pluginsetup.shelf(self.name),
                 "missing": pluginenv.missing_programs(self.manifest)}
 
 
@@ -351,6 +352,7 @@ def start_comic(folder, plugin, values, output, cbz_path=None, cbz=True):
     path = os.path.join(folder, METADATA_FILE)
     if os.path.exists(path):
         raise PluginError("{0} already holds a comic".format(folder))
+    cbz_path = named_path(folder, cbz_path)
     stamp = now_stamp()
     metadata = {
         "schema": SCHEMA,

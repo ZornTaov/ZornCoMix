@@ -4,6 +4,7 @@
 import os
 import sys
 
+from comiclib.cbz import named_path
 from comiclib.exits import INTERRUPTED as EXIT_INTERRUPTED, OK as EXIT_OK
 from comiclib.metadata import METADATA_FILE as metadata_file, SCHEMA, load, now_stamp, write_json
 
@@ -93,7 +94,7 @@ def settings_from_args(args, folder, url, increment, ended=False):
     settings = {
         "url": url,
         "output": folder,
-        "cbz_path": args.cbz_path,
+        "cbz_path": named_path(os.path.abspath(folder), args.cbz_path),
         "increment": increment,
         "prefix": bool(args.prefix),
         "javascript": bool(args.enable_javascript),
