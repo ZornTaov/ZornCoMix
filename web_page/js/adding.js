@@ -14,7 +14,37 @@ function chooseScraper() {
   $("add-scraper-about").textContent = addPlugin ? (addPlugin.about || "") : "";
   if (addPlugin) drawPluginForm($("add-plugin"), addPlugin, {}, ["url"]);
   else clearPluginForm($("add-plugin"));
+  //the plugin's own shelf, if the settings still name it; the built-in scraper starts on the default
+  const own = addPlugin && addPlugin.shelf;
+  $("add-shelf").value = own && own in shelvesNamed() ? own : "";
+  showAddRoots();
   renderAddRows();
+}
+
+//the shelf picker, shown only once the settings name a shelf beside the default one. a choice still on
+//offer is kept as the settings are read again; a plugin's comics start on its own shelf
+function fillShelfPicker() {
+  const shelves = Object.keys(shelvesNamed()), picker = $("add-shelf"), was = picker.value;
+  const s = (config && config.settings) || {};
+  picker.innerHTML = `<option value="">${esc(s.cbz_folder || "CBZs")} (default)</option>` +
+    shelves.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
+  picker.value = shelves.includes(was) ? was : "";
+  $("add-shelf-row").hidden = !shelves.length;
+  showAddRoots();
+}
+
+//where the rows' folders are: inside the pages and archive folders of the shelf picked
+function showAddRoots() {
+  const s = (config && config.settings) || {}, shelf = $("add-shelf").value;
+  const pages = s.pages_folder || "Uncompressed";
+  $("add-roots").textContent = shelf
+    ? `${pages}/${shelf}/ and ${shelvesNamed()[shelf] || shelf}/`
+    : `${pages}/ and ${s.cbz_folder || "CBZs"}/`;
+}
+
+//the shelf, said only when one is picked, so the default's request is the one it always was
+function pickedShelf() {
+  return $("add-shelf").value ? { shelf: $("add-shelf").value } : {};
 }
 
 function defaultCbz(folder) {
@@ -95,6 +125,7 @@ $("add-more").addEventListener("click", () => {
 });
 
 $("add-scraper").addEventListener("change", chooseScraper);
+$("add-shelf").addEventListener("change", showAddRoots);
 
 //what is sent for comics a plugin's program scrapes: the rows, but for a chapter list, and its settings
 function pluginAdd() {
@@ -103,6 +134,7 @@ function pluginAdd() {
     rows: addRows.map((row) => ({ folder: row.folder, cbz: row.cbz, url: row.url })),
     plugin: readPluginForm($("add-plugin")),
     cbz: $("cbz").checked,
+    ...pickedShelf(),
   };
 }
 
@@ -113,6 +145,7 @@ $("add").addEventListener("click", async () => {
   try {
     const result = addPlugin ? await post("/api/add", pluginAdd()) : await post("/api/add", {
       rows: addRows,
+      ...pickedShelf(),
       prime: $("prime").checked,
       prefix: $("prefix").checked,
       increment: $("increment").value,

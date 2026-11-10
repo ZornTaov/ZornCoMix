@@ -9,6 +9,8 @@ function applyConfig(data) {
   ["pages_folder", "cbz_folder", "jobs", "timeout", "progress", "max_depth"].forEach((key) => {
     $("c-" + key).value = s[key] ?? "";
   });
+  $("c-shelves").value = Object.entries(s.shelves || {})
+    .map(([folder, shelf]) => (folder === shelf ? folder : `${folder} = ${shelf}`)).join("\n");
   $("c-schedule").value = s.schedule || "";
   $("c-user_agent").value = s.user_agent || "";
   $("c-user_agent").placeholder = data.user_agent_default || "";
@@ -22,7 +24,7 @@ function applyConfig(data) {
     const box = $("c-add-" + key);
     if (box) box.checked = !!value;
   });
-  $("add-roots").textContent = `${s.pages_folder}/ and ${s.cbz_folder}/`;
+  fillShelfPicker();
   ["prime", "prefix", "javascript", "cbz", "direction"].forEach((key) => {
     const from = s.add_defaults || {};
     const box = $(key);
@@ -32,6 +34,22 @@ function applyConfig(data) {
     $("increment").value = s.add_defaults.increment ?? 1;
     $("waittime").value = s.add_defaults.waittime ?? 0;
   }
+}
+
+//the other shelves the settings name, {folder under the pages folder: shelf}, or none before they are read
+function shelvesNamed() {
+  return (config && config.settings && config.settings.shelves) || {};
+}
+
+//"Manga" or "Comic = Shelves/Comic" a line, as {folder: shelf}; the server says what is wrong with one
+function shelfTable(text) {
+  const table = {};
+  text.split("\n").map((line) => line.trim()).filter(Boolean).forEach((line) => {
+    const at = line.indexOf("=");
+    const folder = (at < 0 ? line : line.slice(0, at)).trim();
+    table[folder] = at < 0 ? folder : line.slice(at + 1).trim();
+  });
+  return table;
 }
 
 async function loadConfig(open) {
@@ -53,7 +71,8 @@ $("c-user_agent-mine").addEventListener("click", () => { $("c-user_agent").value
 $("cfg-save").addEventListener("click", async () => {
   const msg = $("cfg-msg");
   msg.className = "msg"; msg.textContent = "Saving…";
-  const settings = { schedule: $("c-schedule").value.trim(), user_agent: $("c-user_agent").value, add_defaults: {} };
+  const settings = { schedule: $("c-schedule").value.trim(), user_agent: $("c-user_agent").value, add_defaults: {},
+                     shelves: shelfTable($("c-shelves").value) };
   ["pages_folder", "cbz_folder", "jobs", "timeout", "progress", "max_depth"].forEach((key) => {
     settings[key] = $("c-" + key).value;
   });

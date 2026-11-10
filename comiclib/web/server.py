@@ -253,7 +253,7 @@ def make_handler(runner, args, tee):
                 self.reply(result, status)
             elif path == "/api/add":
                 entries, problems = parse_entries(body.get("rows") or body.get("entries") or [],
-                                                  with_config(args))
+                                                  with_config(args), shelf=body.get("shelf"))
                 #whatever the request did not say is taken from the settings file, so adding a comic
                 #through the page and adding one any other way start from the same options
                 fallback = load_config().get("add_defaults", {})
@@ -482,7 +482,10 @@ def make_handler(runner, args, tee):
                 name = str(body.get("name") or "")
                 try:
                     plugin = plugins.load(name, with_hooks=False)
-                    self.reply({"setup": pluginsetup.save(plugin, body.get("values") or {})})
+                    #the shelf first, so one that is refused leaves its settings unsaved too
+                    shelf = pluginsetup.save_shelf(plugin, body["shelf"]) if "shelf" in body else None
+                    setup = pluginsetup.save(plugin, body.get("values") or {})
+                    self.reply({"setup": setup, "shelf": shelf if shelf is not None else pluginsetup.shelf(name)})
                 except plugins.PluginError as error:
                     self.reply({"error": str(error)}, 404)
                 except pluginsetup.SetupError as error:

@@ -7,6 +7,7 @@ import os
 import zipfile
 
 from comiclib import comicinfo
+from comiclib.config import load_config
 from comiclib.metadata import METADATA_FILE
 from comiclib.pages import PAGE_TYPES, mac_leftover, reading_order
 from comiclib.standin import archive_entry, entry_name, held_otherwise, stand_in
@@ -51,30 +52,88 @@ def archive_prefix(zf, folder):
     return first if first and all(name.startswith(first) for name in names) else ''
 
 
-def shelf(folder):
-    #where this library keeps its archives: a comic under an Uncompressed tree belongs in the CBZs tree
-    #beside it. (pages tree, shelf), or (None, None) for a folder that is not laid out that way
+def library_folder(text):
+    #a folder inside the library as the settings name one, or None for one reaching outside it
+    parts = [part for part in str(text or "").strip().replace('\\', '/').split('/') if part not in ("", ".")]
+    if not parts or ".." in parts or ':' in parts[0]:
+        return None
+    return "/".join(parts)
+
+
+def shelves():
+    #(the default shelf, {folder under Uncompressed, lower-cased: (that folder, its shelf)}), from
+    #ComicScraper.json's cbz_folder and shelves, read fresh as every setting is. a program without the
+    #updater's config folder - the reader - gets CBZs and nothing else, which is why a comic on any other
+    #shelf has its archives named in its settings rather than left to this rule
+    settings = load_config(quiet=True)
+    default = library_folder(settings.get("cbz_folder")) or SHELF
+    extra = {}
+    table = settings.get("shelves")
+    for key, value in (table.items() if isinstance(table, dict) else ()):
+        key, value = library_folder(key), library_folder(value)
+        #one folder below Uncompressed, so a comic's own folder cannot be taken for a shelf's
+        if key and value and "/" not in key:
+            extra[key.lower()] = (key, value)
+    return default, extra
+
+
+def layout(folder):
+    #(library, pages tree, shelf) for a comic laid out as Uncompressed/<comic> beside a CBZs shelf, or
+    #(None, None, None) for one that is not. the pages tree is Uncompressed, or Uncompressed/<folder> for a
+    #comic filed under one of the other shelves' folders, and the shelf its archives go in matches it
     parts = os.path.abspath(folder).replace('\\', '/').split('/')
+    default, extra = shelves()
     #the last part is the comic itself and the first is the drive or root, so neither can be the tree
     for at in range(len(parts) - 2, 0, -1):
         if parts[at].lower() != PAGES_TREE:
             continue
-        found = os.sep.join(parts[:at] + [SHELF])
-        if os.path.isdir(found):
-            return os.sep.join(parts[:at + 1]), found
-    return None, None
+        found = os.sep.join(parts[:at] + default.split('/'))
+        #the default shelf being there is what says the library is laid out this way; another shelf
+        #can be named before anything is on it, and its folder made by the first archive put there
+        if not os.path.isdir(found):
+            continue
+        library = os.sep.join(parts[:at + 1])
+        #a folder below Uncompressed with the comic below it, not a comic of the shelf's name
+        if at + 1 < len(parts) - 1 and parts[at + 1].lower() in extra:
+            _, named = extra[parts[at + 1].lower()]
+            return (os.path.dirname(library), os.sep.join(parts[:at + 2]),
+                    os.sep.join(parts[:at] + named.split('/')))
+        return os.path.dirname(library), library, found
+    return None, None, None
+
+
+def shelf(folder):
+    #where this library keeps this comic's archives: (pages tree, shelf), or (None, None)
+    _, tree, found = layout(folder)
+    return tree, found
+
+
+def on_other_shelf(folder):
+    #a comic filed on a shelf other than the default, whose archives the reader cannot find by this rule
+    _, tree, _ = layout(folder)
+    return bool(tree) and os.path.basename(tree).lower() != PAGES_TREE
+
+
+def named_path(folder, given):
+    #what a comic's settings name its archive: what was given, and for a comic on another shelf, where this
+    #rule puts it when nothing was. the reader has none of the updater's settings, so this rule would send
+    #it to the default shelf
+    if given or not on_other_shelf(folder):
+        return given
+    return os.path.relpath(default_path(folder), library_root(folder)).replace(os.sep, "/")
 
 
 def library_root(folder, root=None):
     #the folder a comic's settings name its archives from, when no one has said: the one holding its
     #Uncompressed tree, since output and cbz_path are kept relative to the library. the folder above the
     #comic was guessed before, which for Uncompressed/<comic> is Uncompressed itself - its archive looked for
-    #at Uncompressed/CBZs/..., not found, and taken for one that was never there
+    #at Uncompressed/CBZs/..., not found, and taken for one that was never there. nor is it the folder above
+    #the pages tree, which for a comic on another shelf is Uncompressed
     if root:
         return root
-    tree, found = shelf(folder)
-    if tree:
-        return os.path.dirname(tree)
+    library, _, _ = layout(folder)
+    if library:
+        return library
     return os.path.dirname(os.path.abspath(folder))
 
 

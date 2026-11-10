@@ -63,6 +63,9 @@
         <label class="check">Scraper <select id="add-scraper"><option value="">Built in</option></select></label>
         <span class="muted" id="add-scraper-about"></span>
       </div>
+      <div class="row" id="add-shelf-row" hidden>
+        <label class="check">Shelf <select id="add-shelf"></select></label>
+      </div>
       <div class="help">One row per comic. Folders are inside <span id="add-roots"></span>, and a comic with
         no folder of its own is given one so its archive is not loose in the root.
         <span class="builtin-only">Give a chapter list - the comic's archive page - and it is split into one
@@ -135,6 +138,12 @@
       <div class="field"><label for="c-cbz_folder">Archive folder</label>
         <input type="text" id="c-cbz_folder" spellcheck="false">
         <div class="note">Where .cbz files are filed, mirroring the pages folder.</div></div>
+      <div class="field"><label for="c-shelves">Other shelves</label>
+        <textarea id="c-shelves" rows="3" spellcheck="false" placeholder="Manga&#10;Comic = Shelves/Comic"></textarea>
+        <div class="note">One a line. A comic in the pages folder's <code>Manga/</code> has its archives on the
+          library's <code>Manga</code> shelf instead, mirrored the same way; <code>Comic = Shelves/Comic</code>
+          files a folder's comics on a shelf of another name. Each can be a library of its own in another reader.
+          Add comics and Move offer them.</div></div>
       <div class="field"><label for="c-jobs">Comics at once</label>
         <span><input type="number" id="c-jobs" min="1" style="width:80px"> <span class="muted" id="c-jobs-note"></span></span></div>
       <div class="field"><label for="c-timeout">Time limit</label>

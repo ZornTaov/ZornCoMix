@@ -27,8 +27,24 @@ function setupField(plugin, field) {
     <div class="note">${note}</div></div>`;
 }
 
+//the shelf its comics start on in Add comics: the updater's own setting, not the plugin's, so a plugin with
+//no settings of its own has it too once the library has a shelf to pick
+function shelfField(plugin) {
+  const shelves = Object.keys(shelvesNamed());
+  if (!shelves.length) return "";
+  const id = `pl-shelf-${plugin.name}`.replace(/[^A-Za-z0-9_-]/g, "_");
+  const options = [""].concat(shelves).map((name) => `<option value="${esc(name)}"
+    ${name === (plugin.shelf || "") ? "selected" : ""}>${name ? esc(name) : "the default"}</option>`).join("");
+  return `<div class="field"><label for="${id}">Shelf</label><select id="${id}" data-plugin-shelf>${options}</select>
+    <div class="note">Where Add comics starts its comics; another can still be picked there.</div></div>`;
+}
+
+function hasSettings(plugin) {
+  return (plugin.setup && plugin.setup.length) || Object.keys(shelvesNamed()).length;
+}
+
 function setupForm(plugin) {
-  return plugin.setup.map((field) => setupField(plugin, field)).join("") +
+  return shelfField(plugin) + plugin.setup.map((field) => setupField(plugin, field)).join("") +
     `<div class="setup-foot"><button type="button" class="small primary" data-plugin-setup-save="${esc(plugin.name)}">Save settings</button></div>`;
 }
 
@@ -37,8 +53,12 @@ async function saveSetup(name) {
   if (!plugin || !form) return;
   const msg = $("pl-msg");
   try {
-    const result = await post("/api/plugins/setup", { name, values: readFields(form) });
+    const picked = form.querySelector("[data-plugin-shelf]");
+    const body = { name, values: readFields(form) };
+    if (picked) body.shelf = picked.value;
+    const result = await post("/api/plugins/setup", body);
     plugin.setup = result.setup;
+    plugin.shelf = result.shelf;
     form.innerHTML = setupForm(plugin);
     msg.className = "msg good";
     msg.textContent = `${plugin.title}'s settings are saved; its next run uses them.`;
@@ -56,7 +76,7 @@ function pluginRow(plugin) {
   const missing = plugin.missing && plugin.missing.length
     ? `<div class="bad">Needs ${esc(plugin.missing.join(", "))}, which this image does not have.</div>` : "";
   const may = pluginSetup.may_install;
-  const hasSetup = plugin.setup && plugin.setup.length, open = hasSetup && setupOpen.has(plugin.name);
+  const hasSetup = hasSettings(plugin), open = hasSetup && setupOpen.has(plugin.name);
   return `<div class="plugin-row">
     <div class="grow"><b>${esc(plugin.title)}</b> <span class="muted">${esc(plugin.name)}</span>
       <div class="muted">${facts}</div>
