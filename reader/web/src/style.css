@@ -153,6 +153,10 @@ button {
 .strip-content { position: relative; transform-origin: 0 0; }
 .strip-page { position: absolute; }
 .strip-page img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* each pixel a hard-edged block rather than smoothed into its neighbours: everywhere, or only on a page the
+   reader has found drawn bigger than its own pixels (enlarged) */
+.reader.scaling-pixels :is(.spread, .strip-page) img,
+.reader.scaling-enlarged :is(.spread, .strip-page) img.enlarged { image-rendering: pixelated; }
 .sheet .value { margin-left: auto; color: #bbb; font-variant-numeric: tabular-nums; }
 
 /* a page shown as the real thing: as big as the fit allows, but never so wide that the sides stop being
