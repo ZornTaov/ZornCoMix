@@ -60,9 +60,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: reader/requirements.txt
-      # httpx is what fastapi's TestClient talks to the app through; neither it nor pytest is in the image
-      - run: pip install -r reader/requirements.txt pytest httpx
+          cache-dependency-path: reader/requirements*.txt
+      # the test-only packages (pytest, httpx2 for fastapi's TestClient) are not in the image; installing
+      # the dev file itself keeps this from drifting from what a local run installs
+      - run: pip install -r reader/requirements-dev.txt
       # test_contract.py among them: what the reader relies on comiclib for
       - run: python -m pytest
         working-directory: reader
