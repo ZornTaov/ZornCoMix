@@ -1,5 +1,7 @@
 -r requirements.txt
 pytest>=8.0
-httpx>=0.27
+# what fastapi's TestClient talks to the app through. starlette 1.x looks for httpx2, the maintained
+# successor of httpx, and only falls back to httpx with a deprecation warning
+httpx2>=2
 # python -m pytest --cov=comicreader --cov=comiclib: what the suite reaches, the reader's and the comiclib it leans on
 pytest-cov>=7
