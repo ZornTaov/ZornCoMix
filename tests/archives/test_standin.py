@@ -129,8 +129,12 @@ def test_a_stand_in_is_drawn_the_shape_of_what_it_stands_for(tmp_path):
     (tmp_path / "0002.url").write_bytes(note_body("https://example.com/2/", "https://www.youtube.com/watch?v=abcdefghijk"))
     (tmp_path / "0003.mp4").write_bytes(b"not really a video")
     (tmp_path / "0004.swf").write_bytes(flash(b"CWS", 750, 1550))
+    #a note made by hand, holding the player's address copied out of the page's frame
+    (tmp_path / "0005.txt").write_text("Our trailerhttps://www.youtube.com/embed/abcdefghijk?feature=oembed")
+    (tmp_path / "0006.txt").write_text("https://example.com/comic/game/")
     folder = str(tmp_path)
-    for name, wide in (("0001.mp4", True), ("0002.url", True), ("0003.mp4", False), ("0004.swf", False)):
+    for name, wide in (("0001.mp4", True), ("0002.url", True), ("0003.mp4", False), ("0004.swf", False),
+                       ("0005.txt", True), ("0006.txt", False)):
         lines = standin.held_otherwise(folder, name)
         made = standin.archive_entry(folder, name)[1]
         width, height = comicinfo.dimensions(made)

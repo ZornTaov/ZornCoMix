@@ -57,10 +57,16 @@ def watch_address(address):
     return address
 
 
+#a video's address in every shape a site gives one: youtube's watch page, its player, a short, its no-cookie
+#host, a youtu.be link; vimeo's page or its player. a note made by hand often holds the player's address,
+#copied out of the page's frame
+VIDEO_ADDRESS = re.compile(r"https?://(?:www\.|m\.)?(?:youtube(?:-nocookie)?\.com/(?:watch|embed/|shorts/|v/)"
+                           r"|youtu\.be/|(?:player\.)?vimeo\.com/(?:video/)?\d)")
+
+
 def looks_like_video(address):
     #whether an address a page played in its frame is a video, rather than a game or some other site's page
-    return bool(re.match(r"https?://(?:www\.)?(?:youtube\.com/watch|youtu\.be/|vimeo\.com/\d)", address or "")
-                or video_types.search(re.sub(r"[?#].*$", "", address or "")))
+    return bool(VIDEO_ADDRESS.match(address or "") or video_types.search(re.sub(r"[?#].*$", "", address or "")))
 
 
 def note_name(number, address=None):
