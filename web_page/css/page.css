@@ -10,6 +10,9 @@
 .comic .said { grid-column: 2 / 4; font-family: var(--mono); font-size: 11.5px; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .comic .num { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/*a comic that failed or stopped says why in a whole sentence, not a count. kept beside the name and never
+  wrapping, it took the name's column down to one letter a line, so it gets a line of its own under the name*/
+.comic.wordy .num { grid-column: 2 / 4; white-space: normal; overflow-wrap: anywhere; }
 .tag { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
 .s-running { color: var(--run); } .s-ok { color: var(--ok); } .s-failed { color: var(--bad); }
 /* not a failure, but not finished either: a comic with pages still to fetch */
