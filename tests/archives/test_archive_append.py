@@ -61,6 +61,37 @@ def test_new_pages_are_appended_under_the_prefix_the_archive_already_uses(librar
     assert os.path.getsize(again) == size_after
 
 
+def test_stand_ins_drawn_differently_now_are_swapped_in_place(library, capsys):
+    #an archive packed when a video's stand-in was a tall page of words: chapters.py standins swaps in the
+    #stand-in as drawn now, the video's own shape, and writes nothing else again
+    from comiclib import cbz, comicinfo, standin
+    from comiclib.chapters.packing import standins
+    from test_standin import movie
+    folder = library / "Uncompressed" / NAME
+    folder.mkdir()
+    for n in (1, 3):
+        (folder / "{0:04d}.png".format(n)).write_bytes(b"IMAGE" + bytes([n]) * 900)
+    (folder / "0002.mp4").write_bytes(movie(1280, 720))
+    write_meta(folder, {"schema": 2, "settings": {"cbz_path": "CBZs/" + NAME + ".cbz"}})
+    archive = str(library / "CBZs" / (NAME + ".cbz"))
+    with zipfile.ZipFile(archive, "w") as zf:
+        for name in ("0001.png", "0003.png"):
+            zf.write(folder / name, name)
+        zf.writestr("0002.png", standin.stand_in(list(standin.held_otherwise(str(folder), "0002.mp4"))))
+    pages_before = open(archive, "rb").read()[:2000]
+    args = argparse.Namespace(cbz=None, root=str(library), dry_run=True)
+    assert standins(str(folder), args) == 0
+    assert "1 stand-in(s) drawn differently now: 0002.mp4" in capsys.readouterr().out
+    args.dry_run = False
+    assert standins(str(folder), args) == 0
+    with zipfile.ZipFile(archive) as zf:
+        assert zf.namelist().count("0002.png") == 1
+        assert comicinfo.dimensions(zf.read("0002.png")) == (1400, 788), "the video's 16:9"
+    assert open(archive, "rb").read()[:2000] == pages_before, "the pages were not written again"
+    standins(str(folder), args)
+    assert "every stand-in is as it is drawn now" in capsys.readouterr().out
+
+
 def test_a_page_saved_again_with_other_bytes_takes_the_old_copys_place(library):
     #the page a run resumes on, come back different: written on the end under its own name, the old entry
     #gone from the directory, and every byte before it where it was

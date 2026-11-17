@@ -14,7 +14,7 @@ from comiclib.chapters.banners import covers
 from comiclib.chapters.chapterlist import edit_fixes, plan, try_archive
 from comiclib.chapters.index import alignment_path, index_path, read_index, walk
 from comiclib.chapters.pagefixes import edit_page_fixes, fixes_in
-from comiclib.chapters.packing import pack, repack, retell
+from comiclib.chapters.packing import pack, repack, retell, standins
 from comiclib.chapters.pageops import insert_page, mark_recovered, note_page, refetch, renumber
 from comiclib.chapters.rewind import rewind
 from comiclib.chapters.wordpress import wordpress_index
@@ -27,7 +27,7 @@ def setup():
         description="Line a comic's saved files up with the pages they came from.")
     params.add_argument("what", choices=["index", "align", "show", "chapters", "fix", "try", "pack",
                                          "refetch", "repack", "renumber", "recovered", "insert", "comicinfo",
-                                         "covers", "note", "rewind", "pagefix"],
+                                         "covers", "note", "rewind", "pagefix", "standins"],
                         help="index: walk the comic (or, with --wordpress, read its list of posts) and "
                              "line it up. align: line up a walk already done. "
                              "show: what the last alignment says. refetch: fetch again any page whose file "
@@ -49,6 +49,8 @@ def setup():
                              "note: keep the page at --url as a note of its address, not the pictures on it "
                              "(--forget takes that back). "
                              "repack: write the .cbz afresh from the folder. "
+                             "standins: bring the stand-ins a comic's one archive holds up to how they are "
+                             "drawn now, each swapped in place and nothing else written again. "
                              "rewind: go back to page --from, or to before the run --run: that page and every "
                              "one after it set aside, and the resume point, the index, the alignment, the "
                              "chapters and the archives put back to before them, so the next update fetches "
@@ -261,6 +263,8 @@ def main():
         return refetch(folder, args)
     if args.what == "repack":
         return repack(folder, args)
+    if args.what == "standins":
+        return standins(folder, args)
     if args.what == "comicinfo":
         return retell(folder, args)
     if args.what == "covers":
