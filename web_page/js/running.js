@@ -8,10 +8,11 @@ let seq = 0, lastHistoryId = undefined, lastHistoryHtml = null;
 function comicLine(c) {
   const numbers = c.state === "waiting" ? "" :
     `${c.gained ? "+" + c.gained + " · " : ""}${clock(c.elapsed)}`;
-  return `<div class="comic">
+  const wordy = c.detail && c.state !== "ok";
+  return `<div class="comic${wordy ? " wordy" : ""}">
     <span class="tag s-${c.state}">${c.state}</span>
     <span class="name">${esc(c.name)}</span>
-    <span class="num">${esc(c.detail && c.state !== "ok" ? c.detail : numbers)}${c.log && c.state !== "waiting" ? " · " + logLink(c.log) : ""}</span>
+    <span class="num">${esc(wordy ? c.detail : numbers)}${c.log && c.state !== "waiting" ? " · " + logLink(c.log) : ""}</span>
     ${c.last_line ? `<span class="said" title="${esc(c.last_line)}">${esc(c.last_line)}</span>` : ""}
   </div>${c.tail && c.tail.length ? `<div class="tail">${esc(c.tail.join("\n"))}</div>` : ""}`;
 }
