@@ -157,8 +157,14 @@ export function placeStrip(pages: { w: number | null; h: number | null }[], fit:
 export interface Zoom { scale: number; x: number; y: number }
 export const ZOOM_MIN = 1;
 export const ZOOM_MAX = 6;
-// where a double tap zooms to
-export const ZOOM_TAP = 2.5;
+
+// whether a picture `natural` pixels wide, drawn `shown` css pixels wide on a screen of `dpr` device pixels
+// to each, is drawn bigger than it is: a page shown at its own size on a screen scaled to 150% is already
+// stretched half again. a hair over is not, or a page fitted to within a rounding of its size would flip
+// between the two as it is drawn. a picture still arriving has no size yet, and is not
+export function enlarged(shown: number, natural: number, dpr: number): boolean {
+  return natural > 0 && shown * dpr > natural * 1.01;
+}
 
 // the fingers moved from `from` to `to` and spread to `scale`: whatever was under them stays under them,
 // so a pinch zooms where it is made and a two-finger drag carries the page along with it. points are

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { bookmarkList, chapterOf, chapterTarget, keyAction, pageAt, panRange, pinched, placeStrip, stripLeft, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, enlarged, keyAction, pageAt, panRange, pinched, placeStrip, stripLeft, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
 import { clean, merged, paddingKey, scopeOf, sidePadding } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -323,6 +323,40 @@ describe("settings", () => {
     const both = merged({ padding: 15, paddingPortrait: 0 }, {});
     expect([sidePadding(both, false), sidePadding(both, true)]).toEqual([15, 0]);
     expect([paddingKey(false), paddingKey(true)]).toEqual(["padding", "paddingPortrait"]);
+  });
+
+  it("keeps how pages are scaled only when it is one it knows, smooth until it is set", () => {
+    expect(clean({ scaling: "pixels" })).toEqual({ scaling: "pixels" });
+    expect(clean({ scaling: "blocky" as never })).toEqual({});
+    expect(merged({}, {}).scaling).toBe("smooth");
+  });
+
+  it("keeps a double tap's zoom in halves, between 1.5 and as far as a pinch goes", () => {
+    expect(merged({}, {}).tapZoom).toBe(2.5);
+    expect(clean({ tapZoom: 3 })).toEqual({ tapZoom: 3 });
+    expect(clean({ tapZoom: 2.3 })).toEqual({ tapZoom: 2.5 });
+    expect(clean({ tapZoom: 1 })).toEqual({ tapZoom: 1.5 });
+    expect(clean({ tapZoom: 40 })).toEqual({ tapZoom: 6 });
+    expect(clean({ tapZoom: Number.NaN })).toEqual({});
+  });
+});
+
+describe("pages drawn bigger than they are", () => {
+  it("counts a page drawn past its own pixels as enlarged, and one at or under them as not", () => {
+    // a 784-pixel page zoomed 2.5 times
+    expect(enlarged(1960, 784, 1)).toBe(true);
+    expect(enlarged(784, 784, 1)).toBe(false);
+    expect(enlarged(600, 784, 1)).toBe(false);
+  });
+
+  it("counts the screen's own scaling, which stretches a page shown at its size", () => {
+    expect(enlarged(784, 784, 1.5)).toBe(true);
+    expect(enlarged(600, 1200, 2)).toBe(false);
+  });
+
+  it("does not flip on a rounding's worth over, nor on a picture with no size yet", () => {
+    expect(enlarged(786, 784, 1)).toBe(false);
+    expect(enlarged(500, 0, 1)).toBe(false);
   });
 });
 

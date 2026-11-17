@@ -3,7 +3,7 @@
 // changes, by page rather than by number, so it survives the comic growing or being renumbered.
 import { api, type StandIn } from "./api";
 import { attachGestures } from "./gestures";
-import { bookmarkList, chapterOf, chapterTarget, keyAction, type Bookmark, panRange, pinched, swipeTurns, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_TAP, zigzag } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, enlarged, keyAction, type Bookmark, panRange, pinched, swipeTurns, tapAction, TRIAL_PAGES, trialKept, typedPage, viewOf, views, wanted, type Zoom, ZOOM_MAX, zigzag } from "./layout";
 import { Strip } from "./strip";
 import { clean, merged, paddingKey, scopeOf, type Scope, type Settings, sidePadding } from "./settings";
 import { coverMessage, el, esc, refusal } from "./dom";
@@ -72,6 +72,8 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       img.draggable = false;
       img.alt = `page ${n + 1}`;
       img.src = api.pageUrl(comic.id, n, comic.pages[n].v);
+      // its own size only known once it is here
+      img.addEventListener("load", recheckEnlarged);
       // decoded ahead, not only fetched: a picture still being decoded when it is shown is the stutter a
       // turn should never have
       img.decode().catch(() => undefined);
@@ -104,6 +106,24 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     reader.style.setProperty("--pad", `${pad()}vw`);
     reader.dataset.mode = settings.mode;
     spread.className = `spread fit-${settings.fit} count-${shown[view]?.length ?? 1}${settings.direction === "rtl" ? " rtl" : ""}`;
+    reader.classList.toggle("scaling-pixels", settings.scaling === "pixels");
+    reader.classList.toggle("scaling-enlarged", settings.scaling === "enlarged");
+    recheckEnlarged();
+  }
+
+  // sharp pixels only where a page is enlarged: which pages are, worked out again whenever anything could
+  // have changed it - a zoom, a fit, the window, a picture arriving - at most once a frame. measured on
+  // screen, so a zoom, a fit and the screen's own scaling are all counted however they came about
+  let enlargedFrame = 0;
+  function recheckEnlarged() {
+    if (settings.scaling !== "enlarged" || enlargedFrame) return;
+    enlargedFrame = requestAnimationFrame(() => {
+      enlargedFrame = 0;
+      for (const picture of reader.querySelectorAll<HTMLImageElement>(".spread img, .strip-page img")) {
+        picture.classList.toggle("enlarged",
+          enlarged(picture.getBoundingClientRect().width, picture.naturalWidth, window.devicePixelRatio));
+      }
+    });
   }
 
   // zoomed out, what the zoom had moved the page by is handed back to the stage's scrolling, so the page is
@@ -112,6 +132,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     const back = { left: -zoom.x / zoom.scale, top: -zoom.y / zoom.scale };
     zoom = { scale: 1, x: 0, y: 0 };
     spread.style.transform = "";
+    recheckEnlarged();
     if (back.left > 0 || back.top > 0) stage.scrollBy(back);
   }
 
@@ -178,7 +199,11 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
           shown[view].forEach((each) => looked.add(each));
           remember();
         },
-        moved: remember,
+        // laid out again at another zoom or fit, or scrolled on to pages just put in
+        moved() {
+          remember();
+          recheckEnlarged();
+        },
       });
     }
     scrolling.look(settings.fit, pad(), settings.gap);
@@ -585,6 +610,12 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
           ${inSeries ? '<option value="series">this series</option><option value="comic">this chapter only</option>'
                      : '<option value="comic">this comic only</option>'}</select></label>
       <label class="row">Background <input type="color" data-set="background"></label>
+      <label class="row">Page scaling
+        <select data-set="scaling"><option value="smooth">Smooth</option>
+          <option value="enlarged">Sharp pixels when enlarged</option>
+          <option value="pixels">Sharp pixels always</option></select></label>
+      <label class="row">Double-tap zoom <span class="value" data-show="tapZoom"></span>
+        <input type="range" min="1.5" max="${ZOOM_MAX}" step="0.5" data-set="tapZoom"></label>
       <label class="row">Side padding (${portrait.matches ? "portrait" : "landscape"}) <span class="value" data-show="padding"></span>
         <input type="range" min="0" max="40" step="1" data-set="padding"></label>
       <label class="row">Space above and below pages <span class="value" data-show="gap"></span>
@@ -611,6 +642,15 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     };
     input<HTMLInputElement>("background").value = settings.background;
     input<HTMLInputElement>("background").onchange = (event) => change({ background: (event.target as HTMLInputElement).value });
+    input<HTMLSelectElement>("scaling").value = settings.scaling;
+    input<HTMLSelectElement>("scaling").onchange = (event) =>
+      change({ scaling: (event.target as HTMLSelectElement).value as Settings["scaling"] });
+    const tapZoom = input<HTMLInputElement>("tapZoom");
+    const tapZoomShown = sheet.querySelector<HTMLElement>('[data-show="tapZoom"]')!;
+    tapZoom.value = String(settings.tapZoom);
+    tapZoomShown.textContent = `${settings.tapZoom}×`;
+    tapZoom.oninput = () => { tapZoomShown.textContent = `${tapZoom.value}×`; };
+    tapZoom.onchange = () => change({ tapZoom: Number(tapZoom.value) });
     const padding = input<HTMLInputElement>("padding");
     const paddingShown = sheet.querySelector<HTMLElement>('[data-show="padding"]')!;
     // the padding for the way round the screen is now; the other is set by turning it over
@@ -725,7 +765,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     middle,
     doubleTap(x, y) {
       if (zoom.scale > 1.01) return resetZoom();
-      zoomTo(ZOOM_TAP, x, y);
+      zoomTo(settings.tapZoom, x, y);
     },
     start() {
       swipeFrom = place().at().x;
@@ -750,11 +790,13 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
         return;
       }
       foldScroll();
+      spread.classList.add("pinching");
       const at = corner();
       zoom = pinched(zoom, scale, { x: fromX - at.x, y: fromY - at.y }, { x: x - at.x, y: y - at.y });
       paintZoom();
     },
     pinchEnd() {
+      spread.classList.remove("pinching");
       if (zoom.scale <= 1.01) resetZoom();
     },
     scale: () => zoom.scale,
@@ -764,10 +806,11 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     tap,
     middle,
     doubleTap(x, y) {
-      scrolling?.zoomTo(scrolling.scale > 1.01 ? 1 : ZOOM_TAP, x, y);
+      scrolling?.zoomTo(scrolling.scale > 1.01 ? 1 : settings.tapZoom, x, y);
     },
     pinch(scale, x, y, fromX, fromY) {
       scrolling?.pinch(scale, x, y, fromX, fromY);
+      recheckEnlarged();
     },
     pinchEnd() {
       scrolling?.settle();
@@ -822,6 +865,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     zoom.x = clamp(zoom.x, x.low, x.high);
     zoom.y = clamp(zoom.y, y.low, y.high);
     spread.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
+    recheckEnlarged();
   }
 
   const keys = (event: KeyboardEvent) => {
@@ -982,6 +1026,8 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     if (!sheet.classList.contains("hidden") && sheet.querySelector('[data-set="padding"]')) openSheet();
   };
   portrait.addEventListener("change", turned);
+  // a page fitted to the window grows and shrinks with it, past its own size or back under it
+  window.addEventListener("resize", recheckEnlarged);
 
   buildMenu();
   render();
@@ -1001,6 +1047,8 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     document.removeEventListener("visibilitychange", hidden);
     window.removeEventListener("pagehide", closing);
     portrait.removeEventListener("change", turned);
+    window.removeEventListener("resize", recheckEnlarged);
+    cancelAnimationFrame(enlargedFrame);
     stage.removeEventListener("wheel", wheel);
     stopGlide();
   };

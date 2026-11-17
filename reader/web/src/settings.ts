@@ -1,8 +1,14 @@
 // how a comic is read. kept on the server, once for every comic, again for any series that differs - every
 // chapter of a comic kept one archive per chapter - and again for any one comic, so a phone and a tablet
 // read the same comic the same way
+import { ZOOM_MAX } from "./layout";
+
 export type Mode = "single" | "spread" | "webtoon";
 export type Fit = "screen" | "width" | "height" | "original";
+// how a page drawn bigger or smaller than its own pixels is filled in: the browser's smoothing, or each pixel
+// a hard-edged block - only where the page is enlarged, since blocks are also what a shrunk page's are
+// dropped to, and a page fitted down to the screen shimmers with them, or everywhere
+export type Scaling = "smooth" | "enlarged" | "pixels";
 
 export interface Settings {
   mode: Mode;
@@ -27,6 +33,10 @@ export interface Settings {
   // space above and below every page when scrolling, in pixels: comics of short strips otherwise run
   // together, and a two-row strip cannot be told from two one-row ones
   gap: number;
+  scaling: Scaling;
+  // how far a double tap zooms in: a page with small lettering wants more than one drawn big, and a whole
+  // number keeps every pixel the same size when they are drawn sharp
+  tapZoom: number;
 }
 
 export const defaults: Settings = {
@@ -41,6 +51,8 @@ export const defaults: Settings = {
   behind: 2,
   padding: 0,
   gap: 0,
+  scaling: "smooth",
+  tapZoom: 2.5,
 };
 
 // which setting the side padding is kept in for a screen this way round, and what it is
@@ -78,5 +90,10 @@ export function clean(given: Partial<Settings>): Partial<Settings> {
   if (typeof given.padding === "number" && Number.isFinite(given.padding)) out.padding = Math.min(40, Math.max(0, Math.round(given.padding)));
   if (typeof given.paddingPortrait === "number" && Number.isFinite(given.paddingPortrait)) out.paddingPortrait = Math.min(40, Math.max(0, Math.round(given.paddingPortrait)));
   if (typeof given.gap === "number" && Number.isFinite(given.gap)) out.gap = Math.min(120, Math.max(0, Math.round(given.gap)));
+  if (given.scaling === "smooth" || given.scaling === "enlarged" || given.scaling === "pixels") out.scaling = given.scaling;
+  // in halves, as the slider sets it, and no further than a pinch can go
+  if (typeof given.tapZoom === "number" && Number.isFinite(given.tapZoom)) {
+    out.tapZoom = Math.min(ZOOM_MAX, Math.max(1.5, Math.round(given.tapZoom * 2) / 2));
+  }
   return out;
 }
