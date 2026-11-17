@@ -113,6 +113,8 @@ comic_start = None
 #files dropped because a newer spelling of the same page replaced them. the archive is told, so it does
 #not end up holding the page under both names.
 superseded = []
+#pages saved again under the same name with different bytes, so the archive swaps its copy of each
+changed = []
 #the index this comic keeps, when it has one, added to as pages are saved; and whether the comic is kept
 #in chapters, which decides whether this run builds a single archive at all
 kept_index = KeptIndex()
@@ -387,7 +389,7 @@ def output_folder(args):
 def cbz_update(args):
     #packs the pages into the comic's .cbz: a new archive if there is none, and otherwise only the pages it
     #does not hold yet, added to the end
-    return cbz.update(output_folder(args), args.cbz_path, superseded)
+    return cbz.update(output_folder(args), args.cbz_path, superseded, changed)
 
 
 def page_images(driver, args):
@@ -405,7 +407,8 @@ def page_images(driver, args):
 
     here = getattr(driver, "current_url", None)
     if here and same_page(here) in noted_pages:
-        return [NotAPicture(here)]
+        container = elements.container_of(image_xpath) if image_xpath else None
+        return [NotAPicture(here, *(elements.media_in(driver, container) if container else (None, None)))]
     #the path that worked last time first. pages within one comic differ: most themes wrap the image in a
     #link to the next page, so the newest page - the one an update is there to fetch - has different markup
     #to every page before it
@@ -420,9 +423,14 @@ def page_images(driver, args):
         if container:
             srcs = ele_get_all(driver, container + "//img")
             if not srcs and present(driver, container):
-                print("{0} holds no picture where this comic's pages are, so the page is something else - one "
-                      "you play with, say. Kept as a note of its address, to open on the site.".format(here))
-                return [NotAPicture(here)]
+                media, called = elements.media_in(driver, container)
+                if media:
+                    print("{0} holds no picture where this comic's pages are, but plays {1} there. Kept as a "
+                          "note of that address and the page's.".format(here, media))
+                else:
+                    print("{0} holds no picture where this comic's pages are, so the page is something else - "
+                          "one you play with, say. Kept as a note of its address, to open on the site.".format(here))
+                return [NotAPicture(here, media, called)]
     if srcs:
         fallbacks_in_row = 0
     else:
@@ -502,6 +510,18 @@ def every_picture(driver):
         return {one.get_attribute("src") for one in driver.find_elements(By.TAG_NAME, "img")} - {None}
     except (se.WebDriverException, AttributeError, TypeError):
         return set()
+
+
+def same_bytes(path, body):
+    #whether a file already holds exactly these bytes. the size first, so a changed page of a few megabytes
+    #is not read just to learn what its size already says
+    try:
+        if os.path.getsize(path) != len(body):
+            return False
+        with open(path, "rb") as f:
+            return f.read() == body
+    except OSError:
+        return False
 
 
 def present(driver, xpath):
@@ -623,7 +643,7 @@ def save_one(driver, src, increment, args, resuming):
     same_picture_again(src)
     if isinstance(src, NotAPicture):
         #a page whose comic is not a picture: a note of its address, numbered as the page it is
-        body, image, src_kept = note_body(src), note_name(increment, src), None
+        body, image, src_kept = note_body(src, src.media, src.called), note_name(increment, src), None
     else:
         req = fetch(src)
         body, src_kept = req.content, src
@@ -676,9 +696,13 @@ def save_one(driver, src, increment, args, resuming):
     print('saving {0} from {1} at {2}'.format(target, src, current_url))
 
     #whether this page is one the folder did not have. a resume re-saves its starting page over itself,
-    #which is not the comic gaining anything
+    #which is not the comic gaining anything - unless what it saves now is not what was there, which the
+    #comic's archives have to be told: they hold the old copy, and only pages gained were ever written to them
     if not os.path.exists(target):
         scrape_state["fresh_pages"] += 1
+    elif resuming and not same_bytes(target, body):
+        print("{0} {1}, so its archive is written again.".format(target, runrecord.PAGE_CHANGED))
+        changed.append(image)
 
     #written aside and moved into place, like everything else here. a run killed part way through writing
     #a page - a timeout - otherwise left half a picture under the page's own name, which the next run then

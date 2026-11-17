@@ -12,6 +12,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from comiclib.pages import address_name
+from comiclib.standin import watch_address
 
 #set by the scrape from its --verbose, for saying each path that did not match
 verbose = False
@@ -151,6 +152,30 @@ def container_of(xpath):
     if not container or "[" not in container:
         return None
     return container
+
+
+#what can stand in a comic's place on a page that has no picture there, and the attribute saying where it
+#lives: a video played in a frame from another site, the page's own recording, an old flash embed
+MEDIA_TAGS = (("iframe", "src"), ("video", "src"), ("video//source", "src"), ("embed", "src"), ("object", "data"))
+
+
+def media_in(driver, container):
+    #the first such thing inside the comic's container - by an address that opens it on its own, and what
+    #the page calls it - or (None, None). asked only of a page where the container holds no picture, so the
+    #few round trips to the browser are spent on the odd page, never on every page of a comic
+    for tag, attribute in MEDIA_TAGS:
+        try:
+            found = driver.find_elements(By.XPATH, "{0}//{1}".format(container, tag))
+        except se.WebDriverException:
+            continue
+        for one in found:
+            try:
+                address, called = one.get_attribute(attribute), one.get_attribute("title")
+            except (se.StaleElementReferenceException, AttributeError):
+                continue
+            if address and address.startswith("http"):
+                return watch_address(address), (called or "").strip() or None
+    return None, None
 
 
 def comic_images(srcs, where=None):

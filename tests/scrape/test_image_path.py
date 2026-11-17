@@ -28,11 +28,13 @@ class Page(object):
     def at(self, url, **found):
         self.current_url = url
         self.found = {"comic": found.get("comic"), "loose": found.get("loose"), "menu": True,
-                      "container": found.get("container", True)}
+                      "container": found.get("container", True), "frame": found.get("frame")}
         return self
 
     def find_elements(self, by, xpath):
         found = self.found
+        if xpath == CONTAINER + "//iframe" and found["frame"]:
+            return [Frame(*found["frame"])]
         if xpath == REMEMBERED and found["comic"]:
             return [FakeElement(found["comic"])]
         if xpath == LOOSER and (found["comic"] or found["loose"]):
@@ -45,6 +47,15 @@ class Page(object):
 
     def find_element(self, by, xpath):
         raise self.mb.se.NoSuchElementException(xpath)
+
+
+class Frame(object):
+    #a video another site plays in a frame on the page, and what the page calls it
+    def __init__(self, src, title=None):
+        self.attributes = {"src": src, "title": title}
+
+    def get_attribute(self, name):
+        return self.attributes.get(name)
 
 
 @pytest.fixture
@@ -81,6 +92,22 @@ def test_a_page_whose_comic_is_not_a_picture_is_kept_as_a_note_of_its_address(sc
         assert "URL=https://example.com/2/" in f.read()
     said, nxt = save(scrape, page.at("https://example.com/3/", comic=comic(3)), scrape_args(folder), nxt)
     assert pages(scrape, folder)[-1] == "0003_strip_3.png" and scrape.image_xpath == REMEMBERED
+
+
+def test_a_video_played_where_the_comic_goes_is_noted_by_its_own_address(scrape, folder):
+    #a comic's newest page a video in a frame from another site: the note opens the video, and still says
+    #which of the comic's pages it was, so the stand-in can show both
+    page = Page(scrape)
+    said, nxt = save(scrape, page.at("https://example.com/1/", comic=comic(1)), scrape_args(folder), 1)
+    frame = ("https://www.youtube.com/embed/abcdefghijk?feature=oembed", "Our trailer")
+    said, nxt = save(scrape, page.at("https://example.com/2/", frame=frame), scrape_args(folder), nxt)
+    assert "plays https://www.youtube.com/watch?v=abcdefghijk there" in said, said
+    assert pages(scrape, folder) == ["0001_strip_1.png", "0002_2.url"], "named for the page, like any note"
+    with open(folder + "/0002_2.url", encoding="utf-8") as f:
+        note = f.read()
+    assert "URL=https://www.youtube.com/watch?v=abcdefghijk\n" in note, note
+    assert "Page=https://example.com/2/\n" in note and "Title=Our trailer\n" in note, note
+    assert elements.media_in(page.at("https://example.com/3/"), CONTAINER) == (None, None)
 
 
 def test_one_odd_page_does_not_make_another_path_the_comics(scrape, folder):
