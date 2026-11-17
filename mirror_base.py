@@ -405,7 +405,8 @@ def page_images(driver, args):
 
     here = getattr(driver, "current_url", None)
     if here and same_page(here) in noted_pages:
-        return [NotAPicture(here)]
+        container = elements.container_of(image_xpath) if image_xpath else None
+        return [NotAPicture(here, *(elements.media_in(driver, container) if container else (None, None)))]
     #the path that worked last time first. pages within one comic differ: most themes wrap the image in a
     #link to the next page, so the newest page - the one an update is there to fetch - has different markup
     #to every page before it
@@ -420,9 +421,14 @@ def page_images(driver, args):
         if container:
             srcs = ele_get_all(driver, container + "//img")
             if not srcs and present(driver, container):
-                print("{0} holds no picture where this comic's pages are, so the page is something else - one "
-                      "you play with, say. Kept as a note of its address, to open on the site.".format(here))
-                return [NotAPicture(here)]
+                media, called = elements.media_in(driver, container)
+                if media:
+                    print("{0} holds no picture where this comic's pages are, but plays {1} there. Kept as a "
+                          "note of that address and the page's.".format(here, media))
+                else:
+                    print("{0} holds no picture where this comic's pages are, so the page is something else - "
+                          "one you play with, say. Kept as a note of its address, to open on the site.".format(here))
+                return [NotAPicture(here, media, called)]
     if srcs:
         fallbacks_in_row = 0
     else:
@@ -623,7 +629,7 @@ def save_one(driver, src, increment, args, resuming):
     same_picture_again(src)
     if isinstance(src, NotAPicture):
         #a page whose comic is not a picture: a note of its address, numbered as the page it is
-        body, image, src_kept = note_body(src), note_name(increment, src), None
+        body, image, src_kept = note_body(src, src.media, src.called), note_name(increment, src), None
     else:
         req = fetch(src)
         body, src_kept = req.content, src

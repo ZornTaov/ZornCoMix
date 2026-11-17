@@ -128,7 +128,7 @@ def fetch_missing(folder, args, pages):
                 body = answer.content
                 name = "{0:04d}_{1}".format(page["n"], saved_name(line["src"], answer.headers, body))
             else:
-                body, name = note_body(line["url"]), line["file"]
+                body, name = note_body(line["url"], line.get("media"), line.get("called")), line["file"]
         except MirrorError as error:
             failed.append((page["n"], str(error)[:80]))
             continue

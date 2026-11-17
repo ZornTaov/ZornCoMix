@@ -35,8 +35,31 @@ named_for_a_page = re.compile(r"^(\d+)(?:[._])")
 class NotAPicture(str):
     #a page whose comic is there but is not a picture - one you play with, drawn by the page's own script -
     #standing in a list of a page's pictures as the page's own address. kept as a note naming where it lives,
-    #so the page keeps its place and its number, and a reader opens the real thing
-    pass
+    #so the page keeps its place and its number, and a reader opens the real thing. where the comic's place
+    #on the page holds a video in a frame instead, `media` is the video's address and `called` what the page
+    #calls it: the page's own address alone sent a reader back to the site rather than to the video
+    def __new__(cls, page, media=None, called=None):
+        made = super().__new__(cls, page)
+        made.media, made.called = media, called
+        return made
+
+
+def watch_address(address):
+    #a player made to sit inside another page - youtube's /embed/ID - as the address that opens the video on
+    #its own, which is what a note is for: someone opening it from the folder, or reading it off a stand-in
+    found = re.match(r"https?://(?:www\.)?youtube(?:-nocookie)?\.com/embed/([\w-]{6,})", address or "")
+    if found:
+        return "https://www.youtube.com/watch?v=" + found.group(1)
+    found = re.match(r"https?://player\.vimeo\.com/video/(\d+)", address or "")
+    if found:
+        return "https://vimeo.com/" + found.group(1)
+    return address
+
+
+def looks_like_video(address):
+    #whether an address a page played in its frame is a video, rather than a game or some other site's page
+    return bool(re.match(r"https?://(?:www\.)?(?:youtube\.com/watch|youtu\.be/|vimeo\.com/\d)", address or "")
+                or video_types.search(re.sub(r"[?#].*$", "", address or "")))
 
 
 def note_name(number, address=None):
@@ -48,9 +71,18 @@ def note_name(number, address=None):
     return "{0:04d}_{1}.url".format(number, slug)
 
 
-def note_body(address):
-    #the shortcut format every desktop opens, which a_web_address reads back
-    return "[InternetShortcut]\r\nURL={0}\r\n".format(address).encode("utf-8")
+#the section of a note desktops pass over, saying the comic's page the note was made from and what it calls it
+NOTE_SECTION = "[ZornCoMix]"
+
+
+def note_body(page, media=None, called=None):
+    #the shortcut format every desktop opens - at the video, where the page played one, since that is what
+    #the page is - and, in a section of its own, the comic's page it was found on and what that calls it, so
+    #a stand-in can say both. note_fields reads it back
+    lines = ["[InternetShortcut]", "URL={0}".format(media or page), "", NOTE_SECTION, "Page={0}".format(page)]
+    if called:
+        lines.append("Title={0}".format(" ".join(called.split())))
+    return ("\r\n".join(lines) + "\r\n").encode("utf-8")
 
 
 #five columns and seven rows of dots per letter, written out rather than packed into numbers so that a
@@ -260,14 +292,19 @@ def address_in(path):
     #a comic's readme is not a page, though, and the difference is that a note about one page says almost
     #nothing else: it is short, and most of what it says is the address. a readme is longer than that,
     #whatever addresses it happens to mention.
+    return note_in(path)[:2]
+
+
+def note_in(path):
+    #note_fields for a note in the folder: its address, what it calls it, and the comic's page it came from
     try:
         if os.path.getsize(path) > NOTE_LIMIT:
-            return None, None
+            return None, None, None
         with open(path, encoding="utf-8", errors="replace") as f:
             text = f.read(NOTE_LIMIT)
     except OSError:
-        return None, None
-    return note_address(text)
+        return None, None, None
+    return note_fields(text)
 
 
 #a note about one page says almost nothing but the address
@@ -277,13 +314,28 @@ NOTE_LIMIT = 1024
 def note_address(text):
     #the address a note holds, and what it calls it, from the note's text - read from the folder, or out of
     #an archive someone else made, by the same rule
+    return note_fields(text)[:2]
+
+
+def note_fields(text):
+    #the address, the name and the comic's page a note says. a shortcut is read by its keys: read as prose,
+    #everything ahead of its address - "[InternetShortcut] URL=" - was taken for what the note called its page,
+    #and printed on every stand-in the scraper's own notes were drawn as
     text = (text or "").strip()
+    if text.startswith("[InternetShortcut]"):
+        keys = {}
+        for line in text.splitlines():
+            key, equals, value = line.partition("=")
+            if equals:
+                keys.setdefault(key.strip().lower(), value.strip())
+        if a_web_address.fullmatch(keys.get("url", "")):
+            return keys["url"], keys.get("title") or None, keys.get("page") or None
     found = a_web_address.search(text)
     if not found:
-        return None, None
+        return None, None, None
     address = found.group(1).rstrip('.,;)')
     called = text[:found.start()].strip().strip('-:|').strip()
-    return address, called or None
+    return address, called or None, None
 
 
 def held_otherwise(folder, name):
@@ -297,9 +349,9 @@ def held_otherwise(folder, name):
     #ratio of address to prose could never have told the two apart reliably: a note can be a long video
     #title and one line of address.
     if is_note_name(name):
-        address, called = address_in(os.path.join(folder, name))
+        address, called, page = note_in(os.path.join(folder, name))
         if address:
-            return lines_for(name, address, called)
+            return lines_for(name, address, called, page=page)
     return None
 
 
@@ -308,16 +360,24 @@ def is_note_name(name):
     return bool(link_types.search(name) and named_for_a_page.match(os.path.basename(name)))
 
 
-def lines_for(name, address=None, called=None, where="the comic's folder"):
-    #what a stand-in says for a page held as `name`: a video or flash file, or a note holding `address`
+def lines_for(name, address=None, called=None, where="the comic's folder", page=None):
+    #what a stand-in says for a page held as `name`: a video or flash file, or a note holding `address` -
+    #and, for a note the scraper made, `page`, the comic's page it was found on
     if video_types.search(name):
         return ["This page is a video.", "", "It is in {0} as".format(where), name]
     if flash_types.search(name):
         return ["This page was Flash.", "", "It is in {0} as".format(where), name]
     #the name the note gives it is worth showing: "My Comic's trailer" says more about the page than the
     #address does
-    return (["This page is a video."] + (wrapped(called) if called else [])
-            + ["", address, "", "noted in {0} as".format(where), name])
+    named = wrapped(called) if called else []
+    noted = ["", "noted in {0} as".format(where), name]
+    if page and page == address:
+        #nothing on the page the scraper could keep: the page itself is what to open
+        return ["This page is not a picture."] + named + ["", "Open it on the site:", address] + noted
+    if page:
+        what = "This page is a video." if looks_like_video(address) else "This page plays from another site."
+        return [what] + named + ["", address, "", "on the comic's page", page] + noted
+    return ["This page is a video."] + named + ["", address] + noted
 
 
 def wrapped(text, width=46):

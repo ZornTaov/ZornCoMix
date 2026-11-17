@@ -44,6 +44,40 @@ def test_a_readme_is_not_swallowed_even_though_it_mentions_an_address(folder):
     assert address[0] == "https://example.com/video/abc123", "while a note named for its page is read"
 
 
+def test_a_note_the_scraper_writes_reads_back_whole(folder):
+    #a shortcut was read as prose, so "[InternetShortcut] URL=" became what the note called its page and was
+    #printed on its stand-in; and a page playing a video was noted by its own address, not the video's
+    from comiclib.standin import note_body, note_fields, watch_address
+    page, video = "https://example.com/comic/ghost-1/", "https://www.youtube.com/watch?v=_Abc-123xyz"
+    assert watch_address("https://www.youtube.com/embed/_Abc-123xyz?feature=oembed") == video
+    assert watch_address("https://player.vimeo.com/video/123456?h=ab") == "https://vimeo.com/123456"
+    assert watch_address(page) == page, "anything else is left as it is"
+    written = note_body(page, video, "Ghost  Story\n001").decode()
+    assert written.startswith("[InternetShortcut]\r\nURL=" + video + "\r\n"), "a desktop opens the video"
+    assert note_fields(written) == (video, "Ghost Story 001", page)
+    assert note_fields(note_body(page).decode()) == (page, None, page), "nothing on it to keep: the page"
+    assert note_fields("[InternetShortcut]\r\nURL=" + page + "\r\n") == (page, None, None), \
+        "a note written before notes said their page is still read, with no name made up for it"
+
+
+def test_what_a_stand_in_says_for_each_kind_of_note(tmp_path):
+    from comiclib.standin import note_body
+    page = "https://example.com/comic/ghost-1/"
+    (tmp_path / "0004_ghost-1.url").write_bytes(note_body(page, "https://www.youtube.com/watch?v=abcdefghijk",
+                                                          "Ghost Story 001"))
+    (tmp_path / "0005_game.url").write_bytes(note_body("https://example.com/comic/game/"))
+    (tmp_path / "0006_old.url").write_bytes(b"[InternetShortcut]\r\nURL=https://example.com/comic/old/\r\n")
+    folder = str(tmp_path)
+    assert held_otherwise(folder, "0004_ghost-1.url") == [
+        "This page is a video.", "", "Ghost Story 001", "", "https://www.youtube.com/watch?v=abcdefghijk", "",
+        "on the comic's page", page, "", "noted in the comic's folder as", "0004_ghost-1.url"]
+    assert held_otherwise(folder, "0005_game.url")[:4] == [
+        "This page is not a picture.", "", "Open it on the site:", "https://example.com/comic/game/"]
+    assert held_otherwise(folder, "0006_old.url") == [
+        "This page is a video.", "", "https://example.com/comic/old/", "", "noted in the comic's folder as",
+        "0006_old.url"], "with no '[InternetShortcut] URL=' where its name would go"
+
+
 def test_what_the_folder_counts_as_pages(folder):
     held = folder_pages(folder, others=True)
     assert held == ['0003.png', '0007.txt', '0009.url', '0012.swf', '0015.mp4', '0021.txt'], \

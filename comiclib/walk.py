@@ -115,6 +115,9 @@ def build_index(driver, args, page_images, next, still_on, first_paths=(), elsew
                 if isinstance(src, NotAPicture):
                     line = {"n": at, "url": here, "src": None, "file": note_name(at, src),
                             "title": driver.title}
+                    #the video the page plays in its place, for refetch --missing to write the note a scrape would
+                    if src.media:
+                        line.update(media=src.media, called=src.called)
                 else:
                     line = {"n": at, "url": here, "src": src, "file": saved_name(src) if src else None,
                             "title": driver.title}
