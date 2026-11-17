@@ -59,3 +59,25 @@ def test_new_pages_are_appended_under_the_prefix_the_archive_already_uses(librar
     again, again_added = mirror.cbz_update(args)
     assert again_added == 0, again_added
     assert os.path.getsize(again) == size_after
+
+
+def test_a_page_saved_again_with_other_bytes_takes_the_old_copys_place(library):
+    #the page a run resumes on, come back different: written on the end under its own name, the old entry
+    #gone from the directory, and every byte before it where it was
+    from comiclib import cbz
+    folder = library / "Uncompressed" / NAME
+    folder.mkdir()
+    for n in range(1, 4):
+        (folder / "{0:04d}.png".format(n)).write_bytes(b"IMAGE" + bytes([n]) * 900)
+    archive = str(library / "CBZs" / (NAME + ".cbz"))
+    cbz.update(str(folder), archive)
+    before = open(archive, "rb").read()
+    (folder / "0003.png").write_bytes(b"IMAGE" + b"\x09" * 950)
+    _, added = cbz.update(str(folder), archive, changed=["0003.png"])
+    assert added == 0, "a page changed is not a page added"
+    with zipfile.ZipFile(archive) as zf:
+        names = zf.namelist()
+        assert names.count("0003.png") == 1, names
+        assert zf.read("0003.png") == (folder / "0003.png").read_bytes()
+    after = open(archive, "rb").read()
+    assert after[:len(before) - 2000] == before[:len(before) - 2000], "earlier bytes were rewritten"

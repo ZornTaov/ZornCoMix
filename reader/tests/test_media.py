@@ -106,6 +106,19 @@ def test_every_page_is_the_right_shape_before_it_loads(library, client):
     assert [(page[1], page[2]) for page in comic["pages"]] == [(40, 60), (800, 200), (1600, 900), (1600, 900)]
 
 
+def test_a_folder_page_held_otherwise_is_laid_out_at_its_stand_ins_shape(tmp_path):
+    #a video shown in its page's place fills it: the place is the stand-in's, drawn the video's shape
+    from comiclib.standin import note_body
+    from comicreader.sources import read_folder
+    (tmp_path / "0001.png").write_bytes(png(4, 4))
+    (tmp_path / "0002.url").write_bytes(note_body("https://example.com/2/", "https://www.youtube.com/watch?v=abcdefghijk"))
+    (tmp_path / "0003.swf").write_bytes(swf(800, 200, b"CWS"))
+    shapes = [(page["w"], page["h"]) for page in read_folder(str(tmp_path))["pages"]]
+    assert shapes[0] == (4, 4)
+    assert shapes[1] == (1400, 788), "a video's 16:9"
+    assert shapes[2][0] > 3 * shapes[2][1] - 10, "the flash file's own wide strip: {0}".format(shapes[2])
+
+
 def test_a_flash_header_says_its_size_however_it_is_compressed():
     assert swf_shape(swf(550, 400)) == (550, 400)
     assert swf_shape(swf(800, 200, b"CWS")[:200]) == (800, 200)

@@ -12,6 +12,11 @@ from comiclib.metadata import METADATA_FILE as metadata_file, SCHEMA, load, now_
 #always kept, since it is the one that says how the comic was originally scraped
 max_runs = 20
 
+#said by a scrape when the page it resumed on came back different from the copy it held - its note now
+#naming the video the page plays, a site that swapped its newest picture. the comic gained no page, but an
+#update reads this to know its chapter archives hold an old copy, and writes them again
+PAGE_CHANGED = "changed since it was last saved"
+
 
 def resume_point(scrape_state):
     #where a follow-up run should pick up: the page after the last saved one, if we already moved on.

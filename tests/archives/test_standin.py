@@ -78,6 +78,71 @@ def test_what_a_stand_in_says_for_each_kind_of_note(tmp_path):
         "0006_old.url"], "with no '[InternetShortcut] URL=' where its name would go"
 
 
+def flash(kind, width, height):
+    #a flash file's first bytes: its header, then its stage as four numbers of 16 bits in twentieths of a pixel
+    import lzma
+    import struct
+    import zlib
+    bits = format(16, "05b") + "".join(format(v * 20, "016b") for v in (0, width, 0, height))
+    bits += "0" * (-len(bits) % 8)
+    stage = bytes(int(bits[at:at + 8], 2) for at in range(0, len(bits), 8)) + b"\x00" * 40
+    if kind == b"FWS":
+        return kind + b"\x0a" + struct.pack("<I", 8 + len(stage)) + stage
+    if kind == b"CWS":
+        return kind + b"\x0a" + struct.pack("<I", 8 + len(stage)) + zlib.compress(stage)
+    alone = lzma.compress(stage, format=lzma.FORMAT_ALONE)
+    return kind + b"\x0a" + struct.pack("<II", 8 + len(stage), len(alone) - 13) + alone[:5] + alone[13:]
+
+
+def box(kind, body):
+    import struct
+    return struct.pack(">I4s", 8 + len(body), kind) + body
+
+
+def movie(width, height):
+    #an mp4 with its moov after the pictures, as a camera writes one, and the sound's track ahead of the
+    #picture's: the sound's header says no size, and is passed over
+    import struct
+
+    def track(w, h):
+        return box(b"trak", box(b"tkhd", b"\x00" * 76 + struct.pack(">II", w << 16, h << 16)))
+    return box(b"ftyp", b"isom" + b"\x00" * 4) + box(b"mdat", b"\x00" * 5000) + box(
+        b"moov", box(b"mvhd", b"\x00" * 100) + track(0, 0) + track(width, height))
+
+
+def test_the_shape_of_what_a_stand_in_stands_for_is_read_from_its_file(tmp_path):
+    from comiclib import standin
+    (tmp_path / "0001.swf").write_bytes(flash(b"FWS", 800, 200))
+    (tmp_path / "0002.swf").write_bytes(flash(b"CWS", 750, 1550))
+    (tmp_path / "0003.swf").write_bytes(flash(b"ZWS", 550, 400))
+    (tmp_path / "0004.mp4").write_bytes(movie(1280, 720))
+    (tmp_path / "0005.mp4").write_bytes(b"not really a video")
+    folder = str(tmp_path)
+    shapes = [standin.held_otherwise(folder, name).shape for name in sorted(os.listdir(folder))]
+    assert shapes == [(800, 200), (750, 1550), (550, 400), (1280, 720), None]
+
+
+def test_a_stand_in_is_drawn_the_shape_of_what_it_stands_for(tmp_path):
+    from comiclib import comicinfo, standin
+    from comiclib.standin import note_body
+    (tmp_path / "0001.mp4").write_bytes(movie(1280, 720))
+    (tmp_path / "0002.url").write_bytes(note_body("https://example.com/2/", "https://www.youtube.com/watch?v=abcdefghijk"))
+    (tmp_path / "0003.mp4").write_bytes(b"not really a video")
+    (tmp_path / "0004.swf").write_bytes(flash(b"CWS", 750, 1550))
+    folder = str(tmp_path)
+    for name, wide in (("0001.mp4", True), ("0002.url", True), ("0003.mp4", False), ("0004.swf", False)):
+        lines = standin.held_otherwise(folder, name)
+        made = standin.archive_entry(folder, name)[1]
+        width, height = comicinfo.dimensions(made)
+        assert (width, height) == standin.standin_size(lines), "measured as it is drawn: " + name
+        assert (width > height) == wide, "{0} drawn {1}x{2}".format(name, width, height)
+    assert comicinfo.dimensions(standin.archive_entry(folder, "0001.mp4")[1]) == (1400, 788), "a 16:9 page"
+    #a stand-in with no shape of its own is the page it always was, so no archive holding one is rewritten
+    plain = standin.held_otherwise(folder, "0003.mp4")
+    assert standin.fingerprint(plain) == standin.fingerprint(list(plain))
+    assert standin.stand_in(plain) == standin.drawn(tuple(plain), 1000, 1400, 28, 235)
+
+
 def test_what_the_folder_counts_as_pages(folder):
     held = folder_pages(folder, others=True)
     assert held == ['0003.png', '0007.txt', '0009.url', '0012.swf', '0015.mp4', '0021.txt'], \
