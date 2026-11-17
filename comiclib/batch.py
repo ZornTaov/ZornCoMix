@@ -12,7 +12,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from comiclib import exits, runlogs
+from comiclib import exits, runlogs, runrecord
 from comiclib.cbz import default_shelf
 from comiclib.chapters.index import index_path
 from comiclib.config import load_config
@@ -187,7 +187,11 @@ def scrape_and_pack(comic, args, command, started):
     #comic unpacked behind updates that each found nothing new. one keeping no archives never is packed
     unpacked = (in_chapters and not known.get("packed")
                 and (comic.metadata.get("settings") or {}).get("cbz") is not False)
-    if ((comic.gained or unpacked) and not comic.stopped and getattr(args, "pack_chapters", True)
+    #nor is a page the run saved again over a different copy a page gained, but the archive holding it has
+    #the old copy, and packing is what puts the new one in: a note re-saved naming the video its page plays
+    #sat in the folder while its chapter archive went on pointing back at the site
+    changed = runrecord.PAGE_CHANGED in comic.output
+    if ((comic.gained or unpacked or changed) and not comic.stopped and getattr(args, "pack_chapters", True)
             and in_chapters):
         try:
             pack_chapters(comic, args)

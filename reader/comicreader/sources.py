@@ -7,21 +7,18 @@
 #size or time has changed, read again if it changed while being read, and anything that fails leaves the
 #last good reading in place, to be tried again once the file has settled.
 import collections
-import functools
 import json
-import lzma
 import os
 import posixpath
 import threading
 import xml.etree.ElementTree as ET
 import zipfile
-import zlib
 
 from comiclib import comicinfo
 from comiclib.metadata import METADATA_FILE
 from comiclib.pages import PAGE_TYPES, listing, mac_leftover, page_key, reading_order
 from comiclib.standin import (NOTE_LIMIT, address_in, flash_types, held_otherwise, is_note_name, lines_for,
-                              link_types, note_address, stand_in, video_types)
+                              link_types, note_address, stand_in, standin_size, swf_shape, video_types)
 
 MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
          ".webp": "image/webp", ".bmp": "image/bmp", ".avif": "image/avif"}
@@ -32,7 +29,7 @@ VIDEO_MEDIA = {".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm", 
 
 
 #what a reading of a source holds. a reading kept from an older reader, holding less, is read again once
-FORMAT = 6
+FORMAT = 7
 
 
 def head_of(zf, info):
@@ -43,17 +40,17 @@ def head_of(zf, info):
     return read
 
 
-@functools.lru_cache(maxsize=64)
 def drawn(lines):
-    #a stand-in is drawn a dot at a time, which takes a moment; the same page asked for again is not redrawn
-    return stand_in(list(lines))
+    #a stand-in, drawn at the shape of what it stands for. comiclib keeps what it has drawn, so the same page
+    #asked for again is not redrawn - and is handed the lines themselves, which carry that shape
+    return stand_in(lines)
 
 
 def media_standin(page):
     #the picture shown for a page inside an archive that is not one, saying what it is - the scraper's own
     #stand-in, with the archive in place of the folder
-    return drawn(tuple(lines_for(posixpath.basename(page["entry"]), page.get("address"), page.get("called"),
-                                 where="this archive")))
+    return drawn(lines_for(posixpath.basename(page["entry"]), page.get("address"), page.get("called"),
+                           where="this archive"))
 
 
 class Busy(Exception):
@@ -105,37 +102,6 @@ def media_kind(name):
 
 #what a video or a linked video is shown as before it has loaded: most are made for a 16:9 screen
 WIDE = (1600, 900)
-
-
-def swf_shape(head):
-    #a flash movie's (width, height), from the frame rectangle that opens it - after an uncompressed,
-    #zlib or LZMA header. a flash comic is often a wide strip, which it is shown as from the start
-    try:
-        kind = head[:3]
-        if kind == b"FWS":
-            body = head[8:]
-        elif kind == b"CWS":
-            body = zlib.decompressobj().decompress(head[8:], 64)
-        elif kind == b"ZWS":
-            #the LZMA properties come after a 4-byte length; lzma reads them as the start of an .lzma file
-            #whose unknown size is written as all ones
-            body = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE).decompress(
-                head[12:17] + b"\xff" * 8 + head[17:], 64)
-        else:
-            return None
-        bits = int.from_bytes(body[:17], "big")
-        size = bits >> (17 * 8 - 5)
-        fields = []
-        for at in range(4):
-            shift = 17 * 8 - 5 - size * (at + 1)
-            value = (bits >> shift) & ((1 << size) - 1)
-            if value >> (size - 1):
-                value -= 1 << size
-            fields.append(value)
-        width, height = (fields[1] - fields[0]) // 20, (fields[3] - fields[2]) // 20
-        return (width, height) if width > 0 and height > 0 else None
-    except (zlib.error, lzma.LZMAError, ValueError, IndexError, EOFError):
-        return None
 
 
 def media_shape(kind, read):
@@ -225,12 +191,14 @@ def read_folder(path):
     before = stamp(path)
     pages = []
     for name in listing(path, others=True):
-        standin = bool(held_otherwise(path, name))
+        said = held_otherwise(path, name)
+        standin = bool(said)
 
         def read(n, name=name):
             with open(os.path.join(path, name), "rb") as f:
                 return f.read(n)
-        shape = None if standin else comicinfo.measure(read)
+        #a stand-in's size without drawing it, so a player shown in its place is laid out at its own shape
+        shape = standin_size(said) if standin else comicinfo.measure(read)
         width, height = shape or (None, None)
         pages.append({"entry": name, "key": page_key(os.path.splitext(name)[0] + ".png" if standin else name),
                       "size": None, "w": width, "h": height, "standin": standin})
@@ -297,7 +265,7 @@ class Sources:
         if source["kind"] == "folder":
             lines = held_otherwise(source["path"], entry)
             if lines:
-                return drawn(tuple(lines)), "image/png"
+                return drawn(lines), "image/png"
             try:
                 with open(os.path.join(source["path"], entry), "rb") as f:
                     return f.read(), MEDIA.get(os.path.splitext(entry)[1].lower(), "application/octet-stream")

@@ -22,6 +22,8 @@ class Serial(Site):
     pages = 14
     #a page whose image will not download, which ends a run with the pages before it saved
     broken = 0
+    #a page whose picture the site has swapped since it was saved
+    swapped = 0
 
     def do_GET(self):
         bit = self.path.rsplit("/", 1)[-1].split(".")[0]
@@ -33,7 +35,7 @@ class Serial(Site):
             self.send_error(500)
             return
         if self.path.startswith("/img/"):
-            self.send(image(n), "image/png")
+            self.send(image(n) + (b"swapped" if n == self.swapped else b""), "image/png")
             return
         link = '<a href="/p/{0}">Next</a>'.format(n + 1) if n < self.pages else ""
         self.send('<html><head><title>Page {0}</title></head><body><div id="wrap">{1}'
@@ -130,6 +132,21 @@ def test_a_second_update_with_nothing_new_writes_nothing(held):
     assert "chapters:" not in again.stdout, \
         [line for line in again.stdout.splitlines() if "chapters" in line]
     assert "up to date" in again.stdout, again.stdout[-300:]
+
+
+def test_the_page_a_run_resumes_on_coming_back_changed_is_packed_again(held, chapters):
+    #the site has nothing newer, but has swapped the picture of the page the comic rests on: the run gains
+    #nothing, and the chapter archive holding that page still has to be given the new copy
+    held.handler.pages, held.handler.swapped = HELD, HELD
+    done = held.update()
+    assert "up to date" in done.stdout and "chapters:" in done.stdout, done.stdout[-600:]
+    fresh = (held.comic / "0012.png").read_bytes()
+    assert fresh.endswith(b"swapped"), "the folder has the new copy"
+    with zipfile.ZipFile(str(held.chapter_file(3))) as zf:
+        assert zf.read("0012.png") == fresh, "and so does its archive"
+    #once it holds it, the same page again is a page unchanged, and nothing is packed
+    again = held.update()
+    assert "chapters:" not in again.stdout, again.stdout[-400:]
 
 
 def test_pages_saved_before_a_run_fails_are_still_packed(held, chapters):

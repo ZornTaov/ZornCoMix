@@ -44,6 +44,109 @@ def test_a_readme_is_not_swallowed_even_though_it_mentions_an_address(folder):
     assert address[0] == "https://example.com/video/abc123", "while a note named for its page is read"
 
 
+def test_a_note_the_scraper_writes_reads_back_whole(folder):
+    #a shortcut was read as prose, so "[InternetShortcut] URL=" became what the note called its page and was
+    #printed on its stand-in; and a page playing a video was noted by its own address, not the video's
+    from comiclib.standin import note_body, note_fields, watch_address
+    page, video = "https://example.com/comic/ghost-1/", "https://www.youtube.com/watch?v=_Abc-123xyz"
+    assert watch_address("https://www.youtube.com/embed/_Abc-123xyz?feature=oembed") == video
+    assert watch_address("https://player.vimeo.com/video/123456?h=ab") == "https://vimeo.com/123456"
+    assert watch_address(page) == page, "anything else is left as it is"
+    written = note_body(page, video, "Ghost  Story\n001").decode()
+    assert written.startswith("[InternetShortcut]\r\nURL=" + video + "\r\n"), "a desktop opens the video"
+    assert note_fields(written) == (video, "Ghost Story 001", page)
+    assert note_fields(note_body(page).decode()) == (page, None, page), "nothing on it to keep: the page"
+    assert note_fields("[InternetShortcut]\r\nURL=" + page + "\r\n") == (page, None, None), \
+        "a note written before notes said their page is still read, with no name made up for it"
+
+
+def test_what_a_stand_in_says_for_each_kind_of_note(tmp_path):
+    from comiclib.standin import note_body
+    page = "https://example.com/comic/ghost-1/"
+    (tmp_path / "0004_ghost-1.url").write_bytes(note_body(page, "https://www.youtube.com/watch?v=abcdefghijk",
+                                                          "Ghost Story 001"))
+    (tmp_path / "0005_game.url").write_bytes(note_body("https://example.com/comic/game/"))
+    (tmp_path / "0006_old.url").write_bytes(b"[InternetShortcut]\r\nURL=https://example.com/comic/old/\r\n")
+    folder = str(tmp_path)
+    assert held_otherwise(folder, "0004_ghost-1.url") == [
+        "This page is a video.", "", "Ghost Story 001", "", "https://www.youtube.com/watch?v=abcdefghijk", "",
+        "on the comic's page", page, "", "noted in the comic's folder as", "0004_ghost-1.url"]
+    assert held_otherwise(folder, "0005_game.url")[:4] == [
+        "This page is not a picture.", "", "Open it on the site:", "https://example.com/comic/game/"]
+    assert held_otherwise(folder, "0006_old.url") == [
+        "This page is a video.", "", "https://example.com/comic/old/", "", "noted in the comic's folder as",
+        "0006_old.url"], "with no '[InternetShortcut] URL=' where its name would go"
+
+
+def flash(kind, width, height):
+    #a flash file's first bytes: its header, then its stage as four numbers of 16 bits in twentieths of a pixel
+    import lzma
+    import struct
+    import zlib
+    bits = format(16, "05b") + "".join(format(v * 20, "016b") for v in (0, width, 0, height))
+    bits += "0" * (-len(bits) % 8)
+    stage = bytes(int(bits[at:at + 8], 2) for at in range(0, len(bits), 8)) + b"\x00" * 40
+    if kind == b"FWS":
+        return kind + b"\x0a" + struct.pack("<I", 8 + len(stage)) + stage
+    if kind == b"CWS":
+        return kind + b"\x0a" + struct.pack("<I", 8 + len(stage)) + zlib.compress(stage)
+    alone = lzma.compress(stage, format=lzma.FORMAT_ALONE)
+    return kind + b"\x0a" + struct.pack("<II", 8 + len(stage), len(alone) - 13) + alone[:5] + alone[13:]
+
+
+def box(kind, body):
+    import struct
+    return struct.pack(">I4s", 8 + len(body), kind) + body
+
+
+def movie(width, height):
+    #an mp4 with its moov after the pictures, as a camera writes one, and the sound's track ahead of the
+    #picture's: the sound's header says no size, and is passed over
+    import struct
+
+    def track(w, h):
+        return box(b"trak", box(b"tkhd", b"\x00" * 76 + struct.pack(">II", w << 16, h << 16)))
+    return box(b"ftyp", b"isom" + b"\x00" * 4) + box(b"mdat", b"\x00" * 5000) + box(
+        b"moov", box(b"mvhd", b"\x00" * 100) + track(0, 0) + track(width, height))
+
+
+def test_the_shape_of_what_a_stand_in_stands_for_is_read_from_its_file(tmp_path):
+    from comiclib import standin
+    (tmp_path / "0001.swf").write_bytes(flash(b"FWS", 800, 200))
+    (tmp_path / "0002.swf").write_bytes(flash(b"CWS", 750, 1550))
+    (tmp_path / "0003.swf").write_bytes(flash(b"ZWS", 550, 400))
+    (tmp_path / "0004.mp4").write_bytes(movie(1280, 720))
+    (tmp_path / "0005.mp4").write_bytes(b"not really a video")
+    folder = str(tmp_path)
+    shapes = [standin.held_otherwise(folder, name).shape for name in sorted(os.listdir(folder))]
+    assert shapes == [(800, 200), (750, 1550), (550, 400), (1280, 720), None]
+
+
+def test_a_stand_in_is_drawn_the_shape_of_what_it_stands_for(tmp_path):
+    from comiclib import comicinfo, standin
+    from comiclib.standin import note_body
+    (tmp_path / "0001.mp4").write_bytes(movie(1280, 720))
+    (tmp_path / "0002.url").write_bytes(note_body("https://example.com/2/", "https://www.youtube.com/watch?v=abcdefghijk"))
+    (tmp_path / "0003.mp4").write_bytes(b"not really a video")
+    (tmp_path / "0004.swf").write_bytes(flash(b"CWS", 750, 1550))
+    #a note made by hand, holding the player's address copied out of the page's frame
+    (tmp_path / "0005.txt").write_text("Our trailerhttps://www.youtube.com/embed/abcdefghijk?feature=oembed")
+    (tmp_path / "0006.txt").write_text("https://example.com/comic/game/")
+    folder = str(tmp_path)
+    for name, wide in (("0001.mp4", True), ("0002.url", True), ("0003.mp4", False), ("0004.swf", False),
+                       ("0005.txt", True), ("0006.txt", False)):
+        lines = standin.held_otherwise(folder, name)
+        made = standin.archive_entry(folder, name)[1]
+        width, height = comicinfo.dimensions(made)
+        assert (width, height) == standin.standin_size(lines), "measured as it is drawn: " + name
+        assert (width > height) == wide, "{0} drawn {1}x{2}".format(name, width, height)
+    assert comicinfo.dimensions(standin.archive_entry(folder, "0001.mp4")[1]) == (1400, 788), "a 16:9 page"
+    #a stand-in with no shape of its own is the page it always was, so no archive holding one is rewritten
+    plain = standin.held_otherwise(folder, "0003.mp4")
+    assert standin.fingerprint(plain) == standin.fingerprint(list(plain))
+    assert standin.stand_in(plain) == standin.drawn(tuple(plain), 1000, 1400, 28, 235)
+
+
 def test_what_the_folder_counts_as_pages(folder):
     held = folder_pages(folder, others=True)
     assert held == ['0003.png', '0007.txt', '0009.url', '0012.swf', '0015.mp4', '0021.txt'], \

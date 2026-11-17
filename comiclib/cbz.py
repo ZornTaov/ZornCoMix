@@ -291,21 +291,24 @@ def write(cbz, folder, names, prefix='', about=None):
     return len(names)
 
 
-def append(cbz, folder, pages, superseded=(), about=None):
+def append(cbz, folder, pages, superseded=(), about=None, changed=()):
     #adds to an archive the pages it does not hold yet. a zip keeps its entries in the order they were
     #written and rewrites only the directory at the end, so appending leaves every existing byte where it
     #is and a sync has to carry no more than the new pages. the ComicInfo and the metadata are written
     #again, last, and anything named in `superseded` - a page whose filename was replaced - leaves the
-    #directory. an archive with nothing to add, whose ComicInfo already says what it should, is left
-    #untouched rather than having its directory rewritten, which would make a sync re-checksum the whole
-    #file for no reason
-    change = planned(cbz, folder, pages, superseded, about or comicinfo.about_comic(folder))
+    #directory; a page named in `changed` is written again on the end in place of the copy it held. an
+    #archive with nothing to add, whose ComicInfo already says what it should, is left untouched rather
+    #than having its directory rewritten, which would make a sync re-checksum the whole file for no reason
+    change = planned(cbz, folder, pages, superseded, about or comicinfo.about_comic(folder), changed=changed)
+    if change["renewed"]:
+        print("Wrote {0} changed page(s) into the archive again: {1}".format(
+            len(change["renewed"]), ", ".join(change["renewed"][:3])))
     if change["added"] or change["stale"] or change["retold"]:
         apply(cbz, folder, change, metadata=True)
     return len(change["added"])
 
 
-def update(folder, archive=None, superseded=()):
+def update(folder, archive=None, superseded=(), changed=()):
     #a comic's one archive brought up to its folder after a run: written afresh if there is none, and
     #otherwise given only the pages it does not hold yet, on the end. (archive, pages added), or (None, 0)
     #for a folder with nothing in it. whatever did the scraping, the archive is kept the same way
@@ -325,7 +328,7 @@ def update(folder, archive=None, superseded=()):
         #the metadata goes in last, as it does when one is added to, so its bytes can be reclaimed later
         write(archive, folder, pages + [name for name in on_disk if name == METADATA_FILE])
         return archive, len(pages)
-    return archive, append(archive, folder, pages, superseded)
+    return archive, append(archive, folder, pages, superseded, changed=changed)
 
 
 def retag(cbz, folder, names, about, dry_run=False):
@@ -340,7 +343,7 @@ def retag(cbz, folder, names, about, dry_run=False):
     return True
 
 
-def planned(cbz, folder, pages, superseded, about, adding=True):
+def planned(cbz, folder, pages, superseded, about, adding=True, changed=()):
     #what adding to an archive would change: the files it does not hold yet, the superseded entries to
     #forget, the ComicInfo it should end up with, and whether that says anything the one it has does not
     with opened(cbz) as zf:
@@ -352,6 +355,10 @@ def planned(cbz, folder, pages, superseded, about, adding=True):
         #a page whose filename was replaced has to leave the archive under its old name too, or the comic
         #shows that page twice for good
         stale = [prefix + name for name in superseded if prefix + name in existing]
+        #a page saved again under its own name with other bytes: its old entry leaves the directory, as a
+        #superseded one does, and the page is written again under the same name
+        renewed = [name for name in changed if prefix + entry_name(folder, name) in existing] if adding else []
+        stale += [prefix + entry_name(folder, name) for name in renewed]
         known = described(zf, prefix)
         drawn = standins(folder, pages, prefix)
         facts = {}
@@ -366,7 +373,7 @@ def planned(cbz, folder, pages, superseded, about, adding=True):
             had = zf.read(comicinfo.NAME)
         except KeyError:
             had = None
-    for name in added:
+    for name in added + renewed:
         entry, made = archive_entry(folder, name)
         if made is not None:
             facts[prefix + entry] = comicinfo.page(len(made), comicinfo.dimensions(made), True)
@@ -378,7 +385,8 @@ def planned(cbz, folder, pages, superseded, about, adding=True):
                     return f.read(n)
             facts[prefix + entry] = comicinfo.page(os.path.getsize(path), comicinfo.measure(read), False)
     info = info_for(about, facts, prefix)
-    return {"prefix": prefix, "added": added, "stale": stale, "info": info, "retold": info != had}
+    return {"prefix": prefix, "added": added, "renewed": renewed, "stale": stale, "info": info,
+            "retold": info != had}
 
 
 def apply(cbz, folder, change, metadata):
@@ -390,6 +398,7 @@ def apply(cbz, folder, change, metadata):
         if prefix and meta_name not in zf.NameToInfo and METADATA_FILE in zf.NameToInfo:
             meta_name = METADATA_FILE
         internals = all(hasattr(zf, attr) for attr in ('filelist', 'NameToInfo', 'start_dir'))
+        rewritten = {prefix + entry_name(folder, name) for name in change.get("renewed", [])}
         if internals:
             for name in change["stale"]:
                 gone = zf.NameToInfo.get(name)
@@ -399,7 +408,8 @@ def apply(cbz, folder, change, metadata):
                 #at; only the directory has to forget the name
                 zf.filelist.remove(gone)
                 del zf.NameToInfo[name]
-                print("Removed the superseded {0} from the archive.".format(name))
+                if name not in rewritten:
+                    print("Removed the superseded {0} from the archive.".format(name))
             #the ComicInfo and the metadata are written again after everything else, so the old copies
             #leave the directory or the archive would hold each twice. they are always written last, so
             #their bytes can usually be reclaimed: whatever of them comes after every entry staying is
@@ -414,7 +424,7 @@ def apply(cbz, folder, change, metadata):
             after = [info.header_offset for info in going if info.header_offset > staying]
             if after:
                 zf.start_dir = min(after)
-        for name in change["added"]:
+        for name in change["added"] + change.get("renewed", []):
             entry, made = archive_entry(folder, name)
             if made is None:
                 zf.write(os.path.join(folder, name), prefix + entry)

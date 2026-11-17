@@ -510,16 +510,58 @@ def shelve_cover(folder, single, shelf, root=None):
     return target
 
 
-def repack(folder, args):
-    #a zip cannot replace an entry in place, so the archive is written afresh beside the old one and
-    #swapped in only once it is complete and holds every page
+def single_archive(folder, args):
+    #the comic's one archive: --cbz, or where its settings say, against the library root
     archive = args.cbz
     if not archive:
         metadata = read_metadata(folder)
         archive = (metadata.get("settings") or {}).get("cbz_path")
         if archive and args.root and not os.path.isabs(archive):
             archive = os.path.join(args.root, archive)
-    if not archive or not os.path.exists(archive):
+    return archive if archive and os.path.exists(archive) else None
+
+
+def standins(folder, args):
+    #chapters.py standins: the stand-ins a comic's one archive holds brought up to how they are drawn now -
+    #a video's page drawn the video's shape, say - each written again on the end in place of the old one, and
+    #nothing else in the archive moved, so a sync carries a few small pictures rather than the whole comic.
+    #a comic kept in chapters has its stand-ins brought up to date by pack, which checks every one
+    chapters = read_metadata(folder).get("chapters") or {}
+    if chapters.get("list") or chapters.get("every") or chapters.get("source_url"):
+        print("{0} is kept in chapters: chapters.py pack brings their stand-ins up to date.".format(folder))
+        return 0
+    archive = single_archive(folder, args)
+    if not archive:
+        print("No archive found to bring up to date; pass --cbz with its path.")
+        return 1
+    names = sorted(f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f)))
+    with zipfile.ZipFile(archive) as zf:
+        prefix = cbz.archive_prefix(zf, folder)
+        held = set(zf.namelist())
+        stale = []
+        for name in names:
+            entry, made = cbz.archive_entry(folder, name)
+            #a stand-in the archive does not hold yet is a page missing, which the next update adds
+            if made is not None and prefix + entry in held and zf.read(prefix + entry) != made:
+                stale.append(name)
+    if not stale:
+        print("{0}: every stand-in is as it is drawn now.".format(archive))
+        return 0
+    print("{0}: {1} stand-in(s) drawn differently now: {2}{3}".format(
+        archive, len(stale), ", ".join(stale[:6]), "..." if len(stale) > 6 else ""))
+    if args.dry_run:
+        print("Nothing was written. Run it again without --dry-run.")
+        return 0
+    cbz.append(archive, folder, stale, changed=stale)
+    print("  {0} holds them as they are drawn now.".format(archive))
+    return 0
+
+
+def repack(folder, args):
+    #a zip cannot replace an entry in place, so the archive is written afresh beside the old one and
+    #swapped in only once it is complete and holds every page
+    archive = single_archive(folder, args)
+    if not archive:
         print("No archive found to repack; pass --cbz with its path.")
         return 1
     on_disk = sorted(f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f)))
