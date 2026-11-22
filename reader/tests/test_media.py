@@ -62,7 +62,10 @@ def test_flash_pages_in_folders_of_their_own_read_in_place(library, client):
     assert [page[4] for page in comic["pages"]] == [None, "flash", None, "flash"]
     said = api.get("/api/comics/{0}/pages/1/standin".format(comic["id"])).json()
     assert said["kind"] == "flash" and said["name"] == "010406.swf"
-    assert api.get(said["url"]).content == SWF
+    flash = api.get(said["url"])
+    assert flash.content == SWF and flash.headers["content-disposition"] == 'inline; filename="010406.swf"'
+    assert api.get("/api/comics/{0}/pages/1".format(comic["id"])).headers["content-disposition"] == \
+        'inline; filename="010406.png"', "and its stand-in as the picture it is"
 
 
 def test_a_video_inside_an_archive_plays_and_seeks(library, client):
