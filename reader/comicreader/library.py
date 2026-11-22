@@ -18,6 +18,23 @@ from comiclib.standin import held_otherwise
 from comicreader import covers
 from comicreader.sources import ORIGINALS, Busy, Sources
 
+#the number a scrape puts in front of each page's own name: 0742_a-page.png
+SCRAPE_NUMBER = re.compile(r'^(\d{1,6})_')
+
+
+def scrape_numbered(pages):
+    #whether the number in front of each page's name is the one a scrape gave it, which a page saved from the
+    #reader is better without. only when every page has one and no two share it: a comic whose site names
+    #its pages by date - 2019_01_05.jpg, 2019_02_11.jpg - has a number in front of every page too, and taking
+    #it off would leave 01_05.jpg
+    seen = set()
+    for page in pages:
+        found = SCRAPE_NUMBER.match(posixpath.basename(page["entry"]))
+        if not found or found.group(1) in seen:
+            return False
+        seen.add(found.group(1))
+    return bool(pages)
+
 #how packing names a chapter's archive: "<Comic> - c007 - <label>.cbz", by the chapter's own number where its
 #label says one - which can be c391, or c012.5 for an intermission after chapter 12
 CHAPTER = re.compile(r"^(?P<series>.+?) - c(?P<number>\d+(?:\.\d+)?)(?: - (?P<label>.*))?\.cbz$", re.I)
@@ -425,7 +442,7 @@ class Library:
         if ended is None:
             ended = bool(((metadata or {}).get("settings") or {}).get("ended"))
         return {"pages": pages, "bookmarks": bookmarks, "ended": ended, "versions": versions, "about": first or {},
-                "metadata": metadata}
+                "metadata": metadata, "numbered": scrape_numbered(pages)}
 
     def carry_moves(self, found):
         #a comic the scraper moved - in under its author, say - is found at its new place, and so under a new
