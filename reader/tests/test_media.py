@@ -51,6 +51,7 @@ def test_a_note_named_like_a_page_is_a_page_and_a_readme_is_not(library, client)
     page = api.get("/api/comics/{0}/pages/1".format(comic["id"]))
     assert page.headers["content-type"] == "image/png" and page.content.startswith(b"\x89PNG"), \
         "shown as the scraper's stand-in where only a picture will do - a cover, a spread"
+    assert page.headers["content-disposition"] == 'inline; filename="3855.png"', "and saved as the picture it is"
 
 
 def test_flash_pages_in_folders_of_their_own_read_in_place(library, client):
@@ -61,7 +62,10 @@ def test_flash_pages_in_folders_of_their_own_read_in_place(library, client):
     assert [page[4] for page in comic["pages"]] == [None, "flash", None, "flash"]
     said = api.get("/api/comics/{0}/pages/1/standin".format(comic["id"])).json()
     assert said["kind"] == "flash" and said["name"] == "010406.swf"
-    assert api.get(said["url"]).content == SWF
+    flash = api.get(said["url"])
+    assert flash.content == SWF and flash.headers["content-disposition"] == 'inline; filename="010406.swf"'
+    assert api.get("/api/comics/{0}/pages/1".format(comic["id"])).headers["content-disposition"] == \
+        'inline; filename="010406.png"', "and its stand-in as the picture it is"
 
 
 def test_a_video_inside_an_archive_plays_and_seeks(library, client):
@@ -72,10 +76,12 @@ def test_a_video_inside_an_archive_plays_and_seeks(library, client):
     part = api.get(said["url"], headers={"Range": "bytes=100-199"})
     assert part.status_code == 206 and part.content == MP4[100:200]
     assert part.headers["content-range"] == "bytes 100-199/{0}".format(len(MP4))
+    assert part.headers["content-disposition"] == 'inline; filename="02.mp4"', "saved under its own name"
     tail = api.get(said["url"], headers={"Range": "bytes=-10"})
     assert tail.content == MP4[-10:]
     assert api.get(said["url"], headers={"Range": "bytes={0}-".format(len(MP4) + 5)}).status_code == 416
-    assert api.get(said["url"]).content == MP4
+    whole = api.get(said["url"])
+    assert whole.content == MP4 and whole.headers["content-disposition"] == 'inline; filename="02.mp4"'
 
 
 def test_a_bonus_folder_beside_the_pages_is_not_read_as_pages(library, client):

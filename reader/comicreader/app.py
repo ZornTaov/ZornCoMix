@@ -9,6 +9,7 @@ import posixpath
 import re
 import threading
 import time
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -19,8 +20,8 @@ from comicreader import covers
 from comicreader.config import Config
 from comicreader.editing import Refused, Underway, describe_many, edit, edit_many
 from comicreader.info import describe
-from comicreader.library import Library
-from comicreader.sources import VIDEO_MEDIA, Busy, original
+from comicreader.library import SCRAPE_NUMBER, Library
+from comicreader.sources import MEDIA, VIDEO_MEDIA, Busy, original
 from comicreader.store import Store
 
 #Ruffle's WebAssembly, which a browser compiles as it arrives only when it is sent as what it is - windows
@@ -43,6 +44,28 @@ FOREVER = "private, max-age=31536000, immutable"
 THUMB = (360, 540)
 #seconds a scan brought forward waits after the first sign of something gone, for the rest of a move
 SETTLE = 5
+
+
+def saved_as(page, media, numbered):
+    #the name a page saved from the reader gets: what the site called it. a browser otherwise goes by the
+    #address, which ends in the page's place in the comic - 12, then 12 again for a page of another comic
+    name = posixpath.basename(page["entry"])
+    if numbered:
+        name = SCRAPE_NUMBER.sub('', name)
+    if media == "image/png" and MEDIA.get(os.path.splitext(name)[1].lower()) != media:
+        #a stand-in drawn for a video or a flash page is a picture, and saved as one; a .mp4 that opens as
+        #nothing would only puzzle whoever saved it
+        name = os.path.splitext(name)[0] + ".png"
+    return name
+
+
+def shown_as(name):
+    #inline, so the page is still shown rather than downloaded. a name that is not plain ascii, or carries a
+    #quote, goes the way RFC 6266 gives for any name at all, as starlette's own file responses do
+    quoted = quote(name)
+    if quoted == name:
+        return 'inline; filename="{0}"'.format(name)
+    return "inline; filename*=utf-8''{0}".format(quoted)
 
 
 def create_app(config=None, scan_in_background=True):
@@ -177,11 +200,11 @@ def create_app(config=None, scan_in_background=True):
         source = library.sources.cached(comic["sources"][page["source"]])
         if source is None:
             raise HTTPException(503, "that archive has not been read yet; try again")
-        return comic, page, source
+        return comic, page, source, stream["numbered"]
 
     @app.get("/api/comics/{comic_id}/pages/{n}")
     def page(comic_id: str, n: int, request: Request, v: str = ""):
-        comic, each, source = page_of(comic_id, n)
+        comic, each, source, numbered = page_of(comic_id, n)
         tag = '"{0}-{1}"'.format(each["v"], hashlib.sha1(each["entry"].encode("utf-8")).hexdigest()[:10])
         if request.headers.get("if-none-match") == tag:
             return Response(status_code=304, headers={"ETag": tag})
@@ -191,13 +214,14 @@ def create_app(config=None, scan_in_background=True):
             #the archive is being added to this moment; the page asks again shortly
             raise HTTPException(503, "could not read the page just now ({0}); try again".format(error))
         return Response(body, media_type=media,
-                        headers={"ETag": tag, "Cache-Control": FOREVER if v == each["v"] else "no-cache"})
+                        headers={"ETag": tag, "Cache-Control": FOREVER if v == each["v"] else "no-cache",
+                                 "Content-Disposition": shown_as(saved_as(each, media, numbered))})
 
     @app.get("/api/comics/{comic_id}/pages/{n}/standin")
     def standin(comic_id: str, n: int):
         #what a page standing in for a video, a flash page or a link is standing in for, so tapping it can
         #open the real thing
-        comic, each, _ = page_of(comic_id, n)
+        comic, each, _, _ = page_of(comic_id, n)
         name = posixpath.basename(each["entry"])
         url = "/api/comics/{0}/pages/{1}/original".format(comic_id, n)
         #the thing itself, inside an archive someone else made
@@ -216,16 +240,20 @@ def create_app(config=None, scan_in_background=True):
 
     @app.get("/api/comics/{comic_id}/pages/{n}/original")
     def original_file(comic_id: str, n: int, request: Request):
-        comic, each, source = page_of(comic_id, n)
+        comic, each, source, numbered = page_of(comic_id, n)
         if each.get("media") in ("video", "flash") and source["kind"] == "archive":
             extension = os.path.splitext(each["entry"])[1].lower()
+            media = VIDEO_MEDIA.get(extension, "application/octet-stream")
             return ranged(request, each["size"], lambda start, end: library.sources.read_range(
-                source, each["entry"], start, end), VIDEO_MEDIA.get(extension, "application/octet-stream"))
+                source, each["entry"], start, end), media, shown_as(saved_as(each, media, numbered)))
         found = original(comic["folder"], each["entry"])
         if not found or found["kind"] == "link":
             raise HTTPException(404, "no original kept for that page")
-        #a file response answers range requests, which a video needs to seek
-        return FileResponse(found["path"], media_type=found["media"], filename=found["name"])
+        #a file response answers range requests, which a video needs to seek. named here rather than with its
+        #filename=, which starlette sends as an attachment: a video opened in a tab of its own would download
+        #rather than play
+        return FileResponse(found["path"], media_type=found["media"], headers={
+            "Content-Disposition": shown_as(saved_as({"entry": found["name"]}, found["media"], numbered))})
 
     def cover_file(target, comic, v):
         #a cover made small for the shelf, kept by what it is a picture of, so a new choice is a new file
@@ -444,12 +472,13 @@ PIECE = 4 << 20
 RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
-def ranged(request, size, read, media_type):
+def ranged(request, size, read, media_type, disposition):
     #a file inside an archive, sent a piece at a time as a video player asks for it. a player that asks for
     #the whole of it is sent it whole
     asked = RANGE.match(request.headers.get("range", "").strip())
+    named = {"Accept-Ranges": "bytes", "Content-Disposition": disposition}
     if not asked or (asked.group(1) == "" and asked.group(2) == ""):
-        return Response(read(0, size - 1) if size else b"", media_type=media_type, headers={"Accept-Ranges": "bytes"})
+        return Response(read(0, size - 1) if size else b"", media_type=media_type, headers=named)
     if asked.group(1) == "":
         start, end = max(size - int(asked.group(2)), 0), size - 1
     else:
@@ -459,7 +488,7 @@ def ranged(request, size, read, media_type):
     if start >= size or start > end:
         return Response(status_code=416, headers={"Content-Range": "bytes */{0}".format(size)})
     return Response(read(start, end), status_code=206, media_type=media_type,
-                    headers={"Accept-Ranges": "bytes", "Content-Range": "bytes {0}-{1}/{2}".format(start, end, size)})
+                    headers=dict(named, **{"Content-Range": "bytes {0}-{1}/{2}".format(start, end, size)}))
 
 
 def report_scan(library, counted, took):

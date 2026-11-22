@@ -96,6 +96,23 @@ def test_a_page_named_with_its_version_is_kept_for_good(library, client):
     assert api.get("/api/comics/{0}/pages/99".format(comic["id"])).status_code == 404
 
 
+def test_a_page_saved_from_the_reader_is_named_as_the_site_named_it(library, client):
+    #not after its place in the address, and without the number a scrape put in front. a comic whose site
+    #numbers every page by date keeps its date, and a name in any script survives the header
+    single(library)
+    with zipfile.ZipFile(str(library / "CBZs" / "Dated.cbz"), "w") as zf:
+        for name in ("2019_01_05.png", "2019_02_11.png", "2020_01_07-été.png"):
+            zf.writestr(name, png(40, 60))
+    api, _ = client()
+    named = {}
+    for comic in api.get("/api/library").json()["comics"]:
+        named[comic["title"]] = [api.get("/api/comics/{0}/pages/{1}".format(comic["id"], n))
+                                 .headers["content-disposition"] for n in range(comic["pages"])]
+    assert named["MyComic"][2] == 'inline; filename="page3.png"'
+    assert named["Dated"][:2] == ['inline; filename="2019_01_05.png"', 'inline; filename="2019_02_11.png"']
+    assert named["Dated"][2] == "inline; filename*=utf-8''2020_01_07-%C3%A9t%C3%A9.png"
+
+
 def test_a_page_number_that_comes_to_mean_another_page_gets_another_address(library, client):
     #the archive unchanged, but the reader now counting a page it skipped before: every number after it means
     #a different picture, and a browser keeping pages for good by address must not show the old one
@@ -131,6 +148,11 @@ def test_a_stand_in_opens_the_video_it_stands_for_and_can_seek_in_it(library, cl
     assert said["kind"] == "video" and said["name"] == "0006_clip.mp4"
     part = api.get(said["url"], headers={"Range": "bytes=0-9"})
     assert part.status_code == 206 and part.content == video[:10]
+    #saved as the video, played rather than downloaded when opened in a tab of its own - and its stand-in as
+    #the picture it is
+    assert part.headers["content-disposition"] == 'inline; filename="clip.mp4"'
+    assert api.get("/api/comics/{0}/pages/5".format(comic["id"])).headers["content-disposition"] == \
+        'inline; filename="clip.png"'
     assert api.get("/api/comics/{0}/pages/0/standin".format(comic["id"])).json() == {"kind": None}
 
 
