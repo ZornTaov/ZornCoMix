@@ -5,7 +5,7 @@
 // picture with it. nothing on screen ever moves when either happens, since no page's place depends on
 // another being there.
 import type { Page } from "./api";
-import { pageAt, pinched, type Placed, placeStrip, stripLeft, type Zoom, ZOOM_MAX, ZOOM_MIN } from "./layout";
+import { pageAt, pinched, type Placed, placeStrip, stripLeft, stripTurn, type Zoom, ZOOM_MAX, ZOOM_MIN } from "./layout";
 import type { Fit } from "./settings";
 
 export interface StripHooks {
@@ -138,6 +138,12 @@ export class Strip {
   private inStrip(x: number, y: number) {
     const box = this.scroller.getBoundingClientRect();
     return { x: x - box.left + this.scroller.scrollLeft, y: y - box.top + this.scroller.scrollTop };
+  }
+
+  // where a turn from `at` goes: a step through a tall page, or the next page's top brought to the screen's
+  // top once it is in sight (stripTurn)
+  turnFrom(at: number, forward: boolean, step: number): number {
+    return stripTurn(at, this.scroller.clientHeight, this.placed.tops, this.gap, forward, step);
   }
 
   // how far down page n the screen is, as a share of the page: the place kept, beside the page itself

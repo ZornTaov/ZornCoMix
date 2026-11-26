@@ -37,6 +37,13 @@ describe("the help says what the keys do", () => {
     expect(doing(sections, "Next page")).toHaveLength(0);
     expect(entries(sections)[0].does).toMatch(/^Down a screen/);
   });
+
+  it("says a turn stops at the next page's top only while that is on", () => {
+    const said = (snapTurns?: boolean) => entries(helpSections("reader", { ...ltr, mode: "webtoon", snapTurns }))[0].does;
+    expect(said()).toMatch(/next page's top/);
+    expect(said(true)).toMatch(/next page's top/);
+    expect(said(false)).not.toMatch(/next page's top/);
+  });
 });
 
 describe("the help shows only the gestures of what is open", () => {

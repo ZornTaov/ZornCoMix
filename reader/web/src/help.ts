@@ -25,7 +25,7 @@ export interface Section {
   entries: Entry[];
 }
 
-export type HowRead = Pick<Settings, "mode" | "direction" | "swapZones" | "zone">;
+export type HowRead = Pick<Settings, "mode" | "direction" | "swapZones" | "zone"> & Partial<Pick<Settings, "snapTurns">>;
 
 // how a key is written on its key: the name keyAction is handed, as it reads on a keyboard
 const LABELS: Record<string, string> = {
@@ -66,14 +66,23 @@ function arrows(direction: "ltr" | "rtl"): { on: string; back: string } {
 const READ_THROUGH = "Read through it first: along the row, then down and back to the start of the next - past "
   + "the last row, the next page, opened at the same zoom";
 
+// a turn when scrolling, by key or tap alike: a screen, or with snapTurns on stopping at a page's edge in
+// sight (layout.ts stripTurn). not said either way, it is on, as it is unless turned off
+function scrollTurns(how: HowRead): [string, string] {
+  if (how.snapTurns === false) return ["Down a screen", "Up a screen"];
+  return ["Down a screen, or to the next page's top once it is in sight",
+          "Up a screen, or to the end of the page above once it is in sight"];
+}
+
 function readerKeys(how: HowRead): Entry[] {
   const { on, back } = arrows(how.direction);
   const scrolling = how.mode === "webtoon";
+  const [scrollOn, scrollBack] = scrollTurns(how);
   return [
     { keys: [[on], ["Space"], ["Page Down"], ["Enter"]],
-      does: scrolling ? "Down a screen - at the very end, on into the next chapter" : "Next page" },
+      does: scrolling ? `${scrollOn} - at the very end, on into the next chapter` : "Next page" },
     { keys: [[back], ["Shift", "Space"], ["Page Up"], ["Backspace"]],
-      does: scrolling ? "Up a screen - at the very top, back into the chapter before" : "Previous page" },
+      does: scrolling ? `${scrollBack} - at the very top, back into the chapter before` : "Previous page" },
     // a page bigger than the screen is read through before it turns (reader.ts readThrough)
     ...(scrolling ? [] : [{ keys: [[on], [back]], does: READ_THROUGH }]),
     { keys: [["Shift", on]], does: "Ten pages on" },
@@ -122,7 +131,7 @@ function pagedGestures(how: HowRead): Entry[] {
 
 function scrollGestures(how: HowRead): Entry[] {
   return [
-    ...sides(how, "Down a screen", "Up a screen"),
+    ...sides(how, ...scrollTurns(how)),
     { gesture: "doubleTap", how: "Double-tap the middle", does: "Zoom in there, or back out" },
     { gesture: "pinch", how: "Pinch, or drag with two fingers", does: "Zoom in or out, or move with the fingers" },
     { gesture: "scroll", how: "Scroll, or drag", does: "Move through the comic, every page one under the next - and across it, zoomed" },

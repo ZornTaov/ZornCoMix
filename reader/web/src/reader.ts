@@ -266,10 +266,14 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       // scrolled to the very end of a chapter, or the very start, a turn goes on into the next or the last.
       // judged by where a glide under way is headed, so a turn pressed while one is still easing to the end
       // goes on rather than waiting for it
-      const at = headed(scrollPlace(strip)).y;
-      if (forward && at + strip.clientHeight >= strip.scrollHeight - 2) return onward(true);
-      if (!forward && at <= 2) return onward(false);
-      glideBy(strip, (forward ? 1 : -1) * strip.clientHeight * 0.85);
+      const where = scrollPlace(strip);
+      const from = headed(where);
+      if (forward && from.y + strip.clientHeight >= strip.scrollHeight - 2) return onward(true);
+      if (!forward && from.y <= 2) return onward(false);
+      const step = strip.clientHeight * 0.85;
+      const to = scrolling && settings.snapTurns ? scrolling.turnFrom(from.y, forward, step)
+                                                 : from.y + (forward ? 1 : -1) * step;
+      glideTo(where, { x: from.x, y: clamp(to, 0, where.furthest.y) });
       return;
     }
     if (!readThrough(forward)) return;
@@ -620,6 +624,7 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
         <input type="range" min="0" max="40" step="1" data-set="padding"></label>
       <label class="row">Space above and below pages <span class="value" data-show="gap"></span>
         <input type="range" min="0" max="120" step="2" data-set="gap"></label>
+      <label class="row"><input type="checkbox" data-set="snapTurns"> Scrolling: a turn stops at the next page's top</label>
       <label class="row">Tap zone width <input type="range" min="0.15" max="0.45" step="0.01" data-set="zone"></label>
       <label class="row"><input type="checkbox" data-set="swapZones"> Left side goes forward</label>
       <label class="row"><input type="checkbox" data-set="coverAlone"> First page alone in two-page view</label>
@@ -673,6 +678,8 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
       scrolling?.look(settings.fit, pad(), Number(gap.value));
     };
     gap.onchange = () => change({ gap: Number(gap.value) });
+    input<HTMLInputElement>("snapTurns").checked = settings.snapTurns;
+    input<HTMLInputElement>("snapTurns").onchange = (event) => change({ snapTurns: (event.target as HTMLInputElement).checked });
     input<HTMLInputElement>("zone").value = String(settings.zone);
     input<HTMLInputElement>("zone").onchange = (event) => change({ zone: Number((event.target as HTMLInputElement).value) });
     input<HTMLInputElement>("swapZones").checked = settings.swapZones;
@@ -874,6 +881,13 @@ export async function openReader(root: HTMLElement, id: string, startAt: number 
     if (helpKey(event)) {
       event.preventDefault();
       return openHelp("reader", settings);
+    }
+    // escape closes what was opened last first: the settings or the cover sheet over the menu, then the menu,
+    // then the comic. ahead of the inputs' keys being left alone, since a slider just dragged in the sheet
+    // still has them
+    if (event.key === "Escape" && !sheet.classList.contains("hidden")) {
+      event.preventDefault();
+      return sheet.classList.add("hidden");
     }
     if ((event.target as HTMLElement).closest("input, select, textarea")) return;
     // a flash movie played with the keyboard keeps its keys while it has them

@@ -33,6 +33,10 @@ export interface Settings {
   // space above and below every page when scrolling, in pixels: comics of short strips otherwise run
   // together, and a two-row strip cannot be told from two one-row ones
   gap: number;
+  // when scrolling, a turn stops with the next page at the top of the screen once its edge is in sight
+  // (layout.ts stripTurn). off for a comic drawn as one endless strip, cut into pictures wherever its site
+  // happened to cut it: there an edge is no break in the reading, and stopping at one only shortens the step
+  snapTurns: boolean;
   scaling: Scaling;
   // how far a double tap zooms in: a page with small lettering wants more than one drawn big, and a whole
   // number keeps every pixel the same size when they are drawn sharp
@@ -51,6 +55,7 @@ export const defaults: Settings = {
   behind: 2,
   padding: 0,
   gap: 0,
+  snapTurns: true,
   scaling: "smooth",
   tapZoom: 2.5,
 };
@@ -90,6 +95,7 @@ export function clean(given: Partial<Settings>): Partial<Settings> {
   if (typeof given.padding === "number" && Number.isFinite(given.padding)) out.padding = Math.min(40, Math.max(0, Math.round(given.padding)));
   if (typeof given.paddingPortrait === "number" && Number.isFinite(given.paddingPortrait)) out.paddingPortrait = Math.min(40, Math.max(0, Math.round(given.paddingPortrait)));
   if (typeof given.gap === "number" && Number.isFinite(given.gap)) out.gap = Math.min(120, Math.max(0, Math.round(given.gap)));
+  if (typeof given.snapTurns === "boolean") out.snapTurns = given.snapTurns;
   if (given.scaling === "smooth" || given.scaling === "enlarged" || given.scaling === "pixels") out.scaling = given.scaling;
   // in halves, as the slider sets it, and no further than a pinch can go
   if (typeof given.tapZoom === "number" && Number.isFinite(given.tapZoom)) {
