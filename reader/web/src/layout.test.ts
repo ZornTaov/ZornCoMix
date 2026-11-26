@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManyInfo, Page } from "./api";
 import { addable, boxHtml, type InfoForm } from "./comicinfoform";
 import { changeOf, holding, shownKeys } from "./comicinfodialog";
-import { bookmarkList, chapterOf, chapterTarget, enlarged, keyAction, pageAt, panRange, pinched, placeStrip, stripLeft, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
+import { bookmarkList, chapterOf, chapterTarget, enlarged, keyAction, pageAt, panRange, pinched, placeStrip, stripLeft, stripTurn, swipeTurns, tapAction, trialKept, typedPage, viewOf, views, wanted, type Zoom, zigzag } from "./layout";
 import { clean, merged, paddingKey, scopeOf, sidePadding } from "./settings";
 import { runLine, startingValues } from "./info";
 import { coverMessage, refusal } from "./dom";
@@ -298,6 +298,12 @@ describe("settings", () => {
       .toMatchObject({ gap: 0, padding: 10, fit: "original" });
   });
 
+  it("snaps a scrolled comic's turns unless a series of one endless strip turns it off", () => {
+    expect(merged({}, {}).snapTurns).toBe(true);
+    expect(merged({}, {}, { snapTurns: false }).snapTurns).toBe(false);
+    expect(clean({ snapTurns: "no" as never })).toEqual({});
+  });
+
   it("keeps a change for the nearest that has settings of its own", () => {
     expect(scopeOf({ gap: 0 }, { gap: 4 }, true)).toBe("comic");
     expect(scopeOf({}, { gap: 4 }, true)).toBe("series");
@@ -416,6 +422,54 @@ describe("zooming by hand", () => {
     expect(zigzag({ x: 0, y: 0 }, { x: 0, y: 900 }, step, true, false)).toEqual({ x: 0, y: 680 });
     expect(zigzag({ x: 0, y: 0 }, { x: 600, y: 0 }, step, true, false)).toEqual({ x: 340, y: 0 });
     expect(zigzag({ x: 0, y: 0 }, { x: 0, y: 0 }, step, true, false)).toBeNull();
+  });
+});
+
+describe("turning in a scrolled comic", () => {
+  // a screen 1000 tall, a step 850, a gap of 10 above and below every page
+  const screen = 1000;
+  const step = 850;
+  const turn = (at: number, tops: Float64Array, forward: boolean) => stripTurn(at, screen, tops, 10, forward, step);
+
+  it("steps through a tall page, then brings the next to the top once its edge is on screen", () => {
+    // pages 2400 tall: edges at 2420 and 4840
+    const { tops } = placeStrip([page(400, 2400), page(400, 2400), page(400, 2400)], "width", 400, screen, 10);
+    let at = 0;
+    at = turn(at, tops, true);
+    expect(at).toBe(850);
+    at = turn(at, tops, true);
+    expect(at).toBe(1700);
+    // the edge at 2420 is on screen now: the next page to the top, never back up to the end of this one
+    at = turn(at, tops, true);
+    expect(at).toBe(2420);
+    at = turn(at, tops, true);
+    expect(at).toBe(3270);
+  });
+
+  it("brings the next page up when this one ends exactly at the screen's bottom", () => {
+    const { tops } = placeStrip([page(400, 2400), page(400, 2400)], "width", 400, screen, 10);
+    expect(turn(2420 - screen, tops, true)).toBe(2420);
+  });
+
+  it("turns one page at a time through pages shorter than the screen, forward and back", () => {
+    // pages 300 tall: edges every 320
+    const { tops } = placeStrip(Array.from({ length: 8 }, () => page(400, 300)), "width", 400, screen, 10);
+    expect(turn(0, tops, true)).toBe(320);
+    expect(turn(320, tops, true)).toBe(640);
+    // back: the last edge above the screen's bottom is put at the bottom, a page further up each time
+    expect(turn(640, tops, false)).toBe(1600 - screen);
+    expect(turn(600, tops, false)).toBe(1280 - screen);
+  });
+
+  it("goes back the same way round: a step up a tall page, then the page above ending at the bottom", () => {
+    const { tops } = placeStrip([page(400, 2400), page(400, 2400)], "width", 400, screen, 10);
+    // at the second page's top, its edge right at the screen's top: the first page's end to the bottom
+    expect(turn(2420, tops, false)).toBe(2420 - screen);
+    // the edge on screen, a little way down
+    expect(turn(2000, tops, false)).toBe(2420 - screen);
+    // no edge in sight: a step up
+    expect(turn(3500, tops, false)).toBe(2650);
+    expect(turn(1000, tops, false)).toBe(150);
   });
 
   it("lays a scrolled comic out bigger, the gap between pages as it was", () => {

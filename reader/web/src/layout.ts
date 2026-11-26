@@ -213,6 +213,30 @@ export function zigzag(at: { x: number; y: number }, furthest: { x: number; y: n
   return null;
 }
 
+// where a turn in a scrolled comic goes, `at` being how far down it is scrolled and `screen` how tall the
+// screen is. with no page's edge on screen it moves `step`, reading a tall page through. once the next page's
+// top is in sight - or the page being read ends exactly at the screen's bottom - a turn forward stops with
+// that page at the top of the screen, never part way down it; a turn back is the same the other way round,
+// the page above ending at the screen's bottom. a turn only ever moves the way it was asked: snapping back to
+// show the rest of a page just passed, as another reader does, is a jolt against the way being read, and
+// with pages shorter than the screen walks backwards page by page. each page owns the gap above and below
+// it, so where one ends and the next starts is one line. the place is not kept within the strip's length;
+// the caller clamps it
+export function stripTurn(at: number, screen: number, tops: ArrayLike<number>, gap: number, forward: boolean,
+                          step: number): number {
+  const edges = { length: tops.length, at: (k: number) => tops[k] - gap };
+  if (forward) {
+    // the first edge below the screen's top, if it is on screen or right at its bottom
+    const next = pageAt(edges, at + 2) + 1;
+    if (next < tops.length && edges.at(next) <= at + screen + 2) return edges.at(next);
+    return at + step;
+  }
+  // the last edge above the screen's bottom, if it is on screen or right at its top
+  const above = pageAt(edges, at + screen - 2);
+  if (above >= 1 && edges.at(above) >= at - 2) return edges.at(above) - screen;
+  return at - step;
+}
+
 // the chapter a page is in
 export function chapterOf(starts: number[], page: number): number {
   let found = -1;
