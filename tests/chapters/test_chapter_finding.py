@@ -238,6 +238,26 @@ def test_the_chapter_title_wins_over_the_summary_and_the_site_banner():
     assert "Adventure" not in labels(found), "and over the site banner above it"
 
 
+def test_a_walk_that_recorded_an_anchor_on_every_page_still_meets_the_archive():
+    #a site whose next links all end in #content-start is walked as /comic/p1/#content-start, while its
+    #archive links /comic/p1. compared with the anchor left on, no chapter's page was one the walk had
+    anchored = pages_at(["https://x.test/comic/p{0}/#content-start".format(n) for n in range(1, 21)])
+    found = settle_chapters(parse(ARCHIVE, anchored), anchored)
+    assert labels(found) == ["The Start", "The Middle", "The End"], labels(found)
+    assert [c["start_page"] for c in found] == [1, 9, 15], found
+
+
+@pytest.mark.parametrize("one, other, same", [
+    ("https://x.test/comic/p1/#content-start", "http://www.x.test/comic/p1", True),   # a place on the page
+    ("https://x.test/comic/p1#top", "https://x.test/comic/p1/#bottom", True),
+    ("https://x.test/#/comic/1", "https://x.test/#/comic/2", False),                  # a route is the page
+    ("https://x.test/#!/strip/1", "https://x.test/#!/strip/2", False),
+    ("https://x.test/pages.php#0001", "https://x.test/pages.php#0002", False),       # a number numbers a page
+])
+def test_an_anchor_is_a_place_on_the_page_and_a_route_is_the_page(one, other, same):
+    assert (same_page(one) == same_page(other)) is same, (same_page(one), same_page(other))
+
+
 @pytest.mark.parametrize("link, wanted", [
     ("https://comic.example.com/comic/page000/", True),     # another page of the comic
     ("http://COMIC.example.com/comic/page012", True),       # the same, written differently
