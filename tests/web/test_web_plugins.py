@@ -140,8 +140,9 @@ def test_the_picker_is_hidden_without_plugins_and_built_in_sends_what_it_always_
       document.querySelector('[data-add-field="folder"]').dispatchEvent(new Event('input', {bubbles: true}));
       document.getElementById('add').click();""")
     sent = wait_until(lambda: browser.execute_script("return window.sent"))
-    assert sorted(sent) == ["cbz", "direction_check", "every", "increment", "javascript", "prefix", "prime", "rows",
-                            "waittime"]
+    assert sorted(sent) == ["cbz", "direction_check", "each_address", "every", "increment", "javascript", "prefix",
+                            "prime", "rows", "waittime"]
+    assert sent["each_address"] is False
     assert sent["rows"] == [{"folder": "Old", "cbz": "", "url": "", "chapters": ""}]
 
 

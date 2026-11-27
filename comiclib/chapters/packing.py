@@ -527,7 +527,7 @@ def standins(folder, args):
     #nothing else in the archive moved, so a sync carries a few small pictures rather than the whole comic.
     #a comic kept in chapters has its stand-ins brought up to date by pack, which checks every one
     chapters = read_metadata(folder).get("chapters") or {}
-    if chapters.get("list") or chapters.get("every") or chapters.get("source_url"):
+    if chapters.get("list") or chapters.get("every") or chapters.get("each_address") or chapters.get("source_url"):
         print("{0} is kept in chapters: chapters.py pack brings their stand-ins up to date.".format(folder))
         return 0
     archive = single_archive(folder, args)

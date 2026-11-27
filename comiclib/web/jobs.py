@@ -290,7 +290,9 @@ class Runner:
             args = with_config(self.args)
             script = os.path.join(os.path.dirname(os.path.abspath(args.script)), "chapters.py")
             steps = []
-            if every and walk == "start":
+            #only a size can be cut from filenames: a chapter at each address needs the addresses, so that
+            #comic is walked like any other
+            if every and every != EACH_ADDRESS and walk == "start":
                 #what the reader chose when this stopped short last time, done first and said out loud
                 cache = index_path(comic.folder, args.root)
                 if choices.get("discard_walk"):
@@ -331,7 +333,7 @@ class Runner:
             else:
                 steps.append(["align"])
             if every:
-                steps.append(["chapters", "--every", str(every), "--save"])
+                steps.append(cut_step(every))
             else:
                 steps.append(["chapters", "--archive", listing, "--save"] if listing
                              else ["chapters", "--urls", "--save"])
@@ -675,6 +677,18 @@ class Runner:
         return self.submit(Job("walk", walk_label(name), work))
 
 
+#a comic to have a chapter at each of its addresses, given where a size to cut at would go: either is the
+#one way the comic is cut, so the add and chapterize jobs carry them in one slot and only the steps differ
+EACH_ADDRESS = "address"
+
+
+def cut_step(every):
+    #the chapters.py step that cuts a comic the way the slot says
+    if every == EACH_ADDRESS:
+        return ["chapters", "--each-address", "--save"]
+    return ["chapters", "--every", str(every), "--save"]
+
+
 def remember_chapters(comic, listing, every=None, make_folder=False):
     #so a later run knows where this comic's chapters are listed, or how many pages go in each part,
     #whoever starts it
@@ -695,6 +709,11 @@ def remember_chapters(comic, listing, every=None, make_folder=False):
         block["source"] = "archive"
         block["source_url"] = listing
         said = "chapters will be read from {0}".format(listing)
+    elif every == EACH_ADDRESS:
+        if block.get("each_address"):
+            return
+        block["source"], block["each_address"] = "address", True
+        said = "will have a chapter for each of its addresses"
     else:
         if block.get("every") == every:
             return
@@ -716,9 +735,9 @@ def split_into_chapters(comic, listing, args, keeps_archives=True, every=None):
         return
     #a comic added from part way in keeps no index, since one begun there would number its pages wrong.
     #cut by size, its numbered filenames say which page is which instead, and there is nothing to line up
-    steps = [["align"]] if not every or os.path.exists(index_path(comic.folder, args.root)) else []
-    steps.append(["chapters", "--every", str(every), "--save"] if every
-                 else ["chapters", "--archive", listing, "--save"])
+    steps = ([["align"]] if not every or every == EACH_ADDRESS or os.path.exists(index_path(comic.folder, args.root))
+             else [])
+    steps.append(cut_step(every) if every else ["chapters", "--archive", listing, "--save"])
     #--replace because a comic kept in chapters keeps no single archive: the one the scrape just built
     #is given up as soon as every page is checked to be in a chapter
     if keeps_archives:

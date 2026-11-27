@@ -119,6 +119,11 @@ def setup():
                              "1-100 one archive, 101-200 the next - for a comic with no chapters of its own "
                              "that has grown too big for a reader to open in one. Remembered, so later runs "
                              "keep cutting the pages it gains.")
+    params.add_argument("--each-address", action='store_true', default=False,
+                        help="With chapters, start a chapter at each of the comic's addresses, for a comic that "
+                             "puts a whole episode on one page as a scroll of images. Each is named from its "
+                             "page's title, less the comic's name every title ends with. Remembered, so each "
+                             "episode a later run saves becomes a chapter of its own.")
     params.add_argument("--urls", action='store_true', default=False,
                         help="With chapters, work them out from the comic's own addresses, even when it "
                              "remembers an archive page.")

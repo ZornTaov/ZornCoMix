@@ -22,7 +22,7 @@ from comiclib.web.edits import discard_walk, fix_chapter, fix_page, insert_page,
 from comiclib.web.edits import save_settings
 from comiclib.web.edits import comicinfo_view, cookie_value, preview_rewind, save_comicinfo, try_chapter_list
 from comiclib.web.elementpaths import element_settings, save_elements
-from comiclib.web.jobs import LogTee, Runner
+from comiclib.web.jobs import EACH_ADDRESS, LogTee, Runner
 from comiclib.web.uploads import KINDS as upload_kinds, discard, pending, plan, receive
 from comiclib.web.views import chapters_label, comic_detail, config_view, find_comic, is_running, job_view
 from comiclib.web.views import is_moving, is_rewinding, is_walking, walk_needed
@@ -272,6 +272,11 @@ def make_handler(runner, args, tee):
                 if every and (not every.isdigit() or int(every) < 1):
                     problems.append("pages per part has to be a whole number, or blank for none")
                 options["every"] = int(every) if every.isdigit() and int(every) > 0 else None
+                #or a chapter at each address, for comics that put a whole episode on one page
+                if body.get("each_address") is True:
+                    if options["every"]:
+                        problems.append("cut every so many pages or a chapter at each address, not both")
+                    options["every"] = EACH_ADDRESS
                 if problems:
                     self.reply({"error": "; ".join(problems)}, 400)
                 elif not entries:
@@ -334,13 +339,15 @@ def make_handler(runner, args, tee):
                                or (comic.metadata.get("chapters") or {}).get("source_url"))
                     every = str(body.get("every") or "").strip()
                     every = int(every) if every.isdigit() and int(every) > 0 else None
+                    if body.get("each_address") is True:
+                        every = EACH_ADDRESS
                     #taking the existence of the record to mean the comic was walked once stopped the
                     #chaptering of a 3,500 page comic with nothing to align against, so it is asked
                     #whether it reaches the comic's newest page. a comic cut by size may not need walking
                     #at all, which the job finds out from its filenames, since listing a folder of
                     #thousands on a network share is no thing to make a request wait for
                     walk = walk_needed(args, comic)
-                    numbers_first = bool(every) and walk == "start"
+                    numbers_first = bool(every) and every != EACH_ADDRESS and walk == "start"
                     #what the reader chose after this last stopped to ask. only names of files in the
                     #comic's own folder are passed on, and the job checks each again before moving it
                     aside = body.get("set_aside") if isinstance(body.get("set_aside"), list) else []
@@ -350,7 +357,8 @@ def make_handler(runner, args, tee):
                     job = runner.submit_chapterize(comic, listing, walk, every, choices)
                     self.reply({"queued": job.id, "label": job.label, "walking": bool(walk) and not numbers_first,
                                 "carrying_on": walk == "carry on", "numbers_first": numbers_first,
-                                "from": "every" if every else "archive" if listing else "addresses"})
+                                "from": ("each_address" if every == EACH_ADDRESS else "every" if every
+                                         else "archive" if listing else "addresses")})
             elif path == "/api/trylist":
                 name = str(body.get("name") or "")
                 comic = find_comic(args, name) if name else None

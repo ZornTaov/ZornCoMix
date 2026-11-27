@@ -366,7 +366,7 @@ def save_settings(args, runner, name, given, expected_updated):
     if settings.get("scraper"):
         cleaned, own, problems = plugin_settings(settings, given)
         #a plugin comic's chapters come from its runs, not from an archive page or a size to cut at
-        given = dict(given, chapters_url=None, chapters_every=None)
+        given = dict(given, chapters_url=None, chapters_every=None, chapters_each_address=None)
     else:
         cleaned, problems = clean_settings(given)
     #a plugin's program finds its own pages, so a plugin comic has no paths to put right. a path is checked
@@ -422,6 +422,25 @@ def save_settings(args, runner, name, given, expected_updated):
                 metadata["chapters"] = block
             else:
                 metadata.pop("chapters", None)
+    each = given.get("chapters_each_address")
+    if each is not None:
+        each = each is True or str(each).strip().lower() in ("1", "true", "on", "yes")
+        if each and (every or (listing and str(listing).strip())):
+            return 400, {"error": "a comic's chapters come from one place: its archive page, cutting it every so "
+                                  "many pages, or a chapter at each address; clear the others"}
+        block = metadata.get("chapters") or {}
+        if bool(block.get("each_address")) != each:
+            changed["chapters_each_address"] = [bool(block.get("each_address")), each]
+            if each:
+                block["source"], block["each_address"] = "address", True
+                block.setdefault("list", [])
+                metadata["chapters"] = block
+            elif block.get("list"):
+                #as with parts: the chapters already worked out stay, and their archives keep their names
+                block.pop("each_address", None)
+                metadata["chapters"] = block
+            else:
+                metadata.pop("chapters", None)
     if listing is not None:
         listing = str(listing).strip()
         if listing and not re.match(r"^https?://\S+$", listing):
@@ -433,7 +452,7 @@ def save_settings(args, runner, name, given, expected_updated):
                 block["source"], block["source_url"] = "archive", listing
                 block.setdefault("list", [])
                 metadata["chapters"] = block
-            elif block.get("list") or block.get("every"):
+            elif block.get("list") or block.get("every") or block.get("each_address"):
                 block["source_url"] = None
                 metadata["chapters"] = block
             else:

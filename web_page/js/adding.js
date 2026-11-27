@@ -159,11 +159,13 @@ $("add").addEventListener("click", async () => {
       cbz: $("cbz").checked,
       direction_check: $("direction").checked,
       every: $("add-every").value.trim(),
+      each_address: $("add-each").checked,
     });
     msg.className = "msg good";
     msg.textContent = `Queued: ${result.label}`;
     addRows = [{ folder: "", cbz: "", url: "", chapters: "" }];
     $("add-every").value = "";
+    $("add-each").checked = false;
     renderAddRows();
   } catch (error) {
     msg.className = "msg bad";

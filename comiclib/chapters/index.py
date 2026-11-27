@@ -484,7 +484,8 @@ class KeptIndex:
         named = (held.get("history") or {}).get("index_cache")
         saved = held.get("state")
         chapters = held.get("chapters") or {}
-        self.in_chapters = bool(chapters.get("list") or chapters.get("source_url") or chapters.get("every"))
+        self.in_chapters = bool(chapters.get("list") or chapters.get("source_url") or chapters.get("every")
+                                or chapters.get("each_address"))
         #a scrape starting a comic from its first page, into a folder holding nothing yet, is doing the whole
         #of what a walk would have to do later - so it keeps the record as it goes unless told not to.
         #--keep-index asks for one outright; --no-keep-index never starts one

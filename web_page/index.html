@@ -85,10 +85,13 @@
         <label class="check"><input type="checkbox" id="cbz" checked> make cbz</label>
         <label class="check builtin-only"><input type="checkbox" id="direction" checked> direction check</label>
         <label class="check builtin-only">cut every <input type="number" id="add-every" min="1" style="width:80px" placeholder="off"> pages</label>
+        <label class="check builtin-only"><input type="checkbox" id="add-each"> a chapter each address</label>
       </div>
       <div class="help builtin-only">Prime only saves the first page and checks the next link works; a later update fetches the rest.
         Cut every so many pages is for a long comic with no chapters of its own: it is archived in parts of that
-        size as it is scraped, with no walk afterwards. A row with a chapter list uses that instead.
+        size as it is scraped, with no walk afterwards. A chapter each address is for a comic that puts a whole
+        episode on one page as a scroll of images: each episode is its own archive, named from its page's title.
+        A row with a chapter list uses that instead.
         The options apply to every row, so add comics that need different options separately.</div>
       <div class="help plugin-only">The scraper's settings apply to every row, so add comics that need different
         settings separately. Its chapters come from it, one archive each.</div>
@@ -422,6 +425,13 @@
         <span><input type="number" id="e-every" min="1" style="width:110px" placeholder="off"> pages</span>
         <div class="note">For a comic with no chapters of its own that has grown too big for a reader to open
           as one archive: 100 makes pages 1–100 one archive, 101–200 the next. Leave the chapter list blank to use it.</div>
+      </div>
+      <div class="field">
+        <label for="e-each_address">Or a chapter</label>
+        <label class="check"><input type="checkbox" id="e-each_address"> at each address</label>
+        <div class="note">For a comic that puts a whole episode on one page as a scroll of images: each episode is
+          its own archive, named from its page's title without the comic's name, and each new one gets its own as
+          it comes out. Leave the chapter list and the cut blank to use it.</div>
       </div>
       <div class="decide" id="edit-decide" hidden></div>
       <div class="row">
