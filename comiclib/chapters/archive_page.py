@@ -617,6 +617,8 @@ def chapters_from_events(events, where, base="", fetch=None, outer=False):
     #their own - is not a chapter. its pages were published in among the chapters, and stay where they were
     #published, so a reader of the archives meets them exactly where a reader of the site does
     gathered, seen = False, set()
+    #the chapters started by a link a heading was built round, which nothing after renames
+    named = set()
     for step, (kind, first, second) in enumerate(events):
         if kind == "image":
             src = urllib.parse.urljoin(base, first) if base else first
@@ -646,10 +648,15 @@ def chapters_from_events(events, where, base="", fetch=None, outer=False):
             #this page already starts a chapter, named by whatever mentioned it first - often a dropdown
             #of every page under the archive's own banner. a heading built round this very link knows
             #better, so it renames that chapter rather than making a second one at the same page - or,
-            #cutting by the outer headings, the one this page is the first of does
-            if not outer:
+            #cutting by the outer headings, the one this page is the first of does. a chapter a heading's
+            #own link started keeps that name: a "comics in this chapter" box under it, whose page was read
+            #for where it starts, leads back to the same page and is no better a name
+            if id(already) in named:
+                pass
+            elif not outer:
                 already["label"], already["pages_said"] = heading_says(second)
                 already["image"] = already.get("image") or owner_image(waiting, second)
+                named.add(id(already))
             elif parent is not None:
                 already["label"], already["pages_said"] = heading_says(parent)
                 already["image"] = already.get("image") or parent_image
@@ -690,6 +697,8 @@ def chapters_from_events(events, where, base="", fetch=None, outer=False):
             label, says = heading_says(label)
             found.append({"label": label or "Chapter {0}".format(len(found) + 1),
                           "start_page": at, "pages_listed": [], "pages_said": says, "image": image})
+            if owned:
+                named.add(id(found[-1]))
             waiting = []
         elif gathered:
             continue
