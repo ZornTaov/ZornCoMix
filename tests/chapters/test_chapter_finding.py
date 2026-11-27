@@ -238,6 +238,50 @@ def test_the_chapter_title_wins_over_the_summary_and_the_site_banner():
     assert "Adventure" not in labels(found), "and over the site banner above it"
 
 
+def test_a_walk_that_recorded_an_anchor_on_every_page_still_meets_the_archive():
+    #a site whose next links all end in #content-start is walked as /comic/p1/#content-start, while its
+    #archive links /comic/p1. compared with the anchor left on, no chapter's page was one the walk had
+    anchored = pages_at(["https://x.test/comic/p{0}/#content-start".format(n) for n in range(1, 21)])
+    found = settle_chapters(parse(ARCHIVE, anchored), anchored)
+    assert labels(found) == ["The Start", "The Middle", "The End"], labels(found)
+    assert [c["start_page"] for c in found] == [1, 9, 15], found
+
+
+def test_a_chapters_own_heading_keeps_its_name_over_the_box_listing_its_pages():
+    #a site that puts a "comics in this chapter" box under each chapter's linked title, leading to a page
+    #listing that chapter's pages. the box reads as a heading of its own, its page is read, and the first
+    #page there is the chapter's first again - which renamed the prologue after the box. the menu's First
+    #link under the site's banner had already started a chapter at page 1 for the title to rename
+    def chapter(start, name, listing):
+        return """<div class="chapter-data">
+          <div class="chapter-title"><h3><a href="/comic/p{0}">{1}</a></h3></div>
+          <div class="chapter-more"><a href="/archive/{2}">Comics in this chapter</a></div>
+        </div>""".format(start, name, listing)
+    html_text = ('<h1>The Whole Site</h1><a href="/comic/p1/#content-start">First</a>' +
+                 chapter(1, "Prologue", 101) + chapter(7, "Chapter 1", 102) + chapter(15, "chapter 2", 103))
+    listings = {"101": range(1, 7), "102": range(7, 15), "103": range(15, 21)}
+
+    def fetch(url):
+        return "".join('<a href="/comic/p{0}">{0}</a>'.format(n) for n in listings[url.rstrip("/").rpartition("/")[2]])
+    reader = ArchiveReader()
+    reader.feed(html_text)
+    where = {same_page(p["url"]): p["n"] for p in SITE}
+    found = settle_chapters(chapters_from_events(reader.events, where, "https://x.test/archive/", fetch=fetch)[0],
+                            SITE)
+    assert [(c["label"], c["start_page"]) for c in found] == [("Prologue", 1), ("Chapter 1", 7), ("chapter 2", 15)]
+
+
+@pytest.mark.parametrize("one, other, same", [
+    ("https://x.test/comic/p1/#content-start", "http://www.x.test/comic/p1", True),   # a place on the page
+    ("https://x.test/comic/p1#top", "https://x.test/comic/p1/#bottom", True),
+    ("https://x.test/#/comic/1", "https://x.test/#/comic/2", False),                  # a route is the page
+    ("https://x.test/#!/strip/1", "https://x.test/#!/strip/2", False),
+    ("https://x.test/pages.php#0001", "https://x.test/pages.php#0002", False),       # a number numbers a page
+])
+def test_an_anchor_is_a_place_on_the_page_and_a_route_is_the_page(one, other, same):
+    assert (same_page(one) == same_page(other)) is same, (same_page(one), same_page(other))
+
+
 @pytest.mark.parametrize("link, wanted", [
     ("https://comic.example.com/comic/page000/", True),     # another page of the comic
     ("http://COMIC.example.com/comic/page012", True),       # the same, written differently

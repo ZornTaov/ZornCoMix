@@ -9,6 +9,14 @@ def same_page(url):
     url = (url or "").strip()
     url = re.sub(r'^https?://', '', url, flags=re.I)
     url = re.sub(r'^www\.', '', url, flags=re.I)
+    #and the part after # when it only names a place on the page: a site whose next links all end in
+    ##content-start was walked as /comics/1/#content-start while its archive links /comics/1, and no
+    #chapter's page was found to be one the walk had. one with a number in it is kept, since that numbers
+    #something - a site that draws every page on one pages.php#0012 tells its pages apart by nothing else -
+    #and so is a route after #/ or #!, which on a site drawing each page with javascript is the page
+    url, mark, place = url.partition('#')
+    if mark and (place.startswith(('/', '!')) or re.search(r'\d', place)):
+        url = url + mark + place
     return url.rstrip('/').lower()
 
 
