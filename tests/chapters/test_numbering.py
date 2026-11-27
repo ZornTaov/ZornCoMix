@@ -192,3 +192,63 @@ def test_a_new_name_already_taken_leaves_both_alone(library, config):
     code, said = pack(library, folder)
     assert "is already there, so neither was touched" in said
     assert old.exists() and keep.exists()
+
+
+def relabel(folder, number, label):
+    meta = read_meta(folder)
+    meta["chapters"]["list"][number - 1]["label"] = label
+    write_meta(folder, meta)
+
+
+def test_a_label_put_right_renames_its_archive_rather_than_writing_one_beside_it(library, config):
+    #a chapter named after the wrong thing on the archive page, put right on the web page: packing wrote the
+    #archive under the new label and left the old one beside it, holding the same pages
+    folder = comic(library)
+    pack(library, folder)
+    held = library / "CBZs" / "MyComic"
+    (held / "MyComic - c013 - 13. Puppy Love.webp").write_bytes(b"RIFF cover")
+    before = os.stat(str(held / "MyComic - c013 - 13. Puppy Love.cbz")).st_ino
+    relabel(folder, 3, "13. Puppy Love, Again")
+    code, said = pack(library, folder)
+    assert code == 0, said
+    assert shelf(library) == ["MyComic - c012 - 12. Off to the Movies.cbz",
+                              "MyComic - c012.5 - Intermission Catty Remarks.cbz",
+                              "MyComic - c013 - 13. Puppy Love, Again.cbz",
+                              "MyComic - c013 - 13. Puppy Love, Again.webp"]
+    #the same file, renamed, with only its ComicInfo brought up to date on its end
+    assert os.stat(str(held / "MyComic - c013 - 13. Puppy Love, Again.cbz")).st_ino == before
+    assert "0 to write" in said and "1 of them with a ComicInfo to bring up to date" in said, said
+    with zipfile.ZipFile(str(held / "MyComic - c013 - 13. Puppy Love, Again.cbz")) as zf:
+        assert "Puppy Love, Again" in zf.read("ComicInfo.xml").decode()
+    #and recorded, as the reader follows moves to carry a reader's place
+    moved = read_meta(folder)["history"]["moves"][-1]["moved"]
+    assert {"what": "chapter archive", "from": "CBZs/MyComic/MyComic - c013 - 13. Puppy Love.cbz",
+            "to": "CBZs/MyComic/MyComic - c013 - 13. Puppy Love, Again.cbz"} in moved
+
+
+def test_a_label_put_right_only_in_its_case_is_renamed_too(library, config):
+    #"chapter 2" made "Chapter 2": on a share that ignores case the new name already seems to be there
+    folder = comic(library, labels=["12. Off to the Movies", "Intermission Catty Remarks", "13. puppy love"])
+    pack(library, folder)
+    before = os.stat(str(library / "CBZs" / "MyComic" / "MyComic - c013 - 13. puppy love.cbz")).st_ino
+    relabel(folder, 3, "13. Puppy Love")
+    code, said = pack(library, folder)
+    assert code == 0, said
+    assert shelf(library)[-1] == "MyComic - c013 - 13. Puppy Love.cbz", shelf(library)
+    assert len(shelf(library)) == 3
+    assert os.stat(str(library / "CBZs" / "MyComic" / "MyComic - c013 - 13. Puppy Love.cbz")).st_ino == before
+    assert "0 to write" in said, said
+
+
+def test_an_archive_left_under_an_old_label_beside_the_new_one_is_said_and_left(library, config):
+    #packed before renames were made: both are there, and which to keep is for a person to say
+    folder = comic(library)
+    pack(library, folder)
+    relabel(folder, 3, "13. Puppy Love, Again")
+    held = library / "CBZs" / "MyComic"
+    (held / "MyComic - c013 - 13. Puppy Love, Again.cbz").write_bytes(
+        (held / "MyComic - c013 - 13. Puppy Love.cbz").read_bytes())
+    code, said = pack(library, folder)
+    assert code == 0, said
+    assert "under a label no chapter has now" in said and "MyComic - c013 - 13. Puppy Love.cbz" in said, said
+    assert (held / "MyComic - c013 - 13. Puppy Love.cbz").exists()
