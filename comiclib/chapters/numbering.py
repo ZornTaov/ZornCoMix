@@ -44,9 +44,11 @@ def places(chapters):
 def real_numbers(block):
     #each chapter's number, in the order of the list, as text. a comic whose labels do not say a number
     #that rises chapter by chapter keeps its plain places: a comic cut every so many pages, one whose
-    #chapters are only titled, or one whose numbers go back and forth would otherwise be filed out of order
+    #chapters are only titled, or one whose numbers go back and forth would otherwise be filed out of order.
+    #a comic cut at each address is named from its episodes' titles, and a number in one of those - "Walk
+    #with me 2" - is part of a name, not the chapter's
     chapters = (block or {}).get("list") or []
-    if not chapters or (block or {}).get("source") == "every":
+    if not chapters or (block or {}).get("source") in ("every", "address"):
         return places(chapters)
     said = [label_number(chapter.get("label")) for chapter in chapters]
     known = [number for number in said if number is not None]

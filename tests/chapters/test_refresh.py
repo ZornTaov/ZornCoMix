@@ -230,6 +230,19 @@ def test_an_update_starts_the_next_part_of_a_comic_cut_every_so_many_pages(serve
     assert not (library / "CBZs" / "MyComic.cbz").exists(), "a comic in parts keeps no single archive"
 
 
+def test_an_update_makes_each_new_address_a_chapter_of_its_own(serve, library, config, chapters):
+    #a comic cut at each address: every page the site publishes since is an episode, and its own archive
+    held = hold(serve, library, config, chapters, 3, [], steps=[["align"], ["chapters", "--each-address", "--save"],
+                                                                ["pack"]])
+    assert held.starts() == [(1, "Page 1", 1), (2, "Page 2", 2), (3, "Page 3", 3)], held.starts()
+    held.state["pages"] = 5
+    #with re-reading archive pages off, which this reads nothing from the site for
+    done = update(held, "--no-refresh-chapters")
+    assert held.starts()[3:] == [(4, "Page 4", 4), (5, "Page 5", 5)], held.starts() or done.stdout[-500:]
+    assert sorted(os.listdir(str(held.out)))[-2:] == ["MyComic - c004 - Page 4.cbz", "MyComic - c005 - Page 5.cbz"]
+    assert held.chapter(5) == ["0005.png"], held.chapter(5)
+
+
 def test_a_comic_cut_from_its_filenames_is_kept_in_parts_without_ever_being_walked(serve, library, config,
                                                                                   chapters):
     #the same comic, but with no record of which page is which: its files are numbered, which is enough

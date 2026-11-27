@@ -55,6 +55,59 @@ def chapters_every(pages, size):
             for start in range(1, last + 1, size) if start + size > first]
 
 
+#what stands between an episode's name and the site's in a page title: "Tea for two – My Comic", "Ep 3 | My
+#Comic". spaces on both sides, so the colon in "Delivery status: late" is part of the name
+TITLE_BREAK = re.compile(r'\s+[-–—|:·]\s+')
+
+
+def episode_titles(titles):
+    #each chapter's name out of its first page's title, with the part every title ends with left off: that
+    #part names the comic or the site, never the chapter. a title the cut would leave empty, or one shared
+    #by every chapter alike, says nothing about the chapter, so it is None and the chapter is numbered instead
+    cuts = {}
+    for title in titles:
+        if title and title not in cuts:
+            #left to right, so the longest tail comes first
+            cuts[title] = {title[found.end():]: title[:found.start()] for found in TITLE_BREAK.finditer(title)}
+    shared = None
+    if len(cuts) > 1:
+        first = next(iter(cuts.values()))
+        shared = next((tail for tail in first
+                       if all(tail in cut and cut[tail].strip() for cut in cuts.values())), None)
+    elif cuts:
+        #one episode so far has no other to compare with, and a page title is nearly always the post's and
+        #then the site's, so the last part is the one left off. reading it the same way once a second episode
+        #is out keeps this chapter's name, and so its archive's, where it was
+        only = next(iter(cuts.values()))
+        shared = next((tail for tail in reversed(list(only)) if only[tail].strip()), None)
+    labels = [((cuts[title][shared] if shared is not None else title) if title else "").strip() or None
+              for title in titles]
+    if len(labels) > 1 and len(set(labels)) == 1:
+        return [None] * len(labels)
+    return labels
+
+
+def chapters_each_address(pages, saved=None):
+    #a comic that puts each episode on an address of its own - the whole scroll of it as one page of
+    #images, the next episode at the next address - is in chapters already: one starts wherever the address
+    #changes. a page the index holds no address for stays in the chapter it follows
+    starts, last = [], None
+    for page in pages:
+        here = same_page(page["url"]) if page.get("url") else None
+        if here and here != last:
+            starts.append(page)
+            last = here
+    labels = episode_titles([page.get("title") for page in starts])
+    #a chapter saved before keeps the name it was saved under, found by the address it starts at: titles read
+    #again with more episodes beside them can come out differently, and a renamed chapter is a changed one,
+    #which no update saves without --force - so it would refuse every new episode from then on
+    named = {same_page(chapter["start_url"]): chapter.get("label")
+             for chapter in saved or [] if chapter.get("start_url") and chapter.get("label")}
+    return [{"label": named.get(same_page(page["url"])) or label or "Chapter {0}".format(at),
+             "start_page": page["n"], "pages_listed": [page["n"]]}
+            for at, (page, label) in enumerate(zip(starts, labels), 1)]
+
+
 def apply_fixes(found, pages, fixes):
     #corrections made by hand, kept apart from whatever rule worked the chapters out so that reading the
     #archive again, or the addresses again, never throws them away. each one says either that a chapter
@@ -151,6 +204,10 @@ def chapters_block(was, chapters, source, source_url=None, every=None, outer=Fal
     if every:
         #remembered so a later run cuts the pages the comic gains the same way, with no arguments
         block["every"] = every
+    if source == "address":
+        #and so is starting a chapter at each address. kept apart from the source, as every is, so that
+        #turning it off stops the cutting while the source goes on numbering the archives already written
+        block["each_address"] = True
     if outer:
         #and so is cutting a nested archive by its books rather than by every chapter inside them
         block["outer"] = True
@@ -320,7 +377,11 @@ def plan(folder, args):
     if every is not None and every < 1:
         print("ERROR: --every is how many pages go in each part, so it has to be 1 or more.")
         return 2
-    if (not args.archive and not args.list and not args.urls
+    each = getattr(args, "each_address", False)
+    if each and every:
+        print("ERROR: --each-address and --every are two ways of cutting a comic; give one of them.")
+        return 2
+    if (not args.archive and not args.list and not args.urls and not each
             and known.get("source") == "archive" and known.get("source_url")):
         #the comic remembers where its chapters are listed, so keeping them current needs no arguments
         args.archive = known["source_url"]
@@ -329,10 +390,14 @@ def plan(folder, args):
                                                   and known.get("outer"))
     if outer and not getattr(args, "outer", False):
         print("Cutting it by its outer headings - its books, not every chapter in them - as it remembers.")
-    if (every is None and not args.archive and not args.list and not args.urls
+    if (every is None and not args.archive and not args.list and not args.urls and not each
             and known.get("source") == "every" and known.get("every")):
         every = known["every"]
         print("Cutting this comic into parts of {0} page(s), as it remembers.".format(every))
+    if (not every and not args.archive and not args.list and not args.urls and not each
+            and known.get("source") == "address" and known.get("each_address")):
+        each = True
+        print("Starting a chapter at each of this comic's addresses, as it remembers.")
     #cutting by size only needs which file is which page, which numbered filenames can say without a walk
     pages = joined_pages(folder, args, numbered=bool(every))
     if pages is None:
@@ -340,6 +405,9 @@ def plan(folder, args):
     listed = None
     if every:
         found, source, source_url = chapters_every(pages, every), "every", None
+    elif each:
+        saved = known.get("list") if known.get("source") == "address" else None
+        found, source, source_url = chapters_each_address(pages, saved), "address", None
     elif args.archive and not args.urls:
         try:
             found, listed = chapters_from_archive(args.archive, pages, args.browser, args.script, outer=outer)
@@ -380,10 +448,11 @@ def plan(folder, args):
         else:
             print("  WARNING: this changes chapters that already have archives written for them: {0}{1}".format(
                 "; ".join(what[:4]), " ... and {0} more".format(len(what) - 4) if len(what) > 4 else ""))
-    if len(chapters) < 2 and not args.force and source != "every":
+    if len(chapters) < 2 and not args.force and source not in ("every", "address"):
         #a comic in one chapter is a comic that is not chaptered. saving this replaces the single archive
         #with a single archive under another name, which is the sort of thing that looks like it worked.
-        #cut by size it is only a comic that has not yet filled its first part, and the next one follows
+        #cut by size it is only a comic that has not yet filled its first part, and the next one follows;
+        #cut by address it is a comic whose first episode is all that is out, and the same holds
         print("  this reads as one chapter over the whole comic, which is what a page with no chapter "
               "headings looks like - not a comic in one chapter. Nothing saved. Use --archive with a "
               "page that does list chapters, --urls if the addresses number them, or --list.")

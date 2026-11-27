@@ -451,7 +451,7 @@ paths:
                   description: The comic's folder name
                 settings:
                   type: object
-                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended, cookies, user_agent, placeholders). cookies is "name=value; name=value" or an object of name to value; empty removes them. user_agent is the name this comic's images and chapter pages are fetched under, one line of text; empty removes it, and the library's is used. placeholders is the pictures the site shows where a page will be once it is out, as whole http(s) addresses or paths from their first /, put apart by spaces or given as a list; empty removes them. image_xpath and next_xpath are the element paths a scrape remembers having found this comic's image and next link by, kept in its state rather than its settings and tried before every list; each is one XPath starting with / ( or ., and empty forgets it, so the next scrape searches the element paths. A plugin comic has neither
+                  description: Settings to change (url, increment, cbz_path, prefix, javascript, firefox, waittime, cbz, direction_check, multi_page, ended, cookies, user_agent, placeholders). cookies is "name=value; name=value" or an object of name to value; empty removes them. user_agent is the name this comic's images and chapter pages are fetched under, one line of text; empty removes it, and the library's is used. placeholders is the pictures the site shows where a page will be once it is out, as whole http(s) addresses or paths from their first /, put apart by spaces or given as a list; empty removes them. chapters_each_address, true or false, has the comic start a chapter at each of its addresses, each named from its page's title, and remembered so each new address becomes a chapter of its own; it cannot be on with chapters_url or chapters_every, and turning it off keeps the chapters already worked out. image_xpath and next_xpath are the element paths a scrape remembers having found this comic's image and next link by, kept in its state rather than its settings and tried before every list; each is one XPath starting with / ( or ., and empty forgets it, so the next scrape searches the element paths. A plugin comic has neither
                 updated:
                   type: ["string", "null"]
                   description: Expected updated timestamp (optimistic concurrency)
@@ -630,6 +630,9 @@ paths:
                 every:
                   type: ["string", "integer"]
                   description: Cut into parts of this many pages
+                each_address:
+                  type: boolean
+                  description: Start a chapter at each of the comic's addresses instead; wins over every and url
                 set_aside:
                   type: array
                   items:
@@ -657,7 +660,7 @@ paths:
                         type: boolean
                       from:
                         type: string
-                        enum: [every, archive, addresses]
+                        enum: [each_address, every, archive, addresses]
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -1744,6 +1747,9 @@ components:
               type: ["string", "null"]
             every:
               type: ["integer", "null"]
+            each_address:
+              type: boolean
+              description: A chapter is started at each of the comic's addresses, and each new one becomes a chapter
             list:
               type: array
               items:
@@ -1899,6 +1905,9 @@ components:
           type: integer
         every:
           type: ["string", "integer"]
+        each_address:
+          type: boolean
+          description: Give each comic a chapter at each of its addresses; refused together with every
         shelf:
           type: string
           description: One of the settings' shelves, so the rows are inside pages_folder/<shelf> and that shelf instead of pages_folder and cbz_folder. Left out for the default

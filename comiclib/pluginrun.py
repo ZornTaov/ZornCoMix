@@ -248,7 +248,7 @@ def run_comic(folder, deadline):
     #keeps a single archive, kept up here the way a scrape keeps its own
     fresh = read_metadata(folder)
     if (pages and (fresh.get("settings") or {}).get("cbz") is not False
-            and not (fresh.get("chapters") or {}).get("list") and not (fresh.get("chapters") or {}).get("every")):
+            and not any((fresh.get("chapters") or {}).get(key) for key in ("list", "every", "each_address"))):
         archive, added = update_archive(folder, (fresh.get("settings") or {}).get("cbz_path"))
         if archive:
             print("Archive {0}: {1} page(s) added.".format(archive, added))

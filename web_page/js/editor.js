@@ -77,9 +77,11 @@ async function openEditor(name) {
   const chapters = detail.chapters || {};
   $("e-chapters").value = chapters.source_url || "";
   $("e-every").value = chapters.every || "";
+  $("e-each_address").checked = !!chapters.each_address;
   //an archive page is one source of chapters and the comic's own addresses are another: a comic that
   //counts /comic/issue-4-page-7 often reads better from those than from an archive with no headings
-  const from = chapters.source === "every" && chapters.every ? `cutting it every ${chapters.every} pages`
+  const from = chapters.each_address ? "a chapter at each of its addresses"
+    : chapters.source === "every" && chapters.every ? `cutting it every ${chapters.every} pages`
     : chapters.source === "archive" && chapters.source_url ? "that page" : "the comic's own addresses";
   $("e-chapters-note").textContent = (chapters.count
     ? `${chapters.count} chapter(s) worked out from ${from}${chapters.packed ? ", archives written " + when(chapters.packed) : ""}. `
@@ -318,7 +320,8 @@ async function saveEditor(updateAfter) {
         waittime: $("e-waittime").value, cookies: $("e-cookies").value, user_agent: $("e-user_agent").value,
         placeholders: $("e-placeholders").value,
         image_xpath: $("e-image_xpath").value, next_xpath: $("e-next_xpath").value,
-        chapters_url: $("e-chapters").value, chapters_every: $("e-every").value };
+        chapters_url: $("e-chapters").value, chapters_every: $("e-every").value,
+        chapters_each_address: $("e-each_address").checked };
   flags.forEach((key) => { settings[key] = $("e-" + key).checked; });
   try {
     const result = await post("/api/settings", { name: editing.name, updated: editing.updated, settings, update_after: updateAfter });
@@ -353,12 +356,14 @@ $("edit-chapterize").addEventListener("click", async () => {
   try {
     await saveEditor(false);
     const result = await post("/api/chapterize", { name: editing.name, url: $("e-chapters").value.trim(),
-                                                    every: $("e-every").value.trim() });
+                                                    every: $("e-every").value.trim(),
+                                                    each_address: $("e-each_address").checked });
     chapterJob = { id: result.queued, name: editing.name };
     showDecision(null);
     msg.className = "msg good";
     msg.textContent = (result.from === "addresses" ? "Queued, reading the comic's own addresses. "
-      : result.from === "every" ? `Queued, cutting it every ${$("e-every").value.trim()} pages. ` : "Queued. ")
+      : result.from === "every" ? `Queued, cutting it every ${$("e-every").value.trim()} pages. `
+      : result.from === "each_address" ? "Queued, starting a chapter at each of its addresses. " : "Queued. ")
       + (result.numbers_first ? "Where every file carries its page number it is cut from those; otherwise it stops and asks here what to do. Watch it under Running now."
         : result.carrying_on ? "The record of which page is which stops short of the newest page, so the walk carries on from where it stopped; watch it under Running now."
         : result.walking ? "It walks the comic first, which takes a few minutes; watch it under Running now."

@@ -248,6 +248,7 @@ def comic_detail(args, runner, name):
         "chapters": {"source_url": chapters.get("source_url"), "count": len(chapters.get("list") or []),
                      "packed": chapters.get("packed"), "folder": chapters.get("folder"),
                      "source": chapters.get("source"), "every": chapters.get("every"),
+                     "each_address": bool(chapters.get("each_address")),
                      #with each chapter's own number, as its archive is named
                      "list": numbered(chapters),
                      "fixes": chapters.get("fixes") or []},

@@ -180,7 +180,8 @@ def scrape_and_pack(comic, args, command, started):
     #failed are whole and in the index, and left unpacked they would wait for a later run that both gains
     #pages and finishes - a comic that fails at its newest page every day would never have them packed
     known = chapters_now(comic)
-    in_chapters = known.get("list") or known.get("source_url") or known.get("every")
+    in_chapters = (known.get("list") or known.get("source_url") or known.get("every")
+                   or known.get("each_address"))
     #a comic in chapters that has never been packed is packed whether or not it gained anything: a plugin
     #comic started from the command line took its first chapters outside any update, a comic set to be cut
     #once it had caught up gains nothing to trigger it, and an add whose packing never happened left a whole
@@ -280,6 +281,9 @@ def pack_chapters(comic, args):
     #a comic cut every so many pages needs its next part once the last one fills. that reads nothing from
     #the site, so it is done whether or not archive pages are being read again
     elif known.get("every"):
+        steps.append("chapters")
+    #and so does a comic cut at each address: the episode a run just saved is a chapter of its own
+    elif known.get("each_address"):
         steps.append("chapters")
     #a comic set to keep no archives still has its chapters worked out and its index kept - all of that
     #is knowledge about the comic. only the writing of archives waits for that switch to be turned on.
