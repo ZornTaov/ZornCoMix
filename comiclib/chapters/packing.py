@@ -59,12 +59,25 @@ def chapter_folder(folder, metadata, root=None, given=None):
     return full[:-4] if full.lower().endswith(".cbz") else full
 
 
+def chapter_lead(folder, chapter):
+    #the part of a chapter's archive name before its label: the comic and the chapter's number
+    return "{0} - c{1} - ".format(os.path.basename(os.path.abspath(folder)),
+                                  name_part(chapter.get("called") or chapter["number"]))
+
+
 def chapter_file(folder, chapter):
     #named by the chapter's own number where its label says one (numbering.numbered), and by its place in
     #the comic otherwise
-    return "{0} - c{1} - {2}.cbz".format(os.path.basename(os.path.abspath(folder)),
-                                         name_part(chapter.get("called") or chapter["number"]),
-                                         tidy_name(chapter["label"]))
+    return chapter_lead(folder, chapter) + tidy_name(chapter["label"]) + ".cbz"
+
+
+def relabelled(folder, chapter, on_shelf, current):
+    #this chapter's archives under a label it had before: the comic and the number the same, and a label
+    #after them that no chapter has now. a label put right on the web page names a new archive, and the
+    #one under the old label was left beside it holding the same pages
+    lead = chapter_lead(folder, chapter)
+    return [name for name in on_shelf
+            if name.startswith(lead) and name.lower().endswith(".cbz") and name not in current]
 
 
 def place_file(folder, chapter):
@@ -74,33 +87,52 @@ def place_file(folder, chapter):
 
 
 def renames_to_numbers(folder, shelf, chapters):
-    #the chapter archives still named by their place that are now named by their number, and the cover
-    #beside each, as (from, to, what). only the exact name each chapter had is looked for: a file on the
-    #shelf that is not one of those is nobody's to rename. a name already taken is said and left
-    planned, taken = [], []
-    #the covers as the shelf names them, from one listing: asking for each ending in each case finds one
-    #file twice on a share that ignores case, and the second rename of it fails
+    #the chapter archives under a name their chapter no longer has - still named by their place from before
+    #chapters were named by their number, or by a label since put right - and the cover beside each, as
+    #(from, to, what). only those two shapes of name are looked for: a file on the shelf that is neither is
+    #nobody's to rename. a name already taken is said and left
+    planned, taken, left = [], [], []
+    #the shelf as it names its files, from one listing: asking for each ending in each case finds one file
+    #twice on a share that ignores case, and the second rename of it fails. and asked by name, such a share
+    #says "Chapter 2" is there when only "chapter 2" is
     try:
         on_shelf = os.listdir(shelf)
     except OSError:
         return planned
+    #every name a chapter has now, or had by its place: a file under one of them is that chapter's already
+    current = {chapter_file(folder, chapter) for chapter in chapters} | \
+              {place_file(folder, chapter) for chapter in chapters}
     for chapter in chapters:
         new = os.path.join(shelf, chapter_file(folder, chapter))
         old = os.path.join(shelf, place_file(folder, chapter))
         if new == old or not os.path.exists(old):
-            continue
-        if os.path.exists(new):
+            before = relabelled(folder, chapter, on_shelf, current)
+            if os.path.basename(new) in on_shelf:
+                left.extend(before)
+                continue
+            #two archives left at one number are nobody's to choose between
+            if len(before) != 1:
+                left.extend(before)
+                continue
+            old = os.path.join(shelf, before[0])
+        #the same name in another case is the file itself, on a share that ignores case
+        if os.path.exists(new) and os.path.basename(old).lower() != os.path.basename(new).lower():
             taken.append((old, new))
             continue
         planned.append((old, new, "chapter archive"))
         old_stem, new_stem = os.path.splitext(os.path.basename(old))[0], os.path.splitext(new)[0]
         for name in on_shelf:
             stem, ending = os.path.splitext(name)
-            if stem == old_stem and ending.lower() in COVER_ENDINGS and not os.path.exists(new_stem + ending):
+            if stem == old_stem and ending.lower() in COVER_ENDINGS and (
+                    stem.lower() == os.path.basename(new_stem).lower() or not os.path.exists(new_stem + ending)):
                 planned.append((os.path.join(shelf, name), new_stem + ending, "cover"))
     for old, new in taken:
-        print("WARNING: {0} is still named by its place, and {1} is already there, so neither was touched. "
+        print("WARNING: {0} is no longer its chapter's name, and {1} is already there, so neither was touched. "
               "Move one of them aside and pack again.".format(os.path.basename(old), os.path.basename(new)))
+    if left:
+        print("WARNING: {0} archive(s) on the shelf are under a label no chapter has now, and were left alone "
+              "beside the chapter's own: {1}. Delete them once the chapter's own archive is checked.".format(
+                  len(left), ", ".join(sorted(left)[:6]) + (" ..." if len(left) > 6 else "")))
     return planned
 
 
@@ -110,7 +142,7 @@ def named_by_numbers(folder, shelf, chapters, args):
     #renamed, so it is still under the old one - or None when a rename failed and every one was put back
     renames = renames_to_numbers(folder, shelf, chapters)
     if renames:
-        print("  {0} {1} chapter archive(s) to their chapter's own number".format(
+        print("  {0} {1} chapter archive(s) to the names their chapters have now".format(
             "would rename" if args.dry_run else "renaming", sum(what == "chapter archive" for _, _, what in renames)))
         if args.dry_run:
             for source, target, what in renames:
